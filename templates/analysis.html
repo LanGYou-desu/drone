@@ -226,6 +226,13 @@
         }
 
         loadAnalysisData();
+        window.addEventListener('resize', () => {
+            const charts = ['heightChart', 'speedChart', 'accelChart', 'curvatureChart'];
+            charts.forEach(id => {
+                const chart = echarts.getInstanceByDom(document.getElementById(id));
+                if (chart) chart.resize();
+            });
+        });
     </script>
 </body>
 </html>

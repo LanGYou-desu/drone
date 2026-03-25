@@ -897,6 +897,13 @@
 
         // 初始化
         initScene();
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        window.addEventListener('resize', onWindowResize);
         renderMethodList();
         refreshVisuals();
         heightChart = echarts.init(document.getElementById('heightChart'));
