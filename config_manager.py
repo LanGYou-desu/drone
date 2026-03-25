@@ -38,7 +38,6 @@ DEFAULT_CONFIG = {
 }
 
 def ensure_config():
-    """确保配置文件存在，若不存在则创建默认配置"""
     if not os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
@@ -47,6 +46,5 @@ def ensure_config():
         return json.load(f)
 
 def save_config(config):
-    """保存配置到文件"""
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=4, ensure_ascii=False)

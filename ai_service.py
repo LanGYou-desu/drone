@@ -1,8 +1,6 @@
 import requests
 
 def get_ai_suggestion(methods_data, api_key, url, model):
-    """调用硅基流动 API，返回捕捉建议"""
-    # 构造提示词
     prompt = "你是一个无人机捕捉策略专家。以下是多种检测手段捕获的无人机轨迹数据（三维坐标 x, y, z）：\n\n"
     for method_id, info in methods_data.items():
         prompt += f"检测手段: {info['name']}\n"
