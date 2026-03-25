@@ -99,7 +99,7 @@ HTML_TEMPLATE = """
         const btn3 = document.getElementById('btn3');
         const outputDiv = document.getElementById('output');
 
-        // 按钮点击事件（仅前端演示，不发送后端请求）
+        // 按钮点击事件
         btn1.addEventListener('click', () => {
             outputDiv.innerHTML = '✅ 你点击了「功能 1」，功能开发中...';
         });
