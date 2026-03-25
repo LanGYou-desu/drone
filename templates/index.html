@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D 无人机轨迹预测系统 | 多检测手段 + AI 建议</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+        }
+
+        /* 侧边栏 - 玻璃效果 */
+        .sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 340px;
+            background: rgba(17, 18, 22, 0.85);
+            backdrop-filter: blur(12px);
+            border-radius: 24px;
+            border: 1px solid rgba(108, 92, 231, 0.4);
+            padding: 1.2rem;
+            color: #eef2ff;
+            z-index: 10;
+            pointer-events: auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #eef2ff, #b9c4f0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .method-section, .predict-section, .info-section, .ai-section {
+            margin-top: 1.2rem;
+            border-top: 1px solid rgba(108,92,231,0.3);
+            padding-top: 1rem;
+        }
+
+        .method-section h3, .predict-section h3, .info-section h3, .ai-section h3 {
+            font-size: 0.9rem;
+            margin-bottom: 0.8rem;
+            color: #cbd5ff;
+            letter-spacing: 1px;
+        }
+
+        .method-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .method-item {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.4rem 0.6rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .method-item:hover {
+            background: rgba(108, 92, 231, 0.2);
+        }
+        .method-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .method-name {
+            flex: 1;
+            font-size: 0.85rem;
+        }
+        .method-status {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.3);
+        }
+        .method-status.active {
+            background: #6c5ce7;
+        }
+
+        button {
+            background: rgba(40, 42, 50, 0.8);
+            border: 1px solid rgba(108, 92, 231, 0.5);
+            color: #eef2ff;
+            padding: 0.5rem 1rem;
+            border-radius: 40px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 0.5rem;
+            transition: all 0.2s;
+        }
+        button.primary {
+            background: linear-gradient(135deg, #6c5ce7, #a363d9);
+            border: none;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            padding: 0.6rem;
+            margin: 0.5rem 0;
+            font-size: 0.8rem;
+        }
+
+        .ai-suggestion {
+            background: rgba(108, 92, 231, 0.2);
+            border-left: 3px solid #6c5ce7;
+            padding: 0.8rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+        }
+
+        /* 通知浮层 */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #6c5ce7;
+            padding: 8px 16px;
+            border-radius: 20px;
+            z-index: 1000;
+            font-size: 0.85rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>✈️ 3D 无人机轨迹预测</h2>
+        <p style="font-size: 0.7rem; opacity:0.7;">多检测手段 | AI 辅助捕捉建议</p>
+
+        <div class="method-section">
+            <h3>📡 检测手段</h3>
+            <div class="method-list" id="methodList"></div>
+            <button id="refreshBtn">🔄 刷新轨迹数据</button>
+        </div>
+
+        <div class="predict-section">
+            <h3>🔮 轨迹预测</h3>
+            <button id="predictBtn" class="primary">⚡ 开始预测</button>
+            <div class="info-card">
+                <div>预测置信度: <span id="confidence">--</span></div>
+                <div>预测点数: <span id="predPoints">0</span></div>
+            </div>
+        </div>
+
+        <div class="ai-section">
+            <h3>🤖 AI 捕捉建议</h3>
+            <button id="aiSuggestionBtn">💡 获取 AI 建议</button>
+            <div class="info-card">
+                <div>AI 分析当前轨迹，给出捕捉策略</div>
+                <div id="aiSuggestion" class="ai-suggestion">等待 AI 建议...</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>📊 实时统计</h3>
+            <div class="info-card">
+                <div>历史轨迹点数: <span id="histPoints">0</span></div>
+                <div>可见手段数: <span id="visibleCount">0</span></div>
+                <div>最后更新: <span id="lastUpdate">--:--:--</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- 引入 Three.js 核心库及扩展 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // ======================== 从后端注入数据 ========================
+        const methodsData = {{ methods_data | tojson }};
+        let detectionMethods = methodsData;
+
+        // 存储预测轨迹
+        let predictedTrajectories = {};
+        for (const id in detectionMethods) {
+            predictedTrajectories[id] = [];
+        }
+
+        // 存储 Three.js 对象
+        let scene, camera, renderer, labelRenderer, controls;
+        let lines = {};        // 历史轨迹线对象
+        let predLines = {};    // 预测轨迹线对象
+        let spheres = {};      // 历史轨迹点球体
+
+        // ======================== 辅助函数 ========================
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.style.backgroundColor = isError ? '#ff6b6b' : '#6c5ce7';
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        }
+
+        function updateStats() {
+            let totalPoints = 0;
+            let visibleCount = 0;
+            for (const id in detectionMethods) {
+                if (detectionMethods[id].visible) visibleCount++;
+                totalPoints += detectionMethods[id].points.length;
+            }
+            document.getElementById('histPoints').innerText = totalPoints;
+            document.getElementById('visibleCount').innerText = visibleCount;
+            const now = new Date();
+            document.getElementById('lastUpdate').innerText = now.toLocaleTimeString();
+        }
+
+        // 生成预测轨迹 (简单模拟: 基于最后两个点线性外推)
+        function generatePrediction(points, numPoints = 5) {
+            if (points.length < 2) return [];
+            const last = points[points.length - 1];
+            const secondLast = points[points.length - 2];
+            const dx = last[0] - secondLast[0];
+            const dy = last[1] - secondLast[1];
+            const dz = last[2] - secondLast[2];
+            const pred = [];
+            for (let i = 1; i <= numPoints; i++) {
+                pred.push([
+                    last[0] + dx * i,
+                    last[1] + dy * i,
+                    last[2] + dz * i
+                ]);
+            }
+            return pred;
+        }
+
+        // 更新预测结果显示
+        function updatePredictionUI() {
+            let totalPredPoints = 0;
+            for (const id in predictedTrajectories) {
+                totalPredPoints += predictedTrajectories[id].length;
+            }
+            document.getElementById('predPoints').innerText = totalPredPoints;
+            document.getElementById('confidence').innerText = (Math.random() * 30 + 70).toFixed(1) + '%'; // 模拟置信度
+        }
+
+        // ======================== Three.js 场景构建 ========================
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x05070a);
+            scene.fog = new THREE.FogExp2(0x05070a, 0.008);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(15, 12, 18);
+            camera.lookAt(6, 3, 6);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.left = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            document.body.appendChild(labelRenderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.autoRotate = false;
+            controls.enableZoom = true;
+            controls.zoomSpeed = 1.2;
+            controls.target.set(6, 3, 6);
+
+            // 辅助元素：网格地面和坐标轴
+            const gridHelper = new THREE.GridHelper(30, 20, 0x6c5ce7, 0x2a2c30);
+            gridHelper.position.y = -0.5;
+            scene.add(gridHelper);
+
+            const axesHelper = new THREE.AxesHelper(8);
+            scene.add(axesHelper);
+
+            // 环境光 + 点光源
+            const ambientLight = new THREE.AmbientLight(0x404060);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(5, 10, 7);
+            scene.add(dirLight);
+            const backLight = new THREE.PointLight(0x6c5ce7, 0.5);
+            backLight.position.set(-2, 5, -3);
+            scene.add(backLight);
+
+            // 添加一些漂浮粒子装饰
+            const particleGeo = new THREE.BufferGeometry();
+            const particleCount = 800;
+            const particlePositions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount; i++) {
+                particlePositions[i*3] = (Math.random() - 0.5) * 50;
+                particlePositions[i*3+1] = Math.random() * 15;
+                particlePositions[i*3+2] = (Math.random() - 0.5) * 40;
+            }
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            const particleMat = new THREE.PointsMaterial({ color: 0x6c5ce7, size: 0.08, transparent: true, opacity: 0.4 });
+            const particles = new THREE.Points(particleGeo, particleMat);
+            scene.add(particles);
+
+            // 动画循环
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+                labelRenderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        // 创建轨迹的视觉元素 (线条 + 点)
+        function createTrailVisuals(methodId, data) {
+            const points = data.points;
+            if (points.length < 2) return;
+
+            // 创建线条
+            const vertices = [];
+            points.forEach(p => vertices.push(new THREE.Vector3(p[0], p[1], p[2])));
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: data.color, linewidth: 2 });
+            const lineObj = new THREE.Line(lineGeometry, lineMaterial);
+
+            // 创建点云 (球体)
+            const sphereGroup = new THREE.Group();
+            points.forEach((p, idx) => {
+                const sphereMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 });
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), sphereMat);
+                sphere.position.set(p[0], p[1], p[2]);
+                sphereGroup.add(sphere);
+            });
+
+            // 添加 CSS2D 标签 (手段名称 + 起点/终点)
+            const startDiv = document.createElement('div');
+            startDiv.textContent = '🚀 起点';
+            startDiv.style.color = '#fff';
+            startDiv.style.fontSize = '10px';
+            startDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            startDiv.style.padding = '2px 4px';
+            startDiv.style.borderRadius = '4px';
+            const startLabel = new CSS2DObject(startDiv);
+            startLabel.position.set(points[0][0], points[0][1] + 0.3, points[0][2]);
+
+            const endDiv = document.createElement('div');
+            endDiv.textContent = '🏁 终点';
+            endDiv.style.cssText = startDiv.style.cssText;
+            const endLabel = new CSS2DObject(endDiv);
+            endLabel.position.set(points[points.length-1][0], points[points.length-1][1] + 0.3, points[points.length-1][2]);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.textContent = data.name;
+            nameDiv.style.color = data.color;
+            nameDiv.style.fontSize = '12px';
+            nameDiv.style.fontWeight = 'bold';
+            nameDiv.style.backgroundColor = 'rgba(0,0,0,0.6)';
+            nameDiv.style.padding = '2px 6px';
+            nameDiv.style.borderRadius = '12px';
+            const nameLabel = new CSS2DObject(nameDiv);
+            nameLabel.position.set(points[Math.floor(points.length/2)][0], points[Math.floor(points.length/2)][1] + 0.6, points[Math.floor(points.length/2)][2]);
+
+            return { line: lineObj, points: sphereGroup, startLabel, endLabel, nameLabel };
+        }
+
+        // 创建预测轨迹线 (虚线)
+        function createPredictionLine(methodId, predPoints, color) {
+            if (!predPoints || predPoints.length < 2) return null;
+            const vertices = predPoints.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
+            const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2, transparent: true, opacity: 0.7 });
+            const lineObj = new THREE.Line(lineGeometry, material);
+            // 添加点标记
+            const pointsGroup = new THREE.Group();
+            predPoints.forEach(p => {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 }));
+                sphere.position.set(p[0], p[1], p[2]);
+                pointsGroup.add(sphere);
+            });
+            return { line: lineObj, points: pointsGroup };
+        }
+
+        // 刷新所有轨迹显示 (根据可见性)
+        function refreshVisuals() {
+            for (const id in detectionMethods) {
+                const data = detectionMethods[id];
+                // 移除旧对象
+                if (lines[id]) {
+                    scene.remove(lines[id].line);
+                    scene.remove(lines[id].points);
+                    scene.remove(lines[id].startLabel);
+                    scene.remove(lines[id].endLabel);
+                    scene.remove(lines[id].nameLabel);
+                }
+                if (predLines[id]) {
+                    scene.remove(predLines[id].line);
+                    scene.remove(predLines[id].points);
+                }
+                if (data.visible) {
+                    const visuals = createTrailVisuals(id, data);
+                    lines[id] = visuals;
+                    scene.add(visuals.line);
+                    scene.add(visuals.points);
+                    scene.add(visuals.startLabel);
+                    scene.add(visuals.endLabel);
+                    scene.add(visuals.nameLabel);
+                    // 如果有预测轨迹且可见，则显示预测
+                    if (predictedTrajectories[id] && predictedTrajectories[id].length > 0) {
+                        const predVis = createPredictionLine(id, predictedTrajectories[id], data.color);
+                        if (predVis) {
+                            predLines[id] = predVis;
+                            scene.add(predVis.line);
+                            scene.add(predVis.points);
+                        }
+                    }
+                } else {
+                    lines[id] = null;
+                    predLines[id] = null;
+                }
+            }
+            updateStats();
+        }
+
+        // 刷新数据 (模拟新的历史轨迹)
+        async function refreshData() {
+            try {
+                const response = await fetch('/api/refresh_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    // 重新从后端获取最新数据（简化：前端直接使用返回的更新？这里我们模拟本地更新，但为了保持同步，最好重新从后端加载）
+                    // 由于 refresh_data 已经修改了后端 detection_methods，但前端没有同步，所以我们需要重新加载数据。
+                    // 简便方法：重新从后端获取完整数据，但这里为了简单，我们手动更新前端并通知用户。
+                    // 这里简单提示，实际应重新请求数据，我们做一个简单的重新加载页面或重新获取数据。
+                    // 为了让前端同步，我们重新加载页面或重新 fetch 数据。这里简单重新加载页面。
+                    location.reload();
+                } else {
+                    showToast("刷新失败", true);
+                }
+            } catch (error) {
+                showToast("请求失败: " + error.message, true);
+            }
+        }
+
+        // 执行预测 (前端简单线性外推，也可调用后端)
+        function runPrediction() {
+            for (const id in detectionMethods) {
+                if (detectionMethods[id].visible) {
+                    const pred = generatePrediction(detectionMethods[id].points, 6);
+                    predictedTrajectories[id] = pred;
+                } else {
+                    predictedTrajectories[id] = [];
+                }
+            }
+            refreshVisuals();
+            updatePredictionUI();
+            showToast("预测完成，虚线为预测轨迹");
+        }
+
+        // 获取 AI 建议
+        async function getAISuggestion() {
+            const btn = document.getElementById('aiSuggestionBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 正在思考...';
+            const suggestionDiv = document.getElementById('aiSuggestion');
+            suggestionDiv.innerHTML = '正在调用 AI 模型分析轨迹数据...';
+
+            try {
+                // 准备当前所有检测手段的轨迹数据
+                const dataToSend = {};
+                for (const id in detectionMethods) {
+                    dataToSend[id] = {
+                        name: detectionMethods[id].name,
+                        points: detectionMethods[id].points
+                    };
+                }
+
+                const response = await fetch('/api/ai_suggestion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ methods_data: dataToSend })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    suggestionDiv.innerHTML = result.suggestion;
+                } else {
+                    suggestionDiv.innerHTML = `❌ 获取建议失败: ${result.error}`;
+                }
+            } catch (error) {
+                suggestionDiv.innerHTML = `❌ 请求错误: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💡 获取 AI 建议';
+            }
+        }
+
+        // ======================== UI 交互 ========================
+        function renderMethodList() {
+            const container = document.getElementById('methodList');
+            container.innerHTML = '';
+            for (const [id, data] of Object.entries(detectionMethods)) {
+                const div = document.createElement('div');
+                div.className = 'method-item';
+                div.innerHTML = `
+                    <div class="method-color" style="background: ${data.color};"></div>
+                    <div class="method-name">${data.name}</div>
+                    <div class="method-status ${data.visible ? 'active' : ''}">${data.visible ? '显示' : '隐藏'}</div>
+                `;
+                div.addEventListener('click', () => {
+                    detectionMethods[id].visible = !detectionMethods[id].visible;
+                    renderMethodList();
+                    refreshVisuals();
+                });
+                container.appendChild(div);
+            }
+        }
+
+        // 初始化所有
+        initScene();
+        renderMethodList();
+        refreshVisuals();
+        document.getElementById('refreshBtn').addEventListener('click', refreshData);
+        document.getElementById('predictBtn').addEventListener('click', runPrediction);
+        document.getElementById('aiSuggestionBtn').addEventListener('click', getAISuggestion);
+
+        // 窗口自适应
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
