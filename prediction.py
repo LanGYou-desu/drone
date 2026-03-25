@@ -1,5 +1,4 @@
 def generate_prediction(points, num_points=5):
-    """基于最后两点线性外推预测未来点"""
     if len(points) < 2:
         return []
     last = points[-1]

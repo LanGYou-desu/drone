@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>3D 无人机轨迹预测系统 | 多检测手段 + AI 建议</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -11,12 +12,11 @@
             font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
         }
 
-        /* 侧边栏 - 玻璃效果 */
         .sidebar {
             position: absolute;
             top: 20px;
             left: 20px;
-            width: 340px;
+            width: 360px;
             background: rgba(17, 18, 22, 0.85);
             backdrop-filter: blur(12px);
             border-radius: 24px;
@@ -39,13 +39,13 @@
             color: transparent;
         }
 
-        .method-section, .predict-section, .info-section, .ai-section {
+        .method-section, .predict-section, .info-section, .ai-section, .animation-section, .chart-section {
             margin-top: 1.2rem;
             border-top: 1px solid rgba(108,92,231,0.3);
             padding-top: 1rem;
         }
 
-        .method-section h3, .predict-section h3, .info-section h3, .ai-section h3 {
+        .method-section h3, .predict-section h3, .info-section h3, .ai-section h3, .animation-section h3, .chart-section h3 {
             font-size: 0.9rem;
             margin-bottom: 0.8rem;
             color: #cbd5ff;
@@ -133,13 +133,58 @@
             word-break: break-word;
         }
 
-        .stats {
-            display: flex;
-            justify-content: space-between;
+        .param-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .param-item {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 0.4rem;
+            text-align: center;
+        }
+        .param-label {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        .param-value {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #6c5ce7;
+        }
+
+        .slider-container {
+            margin: 0.5rem 0;
+        }
+        input[type="range"] {
+            width: 100%;
+            background: #2a2c30;
+            height: 4px;
+            border-radius: 2px;
+            -webkit-appearance: none;
+        }
+        input[type="range"]:focus {
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #6c5ce7;
+            cursor: pointer;
+        }
+
+        .chart-container {
+            height: 200px;
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
             margin-top: 0.5rem;
         }
 
-        /* 通知浮层 */
         .toast {
             position: fixed;
             bottom: 20px;
@@ -153,17 +198,61 @@
             opacity: 0;
             transition: opacity 0.2s;
         }
+
+        /* 跟随鼠标的坐标浮层 */
+        .mouse-coord-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.7);
+            color: #6c5ce7;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            border-left: 3px solid #6c5ce7;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: opacity 0.1s;
+        }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <h2>✈️ 3D 无人机轨迹预测</h2>
-        <p style="font-size: 0.7rem; opacity:0.7;">多检测手段 | AI 辅助捕捉建议</p>
+        <p style="font-size: 0.7rem; opacity:0.7;">多检测手段 | AI 辅助捕捉建议 | 实时动画</p>
+
+        <!-- 显眼的数据分析入口 -->
+        <div style="margin: 1rem 0;">
+            <a href="/analysis" target="_self" style="text-decoration: none;">
+                <button style="background: linear-gradient(135deg, #ff6b6b, #a363d9); font-size: 1rem; font-weight: bold; padding: 0.8rem; border-radius: 48px; width: 100%; border: none; cursor: pointer; transition: transform 0.2s;">
+                📊 进入详细数据分析 →
+                </button>
+            </a>
+        </div>
 
         <div class="method-section">
             <h3>📡 检测手段</h3>
             <div class="method-list" id="methodList"></div>
             <button id="refreshBtn">🔄 刷新轨迹数据</button>
+        </div>
+
+        <div class="animation-section">
+            <h3>🎬 时间轴动画</h3>
+            <div class="slider-container">
+                <input type="range" id="timelineSlider" min="0" max="100" value="0" step="1">
+                <div style="display: flex; justify-content: space-between; margin-top: 0.2rem;">
+                    <span>起点</span>
+                    <span>当前进度</span>
+                    <span>终点</span>
+                </div>
+            </div>
+            <select id="animationPlatform" style="width:100%; margin-top:0.5rem; background:#2a2c30; color:#fff; border-radius:20px; padding:0.3rem;">
+                <option value="all">所有平台</option>
+            </select>
+            <button id="playBtn" class="primary">▶ 播放动画</button>
+            <button id="stopBtn">⏹ 停止</button>
         </div>
 
         <div class="predict-section">
@@ -175,11 +264,20 @@
             </div>
         </div>
 
+        <div class="info-section">
+            <h3>📊 飞行参数</h3>
+            <div id="paramPanel" class="param-panel"></div>
+        </div>
+
+        <div class="chart-section">
+            <h3>📈 高度变化曲线</h3>
+            <div id="heightChart" class="chart-container"></div>
+        </div>
+
         <div class="ai-section">
             <h3>🤖 AI 捕捉建议</h3>
             <button id="aiSuggestionBtn">💡 获取 AI 建议</button>
             <div class="info-card">
-                <div>AI 分析当前轨迹，给出捕捉策略</div>
                 <div id="aiSuggestion" class="ai-suggestion">等待 AI 建议...</div>
             </div>
         </div>
@@ -195,8 +293,8 @@
     </div>
 
     <div id="toast" class="toast"></div>
+    <div id="mouseCoordTooltip" class="mouse-coord-tooltip" style="display: none;"></div>
 
-    <!-- 引入 Three.js 核心库及扩展 -->
     <script type="importmap">
         {
             "imports": {
@@ -211,88 +309,137 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-        // ======================== 从后端注入数据 ========================
+        // 数据定义
         const methodsData = {{ methods_data | tojson }};
         let detectionMethods = methodsData;
-
-        // 存储预测轨迹
         let predictedTrajectories = {};
-        for (const id in detectionMethods) {
-            predictedTrajectories[id] = [];
-        }
+        for (const id in detectionMethods) predictedTrajectories[id] = [];
 
-        // 存储 Three.js 对象
+        // Three.js 对象
         let scene, camera, renderer, labelRenderer, controls;
-        let lines = {};        // 历史轨迹线对象
-        let predLines = {};    // 预测轨迹线对象
-        let spheres = {};      // 历史轨迹点球体
+        let lines = {}, predLines = {}, movingSpheres = {}, trailParticles = {}, pointLight = null;
+        let animationActive = false, animationId = null, timelineValue = 0, currentPlatformForAnim = 'all';
+        let heightChart = null;
+        let audioCtx = null;
+
+        // 预测动画相关
+        let activePredAnimations = {};
+
+        // 鼠标悬停相关
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let highlightedSphere = null;
 
         // ======================== 辅助函数 ========================
+        function playBeep() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = 800;
+            gain.gain.value = 0.1;
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
             toast.style.backgroundColor = isError ? '#ff6b6b' : '#6c5ce7';
             toast.style.opacity = '1';
             setTimeout(() => toast.style.opacity = '0', 2000);
+            if (!isError) playBeep();
         }
 
         function updateStats() {
-            let totalPoints = 0;
-            let visibleCount = 0;
+            let totalPoints = 0, visibleCount = 0;
             for (const id in detectionMethods) {
                 if (detectionMethods[id].visible) visibleCount++;
                 totalPoints += detectionMethods[id].points.length;
             }
             document.getElementById('histPoints').innerText = totalPoints;
             document.getElementById('visibleCount').innerText = visibleCount;
-            const now = new Date();
-            document.getElementById('lastUpdate').innerText = now.toLocaleTimeString();
+            document.getElementById('lastUpdate').innerText = new Date().toLocaleTimeString();
         }
 
-        // 生成预测轨迹 (简单模拟: 基于最后两个点线性外推)
+        function computeParams(points) {
+            if (points.length < 2) return { speed: 0, height: points[0]?.[1] || 0, angle: 0 };
+            const last = points[points.length-1], prev = points[points.length-2];
+            const dx = last[0] - prev[0], dz = last[2] - prev[2];
+            const speed = Math.sqrt(dx*dx + dz*dz) / 0.5;
+            const angle = Math.atan2(dz, dx) * 180 / Math.PI;
+            return { speed: speed.toFixed(1), height: last[1].toFixed(1), angle: angle.toFixed(0) };
+        }
+
+        function updateParamPanel() {
+            const container = document.getElementById('paramPanel');
+            container.innerHTML = '';
+            for (const [id, data] of Object.entries(detectionMethods)) {
+                if (!data.visible) continue;
+                const params = computeParams(data.points);
+                const div = document.createElement('div');
+                div.className = 'param-item';
+                div.innerHTML = `<div class="param-label">${data.name}</div>
+                                 <div class="param-value">${params.speed} m/s</div>
+                                 <div class="param-label">高:${params.height}m | 角:${params.angle}°</div>`;
+                container.appendChild(div);
+            }
+        }
+
+        function updateHeightChart() {
+            if (!heightChart) return;
+            const series = [];
+            for (const [id, data] of Object.entries(detectionMethods)) {
+                if (!data.visible) continue;
+                series.push({
+                    name: data.name,
+                    type: 'line',
+                    data: data.points.map(p => p[1]),
+                    lineStyle: { color: data.color, width: 2 },
+                    symbol: 'circle', symbolSize: 4
+                });
+            }
+            heightChart.setOption({
+                title: { text: '高度变化', textStyle: { color: '#fff' } },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: series[0]?.data.map((_, i) => i+1) || [], axisLabel: { color: '#ccc' } },
+                yAxis: { type: 'value', name: '高度 (m)', axisLabel: { color: '#ccc' } },
+                legend: { textStyle: { color: '#fff' } },
+                series: series,
+                grid: { containLabel: true, backgroundColor: 'rgba(0,0,0,0.2)' }
+            });
+        }
+
         function generatePrediction(points, numPoints = 5) {
             if (points.length < 2) return [];
-            const last = points[points.length - 1];
-            const secondLast = points[points.length - 2];
-            const dx = last[0] - secondLast[0];
-            const dy = last[1] - secondLast[1];
-            const dz = last[2] - secondLast[2];
+            const last = points[points.length-1], secondLast = points[points.length-2];
+            const dx = last[0] - secondLast[0], dy = last[1] - secondLast[1], dz = last[2] - secondLast[2];
             const pred = [];
-            for (let i = 1; i <= numPoints; i++) {
-                pred.push([
-                    last[0] + dx * i,
-                    last[1] + dy * i,
-                    last[2] + dz * i
-                ]);
-            }
+            for (let i = 1; i <= numPoints; i++) pred.push([last[0] + dx*i, last[1] + dy*i, last[2] + dz*i]);
             return pred;
         }
 
-        // 更新预测结果显示
         function updatePredictionUI() {
             let totalPredPoints = 0;
-            for (const id in predictedTrajectories) {
-                totalPredPoints += predictedTrajectories[id].length;
-            }
+            for (const id in predictedTrajectories) totalPredPoints += predictedTrajectories[id].length;
             document.getElementById('predPoints').innerText = totalPredPoints;
-            document.getElementById('confidence').innerText = (Math.random() * 30 + 70).toFixed(1) + '%'; // 模拟置信度
+            document.getElementById('confidence').innerText = (Math.random() * 30 + 70).toFixed(1) + '%';
         }
 
-        // ======================== Three.js 场景构建 ========================
+        // Three.js 场景初始化
         function initScene() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x05070a);
             scene.fog = new THREE.FogExp2(0x05070a, 0.008);
-
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(15, 12, 18);
             camera.lookAt(6, 3, 6);
-
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
-
             labelRenderer = new CSS2DRenderer();
             labelRenderer.setSize(window.innerWidth, window.innerHeight);
             labelRenderer.domElement.style.position = 'absolute';
@@ -300,24 +447,14 @@
             labelRenderer.domElement.style.left = '0px';
             labelRenderer.domElement.style.pointerEvents = 'none';
             document.body.appendChild(labelRenderer.domElement);
-
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.autoRotate = false;
-            controls.enableZoom = true;
-            controls.zoomSpeed = 1.2;
             controls.target.set(6, 3, 6);
-
-            // 辅助元素：网格地面和坐标轴
             const gridHelper = new THREE.GridHelper(30, 20, 0x6c5ce7, 0x2a2c30);
             gridHelper.position.y = -0.5;
             scene.add(gridHelper);
-
             const axesHelper = new THREE.AxesHelper(8);
             scene.add(axesHelper);
-
-            // 环境光 + 点光源
             const ambientLight = new THREE.AmbientLight(0x404060);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -326,8 +463,8 @@
             const backLight = new THREE.PointLight(0x6c5ce7, 0.5);
             backLight.position.set(-2, 5, -3);
             scene.add(backLight);
-
-            // 添加一些漂浮粒子装饰
+            pointLight = new THREE.PointLight(0x6c5ce7, 0.5, 10);
+            scene.add(pointLight);
             const particleGeo = new THREE.BufferGeometry();
             const particleCount = 800;
             const particlePositions = new Float32Array(particleCount * 3);
@@ -340,77 +477,53 @@
             const particleMat = new THREE.PointsMaterial({ color: 0x6c5ce7, size: 0.08, transparent: true, opacity: 0.4 });
             const particles = new THREE.Points(particleGeo, particleMat);
             scene.add(particles);
-
-            // 动画循环
             function animate() {
                 requestAnimationFrame(animate);
                 controls.update();
+                updateTrailParticles();
                 renderer.render(scene, camera);
                 labelRenderer.render(scene, camera);
             }
             animate();
         }
 
-        // 创建轨迹的视觉元素 (线条 + 点)
-        function createTrailVisuals(methodId, data) {
+        function createTrailVisuals(id, data) {
             const points = data.points;
             if (points.length < 2) return;
-
-            // 创建线条
-            const vertices = [];
-            points.forEach(p => vertices.push(new THREE.Vector3(p[0], p[1], p[2])));
+            const vertices = points.map(p => new THREE.Vector3(p[0], p[1], p[2]));
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
-            const lineMaterial = new THREE.LineBasicMaterial({ color: data.color, linewidth: 2 });
+            const lineMaterial = new THREE.LineBasicMaterial({ color: data.color });
             const lineObj = new THREE.Line(lineGeometry, lineMaterial);
-
-            // 创建点云 (球体)
             const sphereGroup = new THREE.Group();
-            points.forEach((p, idx) => {
-                const sphereMat = new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 });
-                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), sphereMat);
+            points.forEach(p => {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
                 sphere.position.set(p[0], p[1], p[2]);
                 sphereGroup.add(sphere);
             });
-
-            // 添加 CSS2D 标签 (手段名称 + 起点/终点)
             const startDiv = document.createElement('div');
             startDiv.textContent = '🚀 起点';
-            startDiv.style.color = '#fff';
-            startDiv.style.fontSize = '10px';
-            startDiv.style.backgroundColor = 'rgba(0,0,0,0.5)';
-            startDiv.style.padding = '2px 4px';
-            startDiv.style.borderRadius = '4px';
+            startDiv.style.cssText = 'color:#fff; font-size:10px; background:rgba(0,0,0,0.5); padding:2px 4px; border-radius:4px';
             const startLabel = new CSS2DObject(startDiv);
             startLabel.position.set(points[0][0], points[0][1] + 0.3, points[0][2]);
-
             const endDiv = document.createElement('div');
             endDiv.textContent = '🏁 终点';
             endDiv.style.cssText = startDiv.style.cssText;
             const endLabel = new CSS2DObject(endDiv);
             endLabel.position.set(points[points.length-1][0], points[points.length-1][1] + 0.3, points[points.length-1][2]);
-
             const nameDiv = document.createElement('div');
             nameDiv.textContent = data.name;
-            nameDiv.style.color = data.color;
-            nameDiv.style.fontSize = '12px';
-            nameDiv.style.fontWeight = 'bold';
-            nameDiv.style.backgroundColor = 'rgba(0,0,0,0.6)';
-            nameDiv.style.padding = '2px 6px';
-            nameDiv.style.borderRadius = '12px';
+            nameDiv.style.cssText = `color:${data.color}; font-size:12px; font-weight:bold; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:12px`;
             const nameLabel = new CSS2DObject(nameDiv);
             nameLabel.position.set(points[Math.floor(points.length/2)][0], points[Math.floor(points.length/2)][1] + 0.6, points[Math.floor(points.length/2)][2]);
-
             return { line: lineObj, points: sphereGroup, startLabel, endLabel, nameLabel };
         }
 
-        // 创建预测轨迹线 (虚线)
         function createPredictionLine(methodId, predPoints, color) {
             if (!predPoints || predPoints.length < 2) return null;
             const vertices = predPoints.map(p => new THREE.Vector3(p[0], p[1], p[2]));
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
-            const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2, transparent: true, opacity: 0.7 });
+            const material = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.7 });
             const lineObj = new THREE.Line(lineGeometry, material);
-            // 添加点标记
             const pointsGroup = new THREE.Group();
             predPoints.forEach(p => {
                 const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 }));
@@ -420,159 +533,392 @@
             return { line: lineObj, points: pointsGroup };
         }
 
-        // 刷新所有轨迹显示 (根据可见性)
         function refreshVisuals() {
             for (const id in detectionMethods) {
                 const data = detectionMethods[id];
-                // 移除旧对象
                 if (lines[id]) {
-                    scene.remove(lines[id].line);
-                    scene.remove(lines[id].points);
-                    scene.remove(lines[id].startLabel);
-                    scene.remove(lines[id].endLabel);
-                    scene.remove(lines[id].nameLabel);
+                    scene.remove(lines[id].line); scene.remove(lines[id].points);
+                    scene.remove(lines[id].startLabel); scene.remove(lines[id].endLabel); scene.remove(lines[id].nameLabel);
                 }
-                if (predLines[id]) {
-                    scene.remove(predLines[id].line);
-                    scene.remove(predLines[id].points);
-                }
+                if (predLines[id]) { scene.remove(predLines[id].line); scene.remove(predLines[id].points); }
                 if (data.visible) {
                     const visuals = createTrailVisuals(id, data);
                     lines[id] = visuals;
-                    scene.add(visuals.line);
-                    scene.add(visuals.points);
-                    scene.add(visuals.startLabel);
-                    scene.add(visuals.endLabel);
-                    scene.add(visuals.nameLabel);
-                    // 如果有预测轨迹且可见，则显示预测
+                    scene.add(visuals.line); scene.add(visuals.points);
+                    scene.add(visuals.startLabel); scene.add(visuals.endLabel); scene.add(visuals.nameLabel);
                     if (predictedTrajectories[id] && predictedTrajectories[id].length > 0) {
                         const predVis = createPredictionLine(id, predictedTrajectories[id], data.color);
                         if (predVis) {
                             predLines[id] = predVis;
-                            scene.add(predVis.line);
-                            scene.add(predVis.points);
+                            scene.add(predVis.line); scene.add(predVis.points);
                         }
                     }
-                } else {
-                    lines[id] = null;
-                    predLines[id] = null;
-                }
+                } else { lines[id] = null; predLines[id] = null; }
             }
-            updateStats();
+            updateStats(); updateParamPanel(); updateHeightChart();
         }
 
-        // 刷新数据 (模拟新的历史轨迹)
-        async function refreshData() {
-            try {
-                const response = await fetch('/api/refresh_data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const result = await response.json();
-                if (result.success) {
-                    // 重新从后端获取最新数据（简化：前端直接使用返回的更新？这里我们模拟本地更新，但为了保持同步，最好重新从后端加载）
-                    // 由于 refresh_data 已经修改了后端 detection_methods，但前端没有同步，所以我们需要重新加载数据。
-                    // 简便方法：重新从后端获取完整数据，但这里为了简单，我们手动更新前端并通知用户。
-                    // 这里简单提示，实际应重新请求数据，我们做一个简单的重新加载页面或重新获取数据。
-                    // 为了让前端同步，我们重新加载页面或重新 fetch 数据。这里简单重新加载页面。
-                    location.reload();
-                } else {
-                    showToast("刷新失败", true);
+        // 拖尾粒子系统
+        function initTrailSystem(methodId, color) {
+            const particleCount = 30;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount; i++) {
+                positions[i*3] = positions[i*3+1] = positions[i*3+2] = 0;
+                colors[i*3] = colors[i*3+1] = colors[i*3+2] = 0;
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.1, vertexColors: true, transparent: true, opacity: 0.6 });
+            const points = new THREE.Points(geometry, material);
+            scene.add(points);
+            trailParticles[methodId] = { system: points, particles: [], nextIndex: 0 };
+            for (let i = 0; i < particleCount; i++) trailParticles[methodId].particles.push({ position: new THREE.Vector3(), life: 0, color: new THREE.Color(color) });
+        }
+
+        function addTrailParticle(methodId, pos, color) {
+            if (!trailParticles[methodId]) initTrailSystem(methodId, color);
+            const tp = trailParticles[methodId];
+            const idx = tp.nextIndex;
+            const particle = tp.particles[idx];
+            particle.position.copy(pos);
+            particle.life = 1.0;
+            particle.color.set(color);
+            tp.nextIndex = (tp.nextIndex + 1) % tp.particles.length;
+        }
+
+        function updateTrailParticles() {
+            for (const id in trailParticles) {
+                const tp = trailParticles[id];
+                const positionsAttr = tp.system.geometry.attributes.position.array;
+                const colorsAttr = tp.system.geometry.attributes.color.array;
+                let anyAlive = false;
+                for (let i = 0; i < tp.particles.length; i++) {
+                    const p = tp.particles[i];
+                    if (p.life > 0) {
+                        anyAlive = true;
+                        p.life -= 0.02;
+                        positionsAttr[i*3] = p.position.x;
+                        positionsAttr[i*3+1] = p.position.y;
+                        positionsAttr[i*3+2] = p.position.z;
+                        colorsAttr[i*3] = p.color.r * p.life;
+                        colorsAttr[i*3+1] = p.color.g * p.life;
+                        colorsAttr[i*3+2] = p.color.b * p.life;
+                    } else {
+                        positionsAttr[i*3] = 0;
+                        positionsAttr[i*3+1] = 0;
+                        positionsAttr[i*3+2] = 0;
+                        colorsAttr[i*3] = 0;
+                        colorsAttr[i*3+1] = 0;
+                        colorsAttr[i*3+2] = 0;
+                    }
                 }
-            } catch (error) {
-                showToast("请求失败: " + error.message, true);
+                tp.system.geometry.attributes.position.needsUpdate = true;
+                tp.system.geometry.attributes.color.needsUpdate = true;
             }
         }
 
-        // 执行预测 (前端简单线性外推，也可调用后端)
+        // 动画控制
+        function createMovingSphere(color) {
+            const geometry = new THREE.SphereGeometry(0.3, 32, 32);
+            const material = new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 });
+            const sphere = new THREE.Mesh(geometry, material);
+            scene.add(sphere);
+            return sphere;
+        }
+
+        function updateAnimationProgress(progress) {
+            if (currentPlatformForAnim === 'all') {
+                for (const id in detectionMethods) {
+                    const points = detectionMethods[id].points;
+                    if (points.length === 0) continue;
+                    const idx = Math.floor(progress * (points.length - 1));
+                    const pos = points[idx];
+                    if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
+                    movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                    addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
+                    if (id === Object.keys(detectionMethods)[0] && pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
+                }
+            } else {
+                const id = currentPlatformForAnim;
+                const points = detectionMethods[id]?.points;
+                if (points && points.length) {
+                    const idx = Math.floor(progress * (points.length - 1));
+                    const pos = points[idx];
+                    if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
+                    movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                    addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
+                    if (pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
+                }
+            }
+        }
+
+        function startAnimation() {
+            if (animationActive) return;
+            animationActive = true;
+            const slider = document.getElementById('timelineSlider');
+            const duration = 5000;
+            const startTime = performance.now();
+            const startVal = parseFloat(slider.value) / 100;
+            const endVal = 1.0;
+            function step(now) {
+                const elapsed = now - startTime;
+                let t = Math.min(1, elapsed / duration);
+                const val = startVal + t * (endVal - startVal);
+                slider.value = val * 100;
+                timelineValue = val;
+                updateAnimationProgress(val);
+                if (t < 1) animationId = requestAnimationFrame(step);
+                else { animationActive = false; animationId = null; }
+            }
+            animationId = requestAnimationFrame(step);
+        }
+
+        function stopAnimation() {
+            if (animationId) cancelAnimationFrame(animationId);
+            animationActive = false;
+            animationId = null;
+        }
+
+        // 预测动画
+        function animatePredictionLine(methodId, predPoints, color) {
+            if (!predPoints || predPoints.length < 2) return;
+            if (activePredAnimations[methodId]) {
+                cancelAnimationFrame(activePredAnimations[methodId].frame);
+                delete activePredAnimations[methodId];
+            }
+            if (predLines[methodId]) {
+                scene.remove(predLines[methodId].line);
+                scene.remove(predLines[methodId].points);
+            }
+            const pointsGroup = new THREE.Group();
+            const lineMaterial = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.7 });
+            let currentLineObj = null;
+            let currentIndex = 0;
+            const totalSegments = predPoints.length - 1;
+            let startTime = null;
+            const durationPerSegment = 200;
+
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const elapsed = timestamp - startTime;
+                const segmentIndex = Math.min(totalSegments, Math.floor(elapsed / durationPerSegment));
+                if (segmentIndex !== currentIndex) {
+                    currentIndex = segmentIndex;
+                    if (currentLineObj) scene.remove(currentLineObj);
+                    const vertices = predPoints.slice(0, segmentIndex + 1).map(p => new THREE.Vector3(p[0], p[1], p[2]));
+                    if (vertices.length >= 2) {
+                        const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
+                        currentLineObj = new THREE.Line(lineGeometry, lineMaterial);
+                        scene.add(currentLineObj);
+                    }
+                    if (segmentIndex > 0 && segmentIndex <= totalSegments) {
+                        const pos = predPoints[segmentIndex];
+                        if (!activePredAnimations[methodId].movingSphere) {
+                            const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: color, emissive: 0xff6600 }));
+                            scene.add(sphere);
+                            activePredAnimations[methodId].movingSphere = sphere;
+                        }
+                        activePredAnimations[methodId].movingSphere.position.set(pos[0], pos[1], pos[2]);
+                        addTrailParticle(methodId, activePredAnimations[methodId].movingSphere.position, color);
+                    }
+                }
+                if (currentIndex < totalSegments) {
+                    activePredAnimations[methodId].frame = requestAnimationFrame(step);
+                } else {
+                    if (currentLineObj) scene.remove(currentLineObj);
+                    const finalVis = createPredictionLine(methodId, predPoints, color);
+                    if (finalVis) {
+                        predLines[methodId] = finalVis;
+                        scene.add(finalVis.line);
+                        scene.add(finalVis.points);
+                    }
+                    if (activePredAnimations[methodId].movingSphere) scene.remove(activePredAnimations[methodId].movingSphere);
+                    delete activePredAnimations[methodId];
+                }
+            }
+            activePredAnimations[methodId] = { frame: null, movingSphere: null };
+            activePredAnimations[methodId].frame = requestAnimationFrame(step);
+        }
+
         function runPrediction() {
+            for (const id in activePredAnimations) {
+                cancelAnimationFrame(activePredAnimations[id].frame);
+                if (activePredAnimations[id].movingSphere) scene.remove(activePredAnimations[id].movingSphere);
+                delete activePredAnimations[id];
+            }
             for (const id in detectionMethods) {
                 if (detectionMethods[id].visible) {
                     const pred = generatePrediction(detectionMethods[id].points, 6);
                     predictedTrajectories[id] = pred;
+                    if (pred.length >= 2) animatePredictionLine(id, pred, detectionMethods[id].color);
                 } else {
                     predictedTrajectories[id] = [];
                 }
             }
-            refreshVisuals();
             updatePredictionUI();
-            showToast("预测完成，虚线为预测轨迹");
+            showToast("预测动画已开始，虚线逐步延伸");
         }
 
-        // 获取 AI 建议
+        async function refreshData() {
+            try {
+                const response = await fetch('/api/refresh_data', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) location.reload();
+                else showToast("刷新失败", true);
+            } catch (error) { showToast("请求失败: " + error.message, true); }
+        }
+
         async function getAISuggestion() {
             const btn = document.getElementById('aiSuggestionBtn');
             btn.disabled = true;
             btn.textContent = '⏳ 正在思考...';
             const suggestionDiv = document.getElementById('aiSuggestion');
             suggestionDiv.innerHTML = '正在调用 AI 模型分析轨迹数据...';
-
             try {
-                // 准备当前所有检测手段的轨迹数据
                 const dataToSend = {};
-                for (const id in detectionMethods) {
-                    dataToSend[id] = {
-                        name: detectionMethods[id].name,
-                        points: detectionMethods[id].points
-                    };
-                }
-
+                for (const id in detectionMethods) dataToSend[id] = { name: detectionMethods[id].name, points: detectionMethods[id].points };
                 const response = await fetch('/api/ai_suggestion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ methods_data: dataToSend })
                 });
                 const result = await response.json();
-                if (result.success) {
-                    suggestionDiv.innerHTML = result.suggestion;
-                } else {
-                    suggestionDiv.innerHTML = `❌ 获取建议失败: ${result.error}`;
-                }
-            } catch (error) {
-                suggestionDiv.innerHTML = `❌ 请求错误: ${error.message}`;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '💡 获取 AI 建议';
-            }
+                if (result.success) suggestionDiv.innerHTML = result.suggestion;
+                else suggestionDiv.innerHTML = `❌ 获取建议失败: ${result.error}`;
+            } catch (error) { suggestionDiv.innerHTML = `❌ 请求错误: ${error.message}`; }
+            finally { btn.disabled = false; btn.textContent = '💡 获取 AI 建议'; }
         }
 
-        // ======================== UI 交互 ========================
         function renderMethodList() {
             const container = document.getElementById('methodList');
             container.innerHTML = '';
+            const animSelect = document.getElementById('animationPlatform');
+            animSelect.innerHTML = '<option value="all">所有平台</option>';
             for (const [id, data] of Object.entries(detectionMethods)) {
                 const div = document.createElement('div');
                 div.className = 'method-item';
-                div.innerHTML = `
-                    <div class="method-color" style="background: ${data.color};"></div>
-                    <div class="method-name">${data.name}</div>
-                    <div class="method-status ${data.visible ? 'active' : ''}">${data.visible ? '显示' : '隐藏'}</div>
-                `;
+                div.innerHTML = `<div class="method-color" style="background: ${data.color};"></div>
+                                 <div class="method-name">${data.name}</div>
+                                 <div class="method-status ${data.visible ? 'active' : ''}">${data.visible ? '显示' : '隐藏'}</div>`;
                 div.addEventListener('click', () => {
                     detectionMethods[id].visible = !detectionMethods[id].visible;
                     renderMethodList();
                     refreshVisuals();
                 });
                 container.appendChild(div);
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = data.name;
+                animSelect.appendChild(option);
             }
         }
 
-        // 初始化所有
+        // ======================== WASD 控制 ========================
+        const keyState = { w: false, a: false, s: false, d: false };
+        const moveSpeed = 0.2;
+
+        function handleWASD() {
+            if (!camera) return;
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
+            right.normalize();
+
+            let move = new THREE.Vector3(0, 0, 0);
+            if (keyState.w) move.add(forward);
+            if (keyState.s) move.sub(forward);
+            if (keyState.d) move.add(right);
+            if (keyState.a) move.sub(right);
+            if (move.length() > 0) move.normalize();
+
+            camera.position.x += move.x * moveSpeed;
+            camera.position.z += move.z * moveSpeed;
+            controls.target.set(6, 3, 6);
+            controls.update();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keyState.w = true;
+            if (key === 'a') keyState.a = true;
+            if (key === 's') keyState.s = true;
+            if (key === 'd') keyState.d = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keyState.w = false;
+            if (key === 'a') keyState.a = false;
+            if (key === 's') keyState.s = false;
+            if (key === 'd') keyState.d = false;
+        });
+
+        setInterval(handleWASD, 16);
+
+        // ======================== 鼠标悬停坐标显示 ========================
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const allSpheres = [];
+            for (const id in lines) {
+                if (lines[id] && lines[id].points) {
+                    lines[id].points.children.forEach(sphere => allSpheres.push(sphere));
+                }
+            }
+            const intersects = raycaster.intersectObjects(allSpheres);
+            const tooltip = document.getElementById('mouseCoordTooltip');
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const point = hit.point;
+                const coordStr = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
+                tooltip.innerHTML = `📍 ${coordStr}`;
+                tooltip.style.display = 'block';
+                tooltip.style.left = (event.clientX + 15) + 'px';
+                tooltip.style.top = (event.clientY - 25) + 'px';
+                if (highlightedSphere) {
+                    highlightedSphere.material.emissive.setHex(0x222222);
+                }
+                highlightedSphere = hit.object;
+                highlightedSphere.material.emissive.setHex(0xff6600);
+            } else {
+                tooltip.style.display = 'none';
+                if (highlightedSphere) {
+                    highlightedSphere.material.emissive.setHex(0x222222);
+                    highlightedSphere = null;
+                }
+            }
+        }
+
+        // 初始化
         initScene();
         renderMethodList();
         refreshVisuals();
+        heightChart = echarts.init(document.getElementById('heightChart'));
+        updateHeightChart();
+
         document.getElementById('refreshBtn').addEventListener('click', refreshData);
         document.getElementById('predictBtn').addEventListener('click', runPrediction);
         document.getElementById('aiSuggestionBtn').addEventListener('click', getAISuggestion);
+        document.getElementById('playBtn').addEventListener('click', startAnimation);
+        document.getElementById('stopBtn').addEventListener('click', stopAnimation);
+        document.getElementById('timelineSlider').addEventListener('input', (e) => {
+            if (animationActive) stopAnimation();
+            timelineValue = e.target.value / 100;
+            updateAnimationProgress(timelineValue);
+        });
+        document.getElementById('animationPlatform').addEventListener('change', (e) => {
+            currentPlatformForAnim = e.target.value;
+            if (!animationActive) updateAnimationProgress(timelineValue);
+        });
 
-        // 窗口自适应
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            labelRenderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        showToast("系统已启动，按 WASD 移动相机，鼠标悬停显示坐标");
     </script>
 </body>
 </html>
