@@ -61,7 +61,14 @@ initialize_data()
 
 @main_bp.route('/')
 def index():
-    return render_template('index.html', methods_data=detection_methods)
+    """主页面：传递检测手段元数据和预测配置"""
+    # 读取预测配置，若不存在则使用默认值
+    pred_settings = config.get('prediction_settings', {
+        'min_points': 1,
+        'max_points': 20,
+        'default_points': 6
+    })
+    return render_template('index.html', methods_data=detection_methods, pred_settings=pred_settings)
 
 
 # ---------------------- 清理所有数据并备份 ----------------------
@@ -174,17 +181,24 @@ def load_data():
 @main_bp.route('/api/predict_all', methods=['POST'])
 def predict_all():
     """对当前所有可见检测手段进行预测，并将结果保存到 data/predict/，同时返回预测点和对应时间戳"""
-    num_points = request.json.get('num_points', 6)
-    time_step = request.json.get('time_step', 0.5)
+    data = request.json or {}
+    num_points = data.get('num_points', 6)
+    time_step = data.get('time_step', 0.5)
+
+    # 从配置读取范围限制
+    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20})
+    min_pts = pred_settings.get('min_points', 1)
+    max_pts = pred_settings.get('max_points', 20)
+    num_points = max(min_pts, min(num_points, max_pts))  # 限制在配置范围内
+
     results = {}
-    for method_id, data in detection_methods.items():
-        if data.get('visible', False) and data.get('points') and len(data['points']) >= 2:
-            points = data['points']
-            timestamps = data.get('timestamps', [])
+    for method_id, method_data in detection_methods.items():
+        if method_data.get('visible', False) and method_data.get('points') and len(method_data['points']) >= 2:
+            points = method_data['points']
+            timestamps = method_data.get('timestamps', [])
             pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
             if pred_points:
                 save_predict_data(method_id, pred_points, pred_times)
-                # 返回预测点及对应时间戳
                 results[method_id] = {'prediction': pred_points, 'pred_times': pred_times}
     return jsonify({'success': True, 'results': results})
 
@@ -201,6 +215,13 @@ def predict():
     timestamps = data.get('timestamps', [])
     num_points = data.get('num_points', 6)
     time_step = data.get('time_step', 0.5)
+
+    # 从配置读取范围限制
+    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20})
+    min_pts = pred_settings.get('min_points', 1)
+    max_pts = pred_settings.get('max_points', 20)
+    num_points = max(min_pts, min(num_points, max_pts))  # 限制在配置范围内
+
     pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
     if pred_points:
         save_predict_data(method_id, pred_points, pred_times)

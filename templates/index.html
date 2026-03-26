@@ -288,6 +288,17 @@
                 <option value="">选择平台</option>
                 <option value="all">所有平台</option>
             </select>
+            <div style="margin-top: 0.5rem;">
+                <label>预测点数:
+                    <input type="range" id="predictPointsSlider"
+                           min="{{ pred_settings.min_points }}"
+                           max="{{ pred_settings.max_points }}"
+                           step="1"
+                           value="{{ pred_settings.default_points }}"
+                           style="width: calc(100% - 60px); vertical-align: middle;">
+                </label>
+                <span id="predictPointsValue" style="display: inline-block; width: 40px; text-align: center;">{{ pred_settings.default_points }}</span>
+            </div>
             <button id="predictBtn" class="primary">⚡ 开始预测</button>
             <div class="info-card">
                 <div>预测置信度: <span id="confidence">--</span></div>
@@ -1051,6 +1062,7 @@
                 showToast("请先选择一个检测手段或所有平台", true);
                 return;
             }
+            const numPoints = parseInt(document.getElementById('predictPointsSlider').value, 10); // 获取滑块值
             const btn = document.getElementById('predictBtn');
             btn.disabled = true;
             if (methodId === 'all') {
@@ -1059,7 +1071,7 @@
                     const response = await fetch('/api/predict_all', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ num_points: 6, time_step: 0.5 })
+                        body: JSON.stringify({ num_points: numPoints, time_step: 0.5 }) // 使用 numPoints
                     });
                     const result = await response.json();
                     if (result.success) {
@@ -1098,7 +1110,7 @@
                             method_id: methodId,
                             points: data.points,
                             timestamps: data.timestamps || [],
-                            num_points: 6,
+                            num_points: numPoints,   // 使用 numPoints
                             time_step: 0.5
                         })
                     });
@@ -1338,8 +1350,8 @@
             let move = new THREE.Vector3(0, 0, 0);
             if (keyState.w) move.add(forward);
             if (keyState.s) move.sub(forward);
-            if (keyState.d) move.add(right);
-            if (keyState.a) move.sub(right);
+            if (keyState.d) move.sub(right);
+            if (keyState.a) move.add(right);
             if (move.length() > 0) move.normalize();
 
             camera.position.x += move.x * moveSpeed;
@@ -1442,6 +1454,13 @@
             } else {
                 updateTrailSegment(currentPlatformForAnim, targetTime);
             }
+        });
+
+        // 预测点数滑块联动
+        const predictSlider = document.getElementById('predictPointsSlider');
+        const predictPointsSpan = document.getElementById('predictPointsValue');
+        predictSlider.addEventListener('input', (e) => {
+            predictPointsSpan.textContent = e.target.value;
         });
 
         showToast("系统已启动，按 WASD 移动相机，鼠标悬停显示坐标");

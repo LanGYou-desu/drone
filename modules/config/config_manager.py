@@ -19,7 +19,6 @@ DEFAULT_CONFIG = {
             "name": "可见光",
             "color": "#ff6b6b",
             "visible": True
-            # points 和 timestamps 不在此存储，从文件加载
         },
         "infrared": {
             "name": "红外",
@@ -31,6 +30,11 @@ DEFAULT_CONFIG = {
             "color": "#ffe66d",
             "visible": True
         }
+    },
+    "prediction_settings": {          # 新增预测配置
+        "min_points": 1,
+        "max_points": 20,
+        "default_points": 6
     }
 }
 
