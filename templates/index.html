@@ -353,6 +353,12 @@
 
         // ======================== 从后端注入数据 ========================
         const methodsData = {{ methods_data | tojson }};
+        const predConfig = {
+            minPoints: {{ pred_settings.min_points }},
+            maxPoints: {{ pred_settings.max_points }},
+            defaultPoints: {{ pred_settings.default_points }},
+            defaultTimeStep: {{ pred_settings.time_step }}
+        };
         let detectionMethods = methodsData;
         // 预测轨迹结构：{ points: [], times: [] }
         let predictedTrajectories = {};
@@ -1071,7 +1077,7 @@
                     const response = await fetch('/api/predict_all', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ num_points: numPoints, time_step: 0.5 }) // 使用 numPoints
+                        body: JSON.stringify({ num_points: numPoints, time_step: predConfig.defaultTimeStep }) // 使用 numPoints
                     });
                     const result = await response.json();
                     if (result.success) {
@@ -1111,7 +1117,7 @@
                             points: data.points,
                             timestamps: data.timestamps || [],
                             num_points: numPoints,   // 使用 numPoints
-                            time_step: 0.5
+                            time_step: predConfig.defaultTimeStep
                         })
                     });
                     const result = await response.json();
