@@ -47,4 +47,4 @@ if __name__ == '__main__':
         resizable=True,
         fullscreen=False
     )
-    webview.start(gui='edgechromium')  # 使用 Edge Chromium 后端，避免 pythonnet 问题
+    webview.start()

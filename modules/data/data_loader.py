@@ -1,5 +1,4 @@
 import os
-import shutil
 
 def load_dat_file(file_path):
     """加载 .dat 文件，每行格式：x y z t，返回点列表和时间戳列表"""
@@ -45,22 +44,3 @@ def load_default_data():
         points, timestamps = load_dat_file(file_path)
         methods[mid] = {'points': points, 'timestamps': timestamps}
     return methods
-
-def backup_data():
-    """备份 data 目录下所有文件到 data/backup，清空原目录内容"""
-    backup_dir = os.path.join('data', 'backup')
-    if os.path.exists(backup_dir):
-        shutil.rmtree(backup_dir)
-    shutil.copytree('data', backup_dir, ignore=shutil.ignore_patterns('backup'))
-    print(f"📦 已备份 data 目录到 {backup_dir}")
-
-def clear_all_data():
-    """清空 data/fact 和 data/predict 中的所有文件（保留目录）"""
-    for subdir in ['fact', 'predict']:
-        dir_path = os.path.join('data', subdir)
-        if os.path.exists(dir_path):
-            for filename in os.listdir(dir_path):
-                file_path = os.path.join(dir_path, filename)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-            print(f"🗑️ 已清空 {dir_path} 中的所有文件")
