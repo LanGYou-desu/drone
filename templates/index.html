@@ -199,7 +199,6 @@
             transition: opacity 0.2s;
         }
 
-        /* 跟随鼠标的坐标浮层 */
         .mouse-coord-tooltip {
             position: fixed;
             background: rgba(0, 0, 0, 0.7);
@@ -214,7 +213,6 @@
             border-left: 3px solid #6c5ce7;
             white-space: nowrap;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transition: opacity 0.1s;
         }
     </style>
 </head>
@@ -223,11 +221,10 @@
         <h2>✈️ 3D 无人机轨迹预测</h2>
         <p style="font-size: 0.7rem; opacity:0.7;">多检测手段 | AI 辅助捕捉建议 | 实时动画</p>
 
-        <!-- 显眼的数据分析入口 -->
         <div style="margin: 1rem 0;">
             <a href="/analysis" target="_self" style="text-decoration: none;">
                 <button style="background: linear-gradient(135deg, #ff6b6b, #a363d9); font-size: 1rem; font-weight: bold; padding: 0.8rem; border-radius: 48px; width: 100%; border: none; cursor: pointer; transition: transform 0.2s;">
-                📊 进入详细数据分析 →
+                    📊 进入详细数据分析 →
                 </button>
             </a>
         </div>
@@ -236,6 +233,8 @@
             <h3>📡 检测手段</h3>
             <div class="method-list" id="methodList"></div>
             <button id="refreshBtn">🔄 刷新轨迹数据</button>
+            <button id="loadDataBtn" style="background: linear-gradient(135deg, #4ecdc4, #6c5ce7);">📂 加载外部数据</button>
+            <button id="clearDataBtn">🗑️ 清理当前数据</button>
         </div>
 
         <div class="animation-section">
@@ -248,6 +247,15 @@
                     <span>终点</span>
                 </div>
             </div>
+            <div style="margin-top: 0.5rem;">
+                <label>倍速：</label>
+                <select id="speedSelect" style="background:#2a2c30; color:#fff; border-radius:20px; padding:0.3rem;">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                </select>
+            </div>
             <select id="animationPlatform" style="width:100%; margin-top:0.5rem; background:#2a2c30; color:#fff; border-radius:20px; padding:0.3rem;">
                 <option value="all">所有平台</option>
             </select>
@@ -257,6 +265,9 @@
 
         <div class="predict-section">
             <h3>🔮 轨迹预测</h3>
+            <select id="predictPlatform" style="width:100%; background:#2a2c30; color:#fff; border-radius:20px; padding:0.3rem;">
+                <option value="">选择平台</option>
+            </select>
             <button id="predictBtn" class="primary">⚡ 开始预测</button>
             <div class="info-card">
                 <div>预测置信度: <span id="confidence">--</span></div>
@@ -309,7 +320,7 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-        // 数据定义
+        // 从后端注入数据
         const methodsData = {{ methods_data | tojson }};
         let detectionMethods = methodsData;
         let predictedTrajectories = {};
@@ -321,16 +332,19 @@
         let animationActive = false, animationId = null, timelineValue = 0, currentPlatformForAnim = 'all';
         let heightChart = null;
         let audioCtx = null;
-
-        // 预测动画相关
         let activePredAnimations = {};
+
+        // 动画参数
+        let animationStartTime = null;
+        let animationDuration = 5000;
+        let animationSpeed = 1.0;
 
         // 鼠标悬停相关
         let raycaster = new THREE.Raycaster();
         let mouse = new THREE.Vector2();
         let highlightedSphere = null;
 
-        // ======================== 辅助函数 ========================
+        // 辅助函数
         function playBeep() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = audioCtx.createOscillator();
@@ -364,11 +378,12 @@
             document.getElementById('lastUpdate').innerText = new Date().toLocaleTimeString();
         }
 
-        function computeParams(points) {
+        function computeParams(points, timestamps) {
             if (points.length < 2) return { speed: 0, height: points[0]?.[1] || 0, angle: 0 };
             const last = points[points.length-1], prev = points[points.length-2];
+            const dt = timestamps ? timestamps[timestamps.length-1] - timestamps[timestamps.length-2] : 0.5;
             const dx = last[0] - prev[0], dz = last[2] - prev[2];
-            const speed = Math.sqrt(dx*dx + dz*dz) / 0.5;
+            const speed = Math.sqrt(dx*dx + dz*dz) / dt;
             const angle = Math.atan2(dz, dx) * 180 / Math.PI;
             return { speed: speed.toFixed(1), height: last[1].toFixed(1), angle: angle.toFixed(0) };
         }
@@ -378,7 +393,7 @@
             container.innerHTML = '';
             for (const [id, data] of Object.entries(detectionMethods)) {
                 if (!data.visible) continue;
-                const params = computeParams(data.points);
+                const params = computeParams(data.points, data.timestamps);
                 const div = document.createElement('div');
                 div.className = 'param-item';
                 div.innerHTML = `<div class="param-label">${data.name}</div>
@@ -412,13 +427,65 @@
             });
         }
 
-        function generatePrediction(points, numPoints = 5) {
-            if (points.length < 2) return [];
-            const last = points[points.length-1], secondLast = points[points.length-2];
-            const dx = last[0] - secondLast[0], dy = last[1] - secondLast[1], dz = last[2] - secondLast[2];
-            const pred = [];
-            for (let i = 1; i <= numPoints; i++) pred.push([last[0] + dx*i, last[1] + dy*i, last[2] + dz*i]);
-            return pred;
+        // 生成预测（调用后端）
+        async function runPrediction() {
+            const platformSelect = document.getElementById('predictPlatform');
+            const methodId = platformSelect.value;
+            if (!methodId) {
+                showToast("请先选择一个检测手段或所有平台", true);
+                return;
+            }
+            const btn = document.getElementById('predictBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 预测中...';
+            try {
+                let payload;
+                if (methodId === 'all') {
+                    payload = { method_id: 'all' };
+                } else {
+                    const data = detectionMethods[methodId];
+                    if (!data || data.points.length < 2) {
+                        showToast("该平台轨迹点数不足，无法预测", true);
+                        btn.disabled = false;
+                        btn.textContent = '⚡ 开始预测';
+                        return;
+                    }
+                    payload = {
+                        method_id: methodId,
+                        points: data.points,
+                        timestamps: data.timestamps || [],
+                        num_points: 6,
+                        time_step: 0.5
+                    };
+                }
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    if (methodId === 'all') {
+                        // 为所有平台更新预测轨迹
+                        for (const mid in result.results) {
+                            predictedTrajectories[mid] = result.results[mid].prediction;
+                        }
+                        showToast("所有平台预测完成");
+                    } else {
+                        predictedTrajectories[methodId] = result.prediction;
+                        showToast("预测完成");
+                    }
+                    refreshVisuals();
+                    updatePredictionUI();
+                } else {
+                    showToast("预测失败: " + (result.error || "未知错误"), true);
+                }
+            } catch (error) {
+                showToast("请求失败: " + error.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚡ 开始预测';
+            }
         }
 
         function updatePredictionUI() {
@@ -496,7 +563,7 @@
             const lineObj = new THREE.Line(lineGeometry, lineMaterial);
             const sphereGroup = new THREE.Group();
             points.forEach(p => {
-                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
                 sphere.position.set(p[0], p[1], p[2]);
                 sphereGroup.add(sphere);
             });
@@ -526,7 +593,7 @@
             const lineObj = new THREE.Line(lineGeometry, material);
             const pointsGroup = new THREE.Group();
             predPoints.forEach(p => {
-                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 }));
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 }));
                 sphere.position.set(p[0], p[1], p[2]);
                 pointsGroup.add(sphere);
             });
@@ -570,7 +637,7 @@
             }
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-            const material = new THREE.PointsMaterial({ size: 0.1, vertexColors: true, transparent: true, opacity: 0.6 });
+            const material = new THREE.PointsMaterial({ size: 0.06, vertexColors: true, transparent: true, opacity: 0.6 });
             const points = new THREE.Points(geometry, material);
             scene.add(points);
             trailParticles[methodId] = { system: points, particles: [], nextIndex: 0 };
@@ -593,11 +660,9 @@
                 const tp = trailParticles[id];
                 const positionsAttr = tp.system.geometry.attributes.position.array;
                 const colorsAttr = tp.system.geometry.attributes.color.array;
-                let anyAlive = false;
                 for (let i = 0; i < tp.particles.length; i++) {
                     const p = tp.particles[i];
                     if (p.life > 0) {
-                        anyAlive = true;
                         p.life -= 0.02;
                         positionsAttr[i*3] = p.position.x;
                         positionsAttr[i*3+1] = p.position.y;
@@ -619,31 +684,49 @@
             }
         }
 
-        // 动画控制
-        function createMovingSphere(color) {
-            const geometry = new THREE.SphereGeometry(0.3, 32, 32);
-            const material = new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 });
-            const sphere = new THREE.Mesh(geometry, material);
-            scene.add(sphere);
-            return sphere;
+        // 动画控制（基于时间戳）
+        function getProgressForPlatform(platformId, timestamp) {
+            const data = detectionMethods[platformId];
+            if (!data || !data.timestamps || data.timestamps.length === 0) return 0;
+            const t0 = data.timestamps[0];
+            const t1 = data.timestamps[data.timestamps.length-1];
+            if (t1 === t0) return 0;
+            return (timestamp - t0) / (t1 - t0);
         }
 
-        function updateAnimationProgress(progress) {
+        function updateAnimationByTime(timestamp) {
             if (currentPlatformForAnim === 'all') {
                 for (const id in detectionMethods) {
                     const points = detectionMethods[id].points;
-                    if (points.length === 0) continue;
+                    const timestamps = detectionMethods[id].timestamps;
+                    if (!points.length) continue;
+                    let progress = 0;
+                    if (timestamps && timestamps.length) {
+                        const t0 = timestamps[0];
+                        const t1 = timestamps[timestamps.length-1];
+                        if (t1 > t0) progress = (timestamp - t0) / (t1 - t0);
+                        progress = Math.min(1, Math.max(0, progress));
+                    } else {
+                        progress = 0;
+                    }
                     const idx = Math.floor(progress * (points.length - 1));
                     const pos = points[idx];
                     if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
                     movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
                     addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
-                    if (id === Object.keys(detectionMethods)[0] && pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
                 }
             } else {
                 const id = currentPlatformForAnim;
                 const points = detectionMethods[id]?.points;
+                const timestamps = detectionMethods[id]?.timestamps;
                 if (points && points.length) {
+                    let progress = 0;
+                    if (timestamps && timestamps.length) {
+                        const t0 = timestamps[0];
+                        const t1 = timestamps[timestamps.length-1];
+                        if (t1 > t0) progress = (timestamp - t0) / (t1 - t0);
+                        progress = Math.min(1, Math.max(0, progress));
+                    }
                     const idx = Math.floor(progress * (points.length - 1));
                     const pos = points[idx];
                     if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
@@ -656,23 +739,44 @@
 
         function startAnimation() {
             if (animationActive) return;
+            const platform = document.getElementById('animationPlatform').value;
+            if (platform !== 'all' && (!detectionMethods[platform] || detectionMethods[platform].points.length < 2)) {
+                showToast("所选平台轨迹点数不足，无法播放动画", true);
+                return;
+            }
             animationActive = true;
-            const slider = document.getElementById('timelineSlider');
-            const duration = 5000;
-            const startTime = performance.now();
-            const startVal = parseFloat(slider.value) / 100;
-            const endVal = 1.0;
+            animationStartTime = performance.now();
+            const speed = parseFloat(document.getElementById('speedSelect').value);
+            animationSpeed = speed;
+            const totalDuration = 5000 / speed; // 基础时长5秒，乘以倍速倒数
+            animationDuration = totalDuration;
+            const startTimestamp = getCurrentTimestampForAnim();
             function step(now) {
-                const elapsed = now - startTime;
-                let t = Math.min(1, elapsed / duration);
-                const val = startVal + t * (endVal - startVal);
-                slider.value = val * 100;
-                timelineValue = val;
-                updateAnimationProgress(val);
-                if (t < 1) animationId = requestAnimationFrame(step);
-                else { animationActive = false; animationId = null; }
+                const elapsed = (now - animationStartTime) * animationSpeed;
+                const newTimestamp = startTimestamp + elapsed;
+                updateAnimationByTime(newTimestamp);
+                if (elapsed < totalDuration) {
+                    animationId = requestAnimationFrame(step);
+                } else {
+                    stopAnimation();
+                }
             }
             animationId = requestAnimationFrame(step);
+        }
+
+        function getCurrentTimestampForAnim() {
+            if (currentPlatformForAnim === 'all') {
+                // 取第一个可见平台的最小时间戳作为起点
+                let minT = Infinity;
+                for (const id in detectionMethods) {
+                    const ts = detectionMethods[id].timestamps;
+                    if (ts && ts.length) minT = Math.min(minT, ts[0]);
+                }
+                return minT !== Infinity ? minT : 0;
+            } else {
+                const ts = detectionMethods[currentPlatformForAnim]?.timestamps;
+                return ts && ts.length ? ts[0] : 0;
+            }
         }
 
         function stopAnimation() {
@@ -681,95 +785,95 @@
             animationId = null;
         }
 
-        // 预测动画
-        function animatePredictionLine(methodId, predPoints, color) {
-            if (!predPoints || predPoints.length < 2) return;
-            if (activePredAnimations[methodId]) {
-                cancelAnimationFrame(activePredAnimations[methodId].frame);
-                delete activePredAnimations[methodId];
-            }
-            if (predLines[methodId]) {
-                scene.remove(predLines[methodId].line);
-                scene.remove(predLines[methodId].points);
-            }
-            const pointsGroup = new THREE.Group();
-            const lineMaterial = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.7 });
-            let currentLineObj = null;
-            let currentIndex = 0;
-            const totalSegments = predPoints.length - 1;
-            let startTime = null;
-            const durationPerSegment = 200;
-
-            function step(timestamp) {
-                if (!startTime) startTime = timestamp;
-                const elapsed = timestamp - startTime;
-                const segmentIndex = Math.min(totalSegments, Math.floor(elapsed / durationPerSegment));
-                if (segmentIndex !== currentIndex) {
-                    currentIndex = segmentIndex;
-                    if (currentLineObj) scene.remove(currentLineObj);
-                    const vertices = predPoints.slice(0, segmentIndex + 1).map(p => new THREE.Vector3(p[0], p[1], p[2]));
-                    if (vertices.length >= 2) {
-                        const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
-                        currentLineObj = new THREE.Line(lineGeometry, lineMaterial);
-                        scene.add(currentLineObj);
-                    }
-                    if (segmentIndex > 0 && segmentIndex <= totalSegments) {
-                        const pos = predPoints[segmentIndex];
-                        if (!activePredAnimations[methodId].movingSphere) {
-                            const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: color, emissive: 0xff6600 }));
-                            scene.add(sphere);
-                            activePredAnimations[methodId].movingSphere = sphere;
-                        }
-                        activePredAnimations[methodId].movingSphere.position.set(pos[0], pos[1], pos[2]);
-                        addTrailParticle(methodId, activePredAnimations[methodId].movingSphere.position, color);
-                    }
-                }
-                if (currentIndex < totalSegments) {
-                    activePredAnimations[methodId].frame = requestAnimationFrame(step);
-                } else {
-                    if (currentLineObj) scene.remove(currentLineObj);
-                    const finalVis = createPredictionLine(methodId, predPoints, color);
-                    if (finalVis) {
-                        predLines[methodId] = finalVis;
-                        scene.add(finalVis.line);
-                        scene.add(finalVis.points);
-                    }
-                    if (activePredAnimations[methodId].movingSphere) scene.remove(activePredAnimations[methodId].movingSphere);
-                    delete activePredAnimations[methodId];
-                }
-            }
-            activePredAnimations[methodId] = { frame: null, movingSphere: null };
-            activePredAnimations[methodId].frame = requestAnimationFrame(step);
+        function createMovingSphere(color) {
+            const geometry = new THREE.SphereGeometry(0.25, 24, 24);
+            const material = new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 });
+            const sphere = new THREE.Mesh(geometry, material);
+            scene.add(sphere);
+            return sphere;
         }
 
-        function runPrediction() {
-            for (const id in activePredAnimations) {
-                cancelAnimationFrame(activePredAnimations[id].frame);
-                if (activePredAnimations[id].movingSphere) scene.remove(activePredAnimations[id].movingSphere);
-                delete activePredAnimations[id];
-            }
-            for (const id in detectionMethods) {
-                if (detectionMethods[id].visible) {
-                    const pred = generatePrediction(detectionMethods[id].points, 6);
-                    predictedTrajectories[id] = pred;
-                    if (pred.length >= 2) animatePredictionLine(id, pred, detectionMethods[id].color);
-                } else {
-                    predictedTrajectories[id] = [];
+        // 加载外部数据
+        async function loadExternalData() {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.dat,.txt';
+            fileInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('method_id', 'self');
+                const btn = document.getElementById('loadDataBtn');
+                btn.disabled = true;
+                btn.textContent = '⏳ 上传中...';
+                try {
+                    const response = await fetch('/api/load_data', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        showToast(`成功加载 ${result.name}`);
+                        location.reload();
+                    } else {
+                        showToast("加载失败: " + (result.error || "未知错误"), true);
+                    }
+                } catch (error) {
+                    showToast("请求失败: " + error.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '📂 加载外部数据';
                 }
-            }
-            updatePredictionUI();
-            showToast("预测动画已开始，虚线逐步延伸");
+            };
+            fileInput.click();
         }
 
+        // 清理数据
+        async function clearData() {
+            const btn = document.getElementById('clearDataBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 备份并清理中...';
+            try {
+                const response = await fetch('/api/clear_data', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    showToast(`✅ ${result.message}`);
+                    location.reload();
+                } else {
+                    showToast("清理失败: " + (result.error || "未知错误"), true);
+                }
+            } catch (error) {
+                showToast("请求失败: " + error.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🗑️ 清理当前数据';
+            }
+        }
+
+        // 刷新数据（重新加载默认fact文件）
         async function refreshData() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 刷新中...';
             try {
                 const response = await fetch('/api/refresh_data', { method: 'POST' });
                 const result = await response.json();
-                if (result.success) location.reload();
-                else showToast("刷新失败", true);
-            } catch (error) { showToast("请求失败: " + error.message, true); }
+                if (result.success) {
+                    showToast("数据已刷新");
+                    location.reload();
+                } else {
+                    showToast("刷新失败", true);
+                }
+            } catch (error) {
+                showToast("请求失败: " + error.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 刷新轨迹数据';
+            }
         }
 
+        // AI 建议
         async function getAISuggestion() {
             const btn = document.getElementById('aiSuggestionBtn');
             btn.disabled = true;
@@ -778,24 +882,44 @@
             suggestionDiv.innerHTML = '正在调用 AI 模型分析轨迹数据...';
             try {
                 const dataToSend = {};
-                for (const id in detectionMethods) dataToSend[id] = { name: detectionMethods[id].name, points: detectionMethods[id].points };
+                for (const id in detectionMethods) {
+                    dataToSend[id] = {
+                        name: detectionMethods[id].name,
+                        points: detectionMethods[id].points,
+                        timestamps: detectionMethods[id].timestamps
+                    };
+                }
                 const response = await fetch('/api/ai_suggestion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ methods_data: dataToSend })
                 });
                 const result = await response.json();
-                if (result.success) suggestionDiv.innerHTML = result.suggestion;
-                else suggestionDiv.innerHTML = `❌ 获取建议失败: ${result.error}`;
-            } catch (error) { suggestionDiv.innerHTML = `❌ 请求错误: ${error.message}`; }
-            finally { btn.disabled = false; btn.textContent = '💡 获取 AI 建议'; }
+                if (result.success) {
+                    suggestionDiv.innerHTML = result.suggestion;
+                } else {
+                    suggestionDiv.innerHTML = `❌ 获取建议失败: ${result.error}`;
+                }
+            } catch (error) {
+                suggestionDiv.innerHTML = `❌ 请求错误: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💡 获取 AI 建议';
+            }
         }
 
+        // 渲染检测手段列表
         function renderMethodList() {
             const container = document.getElementById('methodList');
             container.innerHTML = '';
             const animSelect = document.getElementById('animationPlatform');
-            animSelect.innerHTML = '<option value="all">所有平台</option>';
+            const predictSelect = document.getElementById('predictPlatform');
+            predictSelect.innerHTML = '<option value="">选择平台</option>';
+            // 添加所有平台选项
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = '所有平台';
+            predictSelect.appendChild(allOption);
             for (const [id, data] of Object.entries(detectionMethods)) {
                 const div = document.createElement('div');
                 div.className = 'method-item';
@@ -808,62 +932,21 @@
                     refreshVisuals();
                 });
                 container.appendChild(div);
-                const option = document.createElement('option');
-                option.value = id;
-                option.textContent = data.name;
-                animSelect.appendChild(option);
+                const animOption = document.createElement('option');
+                animOption.value = id;
+                animOption.textContent = data.name;
+                animSelect.appendChild(animOption);
+                const predOption = document.createElement('option');
+                predOption.value = id;
+                predOption.textContent = data.name;
+                predictSelect.appendChild(predOption);
             }
         }
 
-        // ======================== WASD 控制 ========================
-        const keyState = { w: false, a: false, s: false, d: false };
-        const moveSpeed = 0.2;
-
-        function handleWASD() {
-            if (!camera) return;
-            const forward = new THREE.Vector3();
-            const right = new THREE.Vector3();
-            camera.getWorldDirection(forward);
-            forward.y = 0;
-            forward.normalize();
-            right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
-            right.normalize();
-
-            let move = new THREE.Vector3(0, 0, 0);
-            if (keyState.w) move.add(forward);
-            if (keyState.s) move.sub(forward);
-            if (keyState.d) move.add(right);
-            if (keyState.a) move.sub(right);
-            if (move.length() > 0) move.normalize();
-
-            camera.position.x += move.x * moveSpeed;
-            camera.position.z += move.z * moveSpeed;
-            controls.target.set(6, 3, 6);
-            controls.update();
-        }
-
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'w') keyState.w = true;
-            if (key === 'a') keyState.a = true;
-            if (key === 's') keyState.s = true;
-            if (key === 'd') keyState.d = true;
-        });
-        window.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'w') keyState.w = false;
-            if (key === 'a') keyState.a = false;
-            if (key === 's') keyState.s = false;
-            if (key === 'd') keyState.d = false;
-        });
-
-        setInterval(handleWASD, 16);
-
-        // ======================== 鼠标悬停坐标显示 ========================
+        // 鼠标悬停坐标显示
         function onMouseMove(event) {
             mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
             mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
             const allSpheres = [];
             for (const id in lines) {
@@ -895,8 +978,7 @@
             }
         }
 
-        // 初始化
-        initScene();
+        // 窗口缩放适配
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -904,27 +986,69 @@
             labelRenderer.setSize(window.innerWidth, window.innerHeight);
         }
         window.addEventListener('resize', onWindowResize);
+
+        // WASD 控制
+        const keyState = { w: false, a: false, s: false, d: false };
+        const moveSpeed = 0.2;
+        function handleWASD() {
+            if (!camera) return;
+            const forward = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+            right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
+            right.normalize();
+            let move = new THREE.Vector3(0, 0, 0);
+            if (keyState.w) move.add(forward);
+            if (keyState.s) move.sub(forward);
+            if (keyState.d) move.add(right);
+            if (keyState.a) move.sub(right);
+            if (move.length() > 0) move.normalize();
+            camera.position.x += move.x * moveSpeed;
+            camera.position.z += move.z * moveSpeed;
+            controls.target.set(6, 3, 6);
+            controls.update();
+        }
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keyState.w = true;
+            if (key === 'a') keyState.a = true;
+            if (key === 's') keyState.s = true;
+            if (key === 'd') keyState.d = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keyState.w = false;
+            if (key === 'a') keyState.a = false;
+            if (key === 's') keyState.s = false;
+            if (key === 'd') keyState.d = false;
+        });
+        setInterval(handleWASD, 16);
+
+        // 初始化
+        initScene();
         renderMethodList();
         refreshVisuals();
         heightChart = echarts.init(document.getElementById('heightChart'));
         updateHeightChart();
 
         document.getElementById('refreshBtn').addEventListener('click', refreshData);
+        document.getElementById('loadDataBtn').addEventListener('click', loadExternalData);
+        document.getElementById('clearDataBtn').addEventListener('click', clearData);
         document.getElementById('predictBtn').addEventListener('click', runPrediction);
         document.getElementById('aiSuggestionBtn').addEventListener('click', getAISuggestion);
         document.getElementById('playBtn').addEventListener('click', startAnimation);
         document.getElementById('stopBtn').addEventListener('click', stopAnimation);
-        document.getElementById('timelineSlider').addEventListener('input', (e) => {
-            if (animationActive) stopAnimation();
-            timelineValue = e.target.value / 100;
-            updateAnimationProgress(timelineValue);
-        });
         document.getElementById('animationPlatform').addEventListener('change', (e) => {
             currentPlatformForAnim = e.target.value;
-            if (!animationActive) updateAnimationProgress(timelineValue);
+            if (!animationActive) {
+                const timestamp = getCurrentTimestampForAnim();
+                updateAnimationByTime(timestamp);
+            }
         });
-
         renderer.domElement.addEventListener('mousemove', onMouseMove);
+
         showToast("系统已启动，按 WASD 移动相机，鼠标悬停显示坐标");
     </script>
 </body>

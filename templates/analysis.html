@@ -61,7 +61,6 @@
             height: 16px;
             border-radius: 4px;
         }
-        /* 返回按钮样式 */
         .back-button {
             display: inline-block;
             margin-bottom: 20px;
@@ -149,7 +148,7 @@
             }
             heightChart.setOption({
                 tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间步', data: allData[Object.keys(allData)[0]]?.time_steps || [] },
+                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps || [] },
                 yAxis: { type: 'value', name: '高度 (m)' },
                 series: heightSeries,
                 legend: { show: false }
@@ -172,7 +171,7 @@
             }
             speedChart.setOption({
                 tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间步', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1) || [] },
+                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1) || [] },
                 yAxis: { type: 'value', name: '速度 (m/s)' },
                 series: speedSeries,
                 legend: { show: false }
@@ -195,7 +194,7 @@
             }
             accelChart.setOption({
                 tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间步', data: allData[Object.keys(allData)[0]]?.time_steps.slice(2) || [] },
+                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(2) || [] },
                 yAxis: { type: 'value', name: '加速度 (m/s²)' },
                 series: accelSeries,
                 legend: { show: false }
@@ -218,7 +217,7 @@
             }
             curvatureChart.setOption({
                 tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间步', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1, -1) || [] },
+                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1, -1) || [] },
                 yAxis: { type: 'value', name: '曲率 (1/m)' },
                 series: curvatureSeries,
                 legend: { show: false }
@@ -226,9 +225,10 @@
         }
 
         loadAnalysisData();
+
+        // 窗口缩放自适应
         window.addEventListener('resize', () => {
-            const charts = ['heightChart', 'speedChart', 'accelChart', 'curvatureChart'];
-            charts.forEach(id => {
+            ['heightChart', 'speedChart', 'accelChart', 'curvatureChart'].forEach(id => {
                 const chart = echarts.getInstanceByDom(document.getElementById(id));
                 if (chart) chart.resize();
             });
