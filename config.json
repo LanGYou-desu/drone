@@ -1,0 +1,24 @@
+{
+    "siliconflow": {
+        "api_key": "sk-ujkeejdwthjfbhmdnkqegcqpomwfcgsstwrqhhrjpmvkirgj",
+        "url": "https://api.siliconflow.cn/v1/chat/completions",
+        "model": "Qwen/Qwen2.5-7B-Instruct"
+    },
+    "detection_methods": {
+        "visible": {
+            "name": "可见光",
+            "color": "#ff6b6b",
+            "visible": true
+        },
+        "infrared": {
+            "name": "红外",
+            "color": "#4ecdc4",
+            "visible": true
+        },
+        "radar": {
+            "name": "雷达",
+            "color": "#ffe66d",
+            "visible": true
+        }
+    }
+}
