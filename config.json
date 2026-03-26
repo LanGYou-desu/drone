@@ -25,5 +25,10 @@
             "color": "#ff8c42",
             "visible": true
         }
+    },
+    "prediction_settings": {
+        "min_points": 10,
+        "max_points": 50,
+        "default_points": 20
     }
 }
