@@ -2,15 +2,12 @@
 分析页面路由：提供详细数据分析页面及其数据接口
 """
 from flask import Blueprint, render_template, jsonify
-from modules.routes.main import detection_methods   # 共享同一个全局对象
+from modules.routes.main import detection_methods   # 直接引用 main.py 中的全局对象
 
 analysis_bp = Blueprint('analysis', __name__)
 
-
 @analysis_bp.route('/')
 def analysis():
-    """渲染分析页面，并将检测手段元数据传递给模板"""
-    # 构建只含元数据的字典，避免将大量轨迹数据传到模板
     metadata = {}
     for mid, data in detection_methods.items():
         metadata[mid] = {
@@ -19,7 +16,6 @@ def analysis():
             'visible': data.get('visible', True)
         }
     return render_template('analysis.html', methods_data=metadata)
-
 
 @analysis_bp.route('/data')
 def get_analysis_data():

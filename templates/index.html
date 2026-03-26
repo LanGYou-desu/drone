@@ -214,6 +214,14 @@
             white-space: nowrap;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
+
+        /* 备份列表样式 */
+        .backup-item {
+            transition: background 0.2s;
+        }
+        .backup-item:hover {
+            background: #3d3f46 !important;
+        }
     </style>
 </head>
 <body>
@@ -234,17 +242,28 @@
             <div class="method-list" id="methodList"></div>
             <button id="refreshBtn">🔄 刷新轨迹数据</button>
             <button id="loadDataBtn" style="background: linear-gradient(135deg, #4ecdc4, #6c5ce7);">📂 加载外部数据</button>
-            <button id="clearDataBtn">🗑️ 清理当前数据</button>
+            <button id="clearAllBtn" style="background: #ff6b6b;">🗑️ 清理所有数据（备份）</button>
+            <button id="restoreBtn" style="background: #ff8c42;">💾 恢复备份</button>
+            <button id="restoreAllBtn" style="background: #6c5ce7;">🔄 一键恢复所有平台</button>
+            <!-- 备份列表模态框 -->
+            <div id="backupModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+                <div style="background: #1e1f22; border-radius: 24px; padding: 20px; width: 400px; max-width: 80%; border: 1px solid #6c5ce7;">
+                    <h3 style="margin-top:0;">选择备份文件</h3>
+                    <div id="backupList" style="max-height: 300px; overflow-y: auto; margin: 10px 0;"></div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button id="closeModalBtn" style="flex:1;">取消</button>
+                        <button id="confirmRestoreBtn" class="primary" style="flex:1;">恢复</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="animation-section">
             <h3>🎬 时间轴动画</h3>
             <div class="slider-container">
                 <input type="range" id="timelineSlider" min="0" max="100" value="0" step="1">
-                <div style="display: flex; justify-content: space-between; margin-top: 0.2rem;">
-                    <span>起点</span>
-                    <span>当前进度</span>
-                    <span>终点</span>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>起点</span><span>当前进度</span><span>终点</span>
                 </div>
             </div>
             <div style="margin-top: 0.5rem;">
@@ -260,6 +279,7 @@
                 <option value="all">所有平台</option>
             </select>
             <button id="playBtn" class="primary">▶ 播放动画</button>
+            <button id="replayBtn" class="primary" style="background: #ff8c42;">🔄 重新播放</button>
             <button id="stopBtn">⏹ 停止</button>
         </div>
 
@@ -267,6 +287,7 @@
             <h3>🔮 轨迹预测</h3>
             <select id="predictPlatform" style="width:100%; background:#2a2c30; color:#fff; border-radius:20px; padding:0.3rem;">
                 <option value="">选择平台</option>
+                <option value="all">所有平台</option>
             </select>
             <button id="predictBtn" class="primary">⚡ 开始预测</button>
             <div class="info-card">
@@ -320,7 +341,7 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-        // 从后端注入数据
+        // ======================== 从后端注入数据 ========================
         const methodsData = {{ methods_data | tojson }};
         let detectionMethods = methodsData;
         let predictedTrajectories = {};
@@ -329,22 +350,22 @@
         // Three.js 对象
         let scene, camera, renderer, labelRenderer, controls;
         let lines = {}, predLines = {}, movingSpheres = {}, trailParticles = {}, pointLight = null;
-        let animationActive = false, animationId = null, timelineValue = 0, currentPlatformForAnim = 'all';
+        let animationActive = false, animationId = null, currentPlatformForAnim = 'all';
         let heightChart = null;
         let audioCtx = null;
         let activePredAnimations = {};
 
         // 动画参数
         let animationStartTime = null;
-        let animationDuration = 5000;
         let animationSpeed = 1.0;
+        let currentTimeRange = { start: 0, end: 0 };
 
         // 鼠标悬停相关
         let raycaster = new THREE.Raycaster();
         let mouse = new THREE.Vector2();
         let highlightedSphere = null;
 
-        // 辅助函数
+        // ======================== 辅助函数 ========================
         function playBeep() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = audioCtx.createOscillator();
@@ -427,67 +448,6 @@
             });
         }
 
-        // 生成预测（调用后端）
-        async function runPrediction() {
-            const platformSelect = document.getElementById('predictPlatform');
-            const methodId = platformSelect.value;
-            if (!methodId) {
-                showToast("请先选择一个检测手段或所有平台", true);
-                return;
-            }
-            const btn = document.getElementById('predictBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ 预测中...';
-            try {
-                let payload;
-                if (methodId === 'all') {
-                    payload = { method_id: 'all' };
-                } else {
-                    const data = detectionMethods[methodId];
-                    if (!data || data.points.length < 2) {
-                        showToast("该平台轨迹点数不足，无法预测", true);
-                        btn.disabled = false;
-                        btn.textContent = '⚡ 开始预测';
-                        return;
-                    }
-                    payload = {
-                        method_id: methodId,
-                        points: data.points,
-                        timestamps: data.timestamps || [],
-                        num_points: 6,
-                        time_step: 0.5
-                    };
-                }
-                const response = await fetch('/api/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                if (result.success) {
-                    if (methodId === 'all') {
-                        // 为所有平台更新预测轨迹
-                        for (const mid in result.results) {
-                            predictedTrajectories[mid] = result.results[mid].prediction;
-                        }
-                        showToast("所有平台预测完成");
-                    } else {
-                        predictedTrajectories[methodId] = result.prediction;
-                        showToast("预测完成");
-                    }
-                    refreshVisuals();
-                    updatePredictionUI();
-                } else {
-                    showToast("预测失败: " + (result.error || "未知错误"), true);
-                }
-            } catch (error) {
-                showToast("请求失败: " + error.message, true);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '⚡ 开始预测';
-            }
-        }
-
         function updatePredictionUI() {
             let totalPredPoints = 0;
             for (const id in predictedTrajectories) totalPredPoints += predictedTrajectories[id].length;
@@ -495,7 +455,7 @@
             document.getElementById('confidence').innerText = (Math.random() * 30 + 70).toFixed(1) + '%';
         }
 
-        // Three.js 场景初始化
+        // ======================== Three.js 场景构建 ========================
         function initScene() {
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x05070a);
@@ -554,19 +514,31 @@
             animate();
         }
 
+        // 创建平滑曲线轨迹（CatmullRomCurve3）
+        function createSmoothCurveLine(points, color) {
+            if (points.length < 2) return null;
+            const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+            // 采样更多点使曲线更平滑
+            const divisions = Math.max(100, points.length * 5);
+            const curvePoints = curve.getPoints(divisions);
+            const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+            const material = new THREE.LineBasicMaterial({ color: color });
+            return new THREE.Line(geometry, material);
+        }
+
         function createTrailVisuals(id, data) {
             const points = data.points;
             if (points.length < 2) return;
-            const vertices = points.map(p => new THREE.Vector3(p[0], p[1], p[2]));
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
-            const lineMaterial = new THREE.LineBasicMaterial({ color: data.color });
-            const lineObj = new THREE.Line(lineGeometry, lineMaterial);
+            // 平滑曲线
+            const smoothLine = createSmoothCurveLine(points, data.color);
+            // 点云（小球）
             const sphereGroup = new THREE.Group();
             points.forEach(p => {
                 const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
                 sphere.position.set(p[0], p[1], p[2]);
                 sphereGroup.add(sphere);
             });
+            // 标签
             const startDiv = document.createElement('div');
             startDiv.textContent = '🚀 起点';
             startDiv.style.cssText = 'color:#fff; font-size:10px; background:rgba(0,0,0,0.5); padding:2px 4px; border-radius:4px';
@@ -582,7 +554,7 @@
             nameDiv.style.cssText = `color:${data.color}; font-size:12px; font-weight:bold; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:12px`;
             const nameLabel = new CSS2DObject(nameDiv);
             nameLabel.position.set(points[Math.floor(points.length/2)][0], points[Math.floor(points.length/2)][1] + 0.6, points[Math.floor(points.length/2)][2]);
-            return { line: lineObj, points: sphereGroup, startLabel, endLabel, nameLabel };
+            return { line: smoothLine, points: sphereGroup, startLabel, endLabel, nameLabel };
         }
 
         function createPredictionLine(methodId, predPoints, color) {
@@ -604,20 +576,27 @@
             for (const id in detectionMethods) {
                 const data = detectionMethods[id];
                 if (lines[id]) {
-                    scene.remove(lines[id].line); scene.remove(lines[id].points);
-                    scene.remove(lines[id].startLabel); scene.remove(lines[id].endLabel); scene.remove(lines[id].nameLabel);
+                    if (lines[id].line) scene.remove(lines[id].line);
+                    scene.remove(lines[id].points);
+                    scene.remove(lines[id].startLabel);
+                    scene.remove(lines[id].endLabel);
+                    scene.remove(lines[id].nameLabel);
                 }
                 if (predLines[id]) { scene.remove(predLines[id].line); scene.remove(predLines[id].points); }
                 if (data.visible) {
                     const visuals = createTrailVisuals(id, data);
                     lines[id] = visuals;
-                    scene.add(visuals.line); scene.add(visuals.points);
-                    scene.add(visuals.startLabel); scene.add(visuals.endLabel); scene.add(visuals.nameLabel);
+                    if (visuals.line) scene.add(visuals.line);
+                    scene.add(visuals.points);
+                    scene.add(visuals.startLabel);
+                    scene.add(visuals.endLabel);
+                    scene.add(visuals.nameLabel);
                     if (predictedTrajectories[id] && predictedTrajectories[id].length > 0) {
                         const predVis = createPredictionLine(id, predictedTrajectories[id], data.color);
                         if (predVis) {
                             predLines[id] = predVis;
-                            scene.add(predVis.line); scene.add(predVis.points);
+                            scene.add(predVis.line);
+                            scene.add(predVis.points);
                         }
                     }
                 } else { lines[id] = null; predLines[id] = null; }
@@ -625,7 +604,7 @@
             updateStats(); updateParamPanel(); updateHeightChart();
         }
 
-        // 拖尾粒子系统
+        // 拖尾粒子系统（保持不变）
         function initTrailSystem(methodId, color) {
             const particleCount = 30;
             const geometry = new THREE.BufferGeometry();
@@ -684,14 +663,39 @@
             }
         }
 
-        // 动画控制（基于时间戳）
-        function getProgressForPlatform(platformId, timestamp) {
-            const data = detectionMethods[platformId];
-            if (!data || !data.timestamps || data.timestamps.length === 0) return 0;
-            const t0 = data.timestamps[0];
-            const t1 = data.timestamps[data.timestamps.length-1];
-            if (t1 === t0) return 0;
-            return (timestamp - t0) / (t1 - t0);
+        // ======================== 动画控制（基于真实时间戳和线性插值） ========================
+        function interpolatePosition(points, timestamps, targetTime) {
+            if (!points.length || !timestamps.length) return null;
+            if (targetTime <= timestamps[0]) return points[0];
+            if (targetTime >= timestamps[timestamps.length-1]) return points[points.length-1];
+            let i = 0;
+            while (i < timestamps.length-1 && timestamps[i+1] < targetTime) i++;
+            const t1 = timestamps[i], t2 = timestamps[i+1];
+            const p1 = points[i], p2 = points[i+1];
+            const ratio = (targetTime - t1) / (t2 - t1);
+            return [
+                p1[0] + (p2[0] - p1[0]) * ratio,
+                p1[1] + (p2[1] - p1[1]) * ratio,
+                p1[2] + (p2[2] - p1[2]) * ratio
+            ];
+        }
+
+        function getCurrentTimeRange() {
+            if (currentPlatformForAnim === 'all') {
+                let minT = Infinity, maxT = -Infinity;
+                for (const id in detectionMethods) {
+                    const ts = detectionMethods[id]?.timestamps;
+                    if (ts && ts.length) {
+                        minT = Math.min(minT, ts[0]);
+                        maxT = Math.max(maxT, ts[ts.length-1]);
+                    }
+                }
+                return { start: minT !== Infinity ? minT : 0, end: maxT !== -Infinity ? maxT : 0 };
+            } else {
+                const ts = detectionMethods[currentPlatformForAnim]?.timestamps;
+                if (ts && ts.length) return { start: ts[0], end: ts[ts.length-1] };
+                return { start: 0, end: 0 };
+            }
         }
 
         function updateAnimationByTime(timestamp) {
@@ -699,84 +703,60 @@
                 for (const id in detectionMethods) {
                     const points = detectionMethods[id].points;
                     const timestamps = detectionMethods[id].timestamps;
-                    if (!points.length) continue;
-                    let progress = 0;
-                    if (timestamps && timestamps.length) {
-                        const t0 = timestamps[0];
-                        const t1 = timestamps[timestamps.length-1];
-                        if (t1 > t0) progress = (timestamp - t0) / (t1 - t0);
-                        progress = Math.min(1, Math.max(0, progress));
-                    } else {
-                        progress = 0;
+                    if (!points.length || !timestamps.length) continue;
+                    const pos = interpolatePosition(points, timestamps, timestamp);
+                    if (pos) {
+                        if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
+                        movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                        addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
                     }
-                    const idx = Math.floor(progress * (points.length - 1));
-                    const pos = points[idx];
-                    if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
-                    movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
-                    addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
                 }
             } else {
                 const id = currentPlatformForAnim;
                 const points = detectionMethods[id]?.points;
                 const timestamps = detectionMethods[id]?.timestamps;
-                if (points && points.length) {
-                    let progress = 0;
-                    if (timestamps && timestamps.length) {
-                        const t0 = timestamps[0];
-                        const t1 = timestamps[timestamps.length-1];
-                        if (t1 > t0) progress = (timestamp - t0) / (t1 - t0);
-                        progress = Math.min(1, Math.max(0, progress));
+                if (points && timestamps && points.length) {
+                    const pos = interpolatePosition(points, timestamps, timestamp);
+                    if (pos) {
+                        if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
+                        movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                        addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
+                        if (pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
                     }
-                    const idx = Math.floor(progress * (points.length - 1));
-                    const pos = points[idx];
-                    if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
-                    movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
-                    addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
-                    if (pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
                 }
             }
         }
 
         function startAnimation() {
             if (animationActive) return;
-            const platform = document.getElementById('animationPlatform').value;
-            if (platform !== 'all' && (!detectionMethods[platform] || detectionMethods[platform].points.length < 2)) {
-                showToast("所选平台轨迹点数不足，无法播放动画", true);
+            const range = getCurrentTimeRange();
+            if (range.end <= range.start) {
+                showToast("所选平台没有有效时间数据，无法播放动画", true);
                 return;
             }
             animationActive = true;
-            animationStartTime = performance.now();
             const speed = parseFloat(document.getElementById('speedSelect').value);
             animationSpeed = speed;
-            const totalDuration = 5000 / speed; // 基础时长5秒，乘以倍速倒数
-            animationDuration = totalDuration;
-            const startTimestamp = getCurrentTimestampForAnim();
+            const totalDuration = (range.end - range.start) / animationSpeed;
+            animationStartTime = performance.now();
+            const startTimestamp = range.start;
+
             function step(now) {
                 const elapsed = (now - animationStartTime) * animationSpeed;
                 const newTimestamp = startTimestamp + elapsed;
-                updateAnimationByTime(newTimestamp);
-                if (elapsed < totalDuration) {
-                    animationId = requestAnimationFrame(step);
-                } else {
+                if (newTimestamp >= range.end) {
                     stopAnimation();
+                    updateAnimationByTime(range.end);
+                } else {
+                    updateAnimationByTime(newTimestamp);
+                    // 同步滑块进度
+                    const progress = (newTimestamp - range.start) / (range.end - range.start);
+                    const slider = document.getElementById('timelineSlider');
+                    if (slider) slider.value = progress * 100;
+                    animationId = requestAnimationFrame(step);
                 }
             }
             animationId = requestAnimationFrame(step);
-        }
-
-        function getCurrentTimestampForAnim() {
-            if (currentPlatformForAnim === 'all') {
-                // 取第一个可见平台的最小时间戳作为起点
-                let minT = Infinity;
-                for (const id in detectionMethods) {
-                    const ts = detectionMethods[id].timestamps;
-                    if (ts && ts.length) minT = Math.min(minT, ts[0]);
-                }
-                return minT !== Infinity ? minT : 0;
-            } else {
-                const ts = detectionMethods[currentPlatformForAnim]?.timestamps;
-                return ts && ts.length ? ts[0] : 0;
-            }
         }
 
         function stopAnimation() {
@@ -793,7 +773,28 @@
             return sphere;
         }
 
-        // 加载外部数据
+        // ======================== 数据交互 API ========================
+        async function refreshData() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 刷新中...';
+            try {
+                const response = await fetch('/api/refresh_data', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    showToast("数据已刷新");
+                    location.reload();
+                } else {
+                    showToast("刷新失败", true);
+                }
+            } catch (error) {
+                showToast("请求失败: " + error.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 刷新轨迹数据';
+            }
+        }
+
         async function loadExternalData() {
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
@@ -829,51 +830,102 @@
             fileInput.click();
         }
 
-        // 清理数据
-        async function clearData() {
-            const btn = document.getElementById('clearDataBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ 备份并清理中...';
-            try {
-                const response = await fetch('/api/clear_data', { method: 'POST' });
-                const result = await response.json();
-                if (result.success) {
-                    showToast(`✅ ${result.message}`);
-                    location.reload();
-                } else {
-                    showToast("清理失败: " + (result.error || "未知错误"), true);
+        async function clearAllData() {
+            if (confirm('确认清理所有轨迹数据？数据将被备份到 data/backup/ 目录。')) {
+                const btn = document.getElementById('clearAllBtn');
+                btn.disabled = true;
+                btn.textContent = '⏳ 清理中...';
+                try {
+                    const response = await fetch('/api/clear_all_data', { method: 'POST' });
+                    const result = await response.json();
+                    if (result.success) {
+                        showToast('所有数据已清理并备份');
+                        location.reload();
+                    } else {
+                        showToast('清理失败: ' + result.error, true);
+                    }
+                } catch (error) {
+                    showToast('请求失败: ' + error.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '🗑️ 清理所有数据（备份）';
                 }
-            } catch (error) {
-                showToast("请求失败: " + error.message, true);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🗑️ 清理当前数据';
             }
         }
 
-        // 刷新数据（重新加载默认fact文件）
-        async function refreshData() {
-            const btn = document.getElementById('refreshBtn');
+        async function runPrediction() {
+            const platformSelect = document.getElementById('predictPlatform');
+            const methodId = platformSelect.value;
+            if (!methodId) {
+                showToast("请先选择一个检测手段或所有平台", true);
+                return;
+            }
+            const btn = document.getElementById('predictBtn');
             btn.disabled = true;
-            btn.textContent = '⏳ 刷新中...';
-            try {
-                const response = await fetch('/api/refresh_data', { method: 'POST' });
-                const result = await response.json();
-                if (result.success) {
-                    showToast("数据已刷新");
-                    location.reload();
-                } else {
-                    showToast("刷新失败", true);
+            if (methodId === 'all') {
+                btn.textContent = '⏳ 预测所有平台...';
+                try {
+                    const response = await fetch('/api/predict_all', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ num_points: 6, time_step: 0.5 })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        for (const [mid, predData] of Object.entries(result.results)) {
+                            predictedTrajectories[mid] = predData.prediction;
+                        }
+                        refreshVisuals();
+                        updatePredictionUI();
+                        showToast('所有平台预测完成，虚线为预测轨迹');
+                    } else {
+                        showToast('预测失败', true);
+                    }
+                } catch (error) {
+                    showToast('请求失败: ' + error.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '⚡ 开始预测';
                 }
-            } catch (error) {
-                showToast("请求失败: " + error.message, true);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🔄 刷新轨迹数据';
+            } else {
+                const data = detectionMethods[methodId];
+                if (!data || data.points.length < 2) {
+                    showToast("该平台轨迹点数不足，无法预测", true);
+                    btn.disabled = false;
+                    btn.textContent = '⚡ 开始预测';
+                    return;
+                }
+                btn.textContent = '⏳ 预测中...';
+                try {
+                    const response = await fetch('/api/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            method_id: methodId,
+                            points: data.points,
+                            timestamps: data.timestamps || [],
+                            num_points: 6,
+                            time_step: 0.5
+                        })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        predictedTrajectories[methodId] = result.prediction;
+                        refreshVisuals();
+                        updatePredictionUI();
+                        showToast("预测完成，虚线为预测轨迹");
+                    } else {
+                        showToast("预测失败: " + (result.error || "未知错误"), true);
+                    }
+                } catch (error) {
+                    showToast("请求失败: " + error.message, true);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '⚡ 开始预测';
+                }
             }
         }
 
-        // AI 建议
         async function getAISuggestion() {
             const btn = document.getElementById('aiSuggestionBtn');
             btn.disabled = true;
@@ -908,14 +960,104 @@
             }
         }
 
-        // 渲染检测手段列表
+        // 显示备份列表模态框
+        async function showBackupModal() {
+            const modal = document.getElementById('backupModal');
+            const backupListDiv = document.getElementById('backupList');
+            backupListDiv.innerHTML = '<div style="text-align:center;">加载中...</div>';
+            modal.style.display = 'flex';
+            try {
+                const response = await fetch('/api/list_backups');
+                const result = await response.json();
+                if (result.success && result.backups.length) {
+                    backupListDiv.innerHTML = '';
+                    result.backups.forEach(backup => {
+                        const div = document.createElement('div');
+                        div.className = 'backup-item';
+                        div.style.cssText = 'padding: 8px; margin: 5px 0; background: #2a2c30; border-radius: 8px; cursor: pointer;';
+                        div.innerHTML = `
+                            <strong>${backup.method}</strong> (${backup.timestamp})<br>
+                            <span style="font-size: 0.8rem;">${backup.filename}</span>
+                        `;
+                        div.addEventListener('click', () => {
+                            // 高亮选中
+                            document.querySelectorAll('.backup-item').forEach(item => item.style.background = '#2a2c30');
+                            div.style.background = '#6c5ce7';
+                            window.selectedBackupFile = backup.filename;
+                        });
+                        backupListDiv.appendChild(div);
+                    });
+                } else {
+                    backupListDiv.innerHTML = '<div style="text-align:center;">没有找到备份文件</div>';
+                }
+            } catch (error) {
+                backupListDiv.innerHTML = '<div style="text-align:center;">加载失败</div>';
+            }
+        }
+
+        // 确认恢复
+        async function confirmRestore() {
+            if (!window.selectedBackupFile) {
+                alert('请选择一个备份文件');
+                return;
+            }
+            const btn = document.getElementById('confirmRestoreBtn');
+            btn.disabled = true;
+            btn.textContent = '恢复中...';
+            try {
+                const response = await fetch('/api/restore_backup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_file: window.selectedBackupFile })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('恢复失败: ' + result.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '恢复';
+                document.getElementById('backupModal').style.display = 'none';
+                window.selectedBackupFile = null;
+            }
+        }
+
+        // 一键恢复所有平台
+        async function restoreAllBackups() {
+            if (!confirm('确认恢复所有平台的最新备份？这将覆盖当前所有轨迹数据。')) return;
+            const btn = document.getElementById('restoreAllBtn');
+            btn.disabled = true;
+            btn.textContent = '恢复中...';
+            try {
+                const response = await fetch('/api/restore_all_backups', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('恢复失败: ' + result.error);
+                }
+            } catch (error) {
+                alert('请求失败: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 一键恢复所有平台';
+            }
+        }
+
+        // ======================== UI 渲染 ========================
         function renderMethodList() {
             const container = document.getElementById('methodList');
             container.innerHTML = '';
             const animSelect = document.getElementById('animationPlatform');
             const predictSelect = document.getElementById('predictPlatform');
+            animSelect.innerHTML = '<option value="all">所有平台</option>';
             predictSelect.innerHTML = '<option value="">选择平台</option>';
-            // 添加所有平台选项
             const allOption = document.createElement('option');
             allOption.value = 'all';
             allOption.textContent = '所有平台';
@@ -1026,25 +1168,43 @@
         });
         setInterval(handleWASD, 16);
 
-        // 初始化
+        // ======================== 初始化 ========================
         initScene();
         renderMethodList();
         refreshVisuals();
         heightChart = echarts.init(document.getElementById('heightChart'));
         updateHeightChart();
 
+        // 事件绑定
+        document.getElementById('restoreBtn').addEventListener('click', showBackupModal);
+        document.getElementById('restoreAllBtn').addEventListener('click', restoreAllBackups);
+        document.getElementById('closeModalBtn').addEventListener('click', () => {
+            document.getElementById('backupModal').style.display = 'none';
+            window.selectedBackupFile = null;
+        });
+        document.getElementById('confirmRestoreBtn').addEventListener('click', confirmRestore);
         document.getElementById('refreshBtn').addEventListener('click', refreshData);
         document.getElementById('loadDataBtn').addEventListener('click', loadExternalData);
-        document.getElementById('clearDataBtn').addEventListener('click', clearData);
+        document.getElementById('clearAllBtn').addEventListener('click', clearAllData);
         document.getElementById('predictBtn').addEventListener('click', runPrediction);
         document.getElementById('aiSuggestionBtn').addEventListener('click', getAISuggestion);
         document.getElementById('playBtn').addEventListener('click', startAnimation);
         document.getElementById('stopBtn').addEventListener('click', stopAnimation);
+        document.getElementById('replayBtn').addEventListener('click', () => {
+            if (animationActive) stopAnimation();
+            const slider = document.getElementById('timelineSlider');
+            if (slider) slider.value = 0;
+            const range = getCurrentTimeRange();
+            if (range.end > range.start) {
+                updateAnimationByTime(range.start);
+            }
+            startAnimation();
+        });
         document.getElementById('animationPlatform').addEventListener('change', (e) => {
             currentPlatformForAnim = e.target.value;
             if (!animationActive) {
-                const timestamp = getCurrentTimestampForAnim();
-                updateAnimationByTime(timestamp);
+                const range = getCurrentTimeRange();
+                updateAnimationByTime(range.start);
             }
         });
         renderer.domElement.addEventListener('mousemove', onMouseMove);
