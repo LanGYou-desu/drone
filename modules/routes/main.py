@@ -62,11 +62,11 @@ initialize_data()
 @main_bp.route('/')
 def index():
     """主页面：传递检测手段元数据和预测配置"""
-    # 读取预测配置，若不存在则使用默认值
     pred_settings = config.get('prediction_settings', {
         'min_points': 1,
         'max_points': 20,
-        'default_points': 6
+        'default_points': 6,
+        'time_step': 0.5
     })
     return render_template('index.html', methods_data=detection_methods, pred_settings=pred_settings)
 
@@ -183,13 +183,21 @@ def predict_all():
     """对当前所有可见检测手段进行预测，并将结果保存到 data/predict/，同时返回预测点和对应时间戳"""
     data = request.json or {}
     num_points = data.get('num_points', 6)
-    time_step = data.get('time_step', 0.5)
+    time_step = data.get('time_step')
 
-    # 从配置读取范围限制
-    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20})
+    # 获取预测配置
+    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20, 'time_step': 0.5})
     min_pts = pred_settings.get('min_points', 1)
     max_pts = pred_settings.get('max_points', 20)
-    num_points = max(min_pts, min(num_points, max_pts))  # 限制在配置范围内
+    num_points = max(min_pts, min(num_points, max_pts))
+
+    # 处理时间步长：如果请求未提供或无效，则使用配置默认值
+    if time_step is None:
+        time_step = pred_settings.get('time_step', 0.5)
+    else:
+        time_step = float(time_step)
+        if time_step <= 0:
+            time_step = pred_settings.get('time_step', 0.5)
 
     results = {}
     for method_id, method_data in detection_methods.items():
@@ -214,13 +222,21 @@ def predict():
     points = data.get('points', [])
     timestamps = data.get('timestamps', [])
     num_points = data.get('num_points', 6)
-    time_step = data.get('time_step', 0.5)
+    time_step = data.get('time_step')
 
-    # 从配置读取范围限制
-    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20})
+    # 获取预测配置
+    pred_settings = config.get('prediction_settings', {'min_points': 1, 'max_points': 20, 'time_step': 0.5})
     min_pts = pred_settings.get('min_points', 1)
     max_pts = pred_settings.get('max_points', 20)
-    num_points = max(min_pts, min(num_points, max_pts))  # 限制在配置范围内
+    num_points = max(min_pts, min(num_points, max_pts))
+
+    # 处理时间步长：如果请求未提供或无效，则使用配置默认值
+    if time_step is None:
+        time_step = pred_settings.get('time_step', 0.5)
+    else:
+        time_step = float(time_step)
+        if time_step <= 0:
+            time_step = pred_settings.get('time_step', 0.5)
 
     pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
     if pred_points:

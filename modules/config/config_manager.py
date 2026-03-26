@@ -34,7 +34,8 @@ DEFAULT_CONFIG = {
     "prediction_settings": {          # 新增预测配置
         "min_points": 1,
         "max_points": 20,
-        "default_points": 6
+        "default_points": 6,
+        "time_step": 0.5
     }
 }
 
