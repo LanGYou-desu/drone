@@ -19,6 +19,11 @@
             "name": "雷达",
             "color": "#ffe66d",
             "visible": true
+        },
+        "self": {
+            "name": "自选",
+            "color": "#ff8c42",
+            "visible": true
         }
     }
 }
