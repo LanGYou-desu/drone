@@ -442,9 +442,23 @@
                 tooltip: { trigger: 'axis' },
                 xAxis: { type: 'category', data: series[0]?.data.map((_, i) => i+1) || [], axisLabel: { color: '#ccc' } },
                 yAxis: { type: 'value', name: '高度 (m)', axisLabel: { color: '#ccc' } },
-                legend: { textStyle: { color: '#fff' } },
+                legend: {
+                    textStyle: { color: '#fff' },
+                    type: 'scroll',          // 水平滚动图例
+                    orient: 'horizontal',
+                    bottom: 0,               // 放在图表底部
+                    itemWidth: 40,
+                    itemHeight: 14
+                },
                 series: series,
-                grid: { containLabel: true, backgroundColor: 'rgba(0,0,0,0.2)' }
+                grid: {
+                    containLabel: true,
+                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    top: 60,                 // 为标题留出空间
+                    bottom: 40,              // 为图例留出空间
+                    left: 30,
+                    right: 30
+                }
             });
         }
 
@@ -477,7 +491,7 @@
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.target.set(6, 3, 6);
-            const gridHelper = new THREE.GridHelper(30, 20, 0x6c5ce7, 0x2a2c30);
+            const gridHelper = new THREE.GridHelper(500, 500, 0x6c5ce7, 0x2a2c30);
             gridHelper.position.y = -0.5;
             scene.add(gridHelper);
             const axesHelper = new THREE.AxesHelper(8);
@@ -493,12 +507,12 @@
             pointLight = new THREE.PointLight(0x6c5ce7, 0.5, 10);
             scene.add(pointLight);
             const particleGeo = new THREE.BufferGeometry();
-            const particleCount = 800;
+            const particleCount = 10000;
             const particlePositions = new Float32Array(particleCount * 3);
             for (let i = 0; i < particleCount; i++) {
-                particlePositions[i*3] = (Math.random() - 0.5) * 50;
-                particlePositions[i*3+1] = Math.random() * 15;
-                particlePositions[i*3+2] = (Math.random() - 0.5) * 40;
+                particlePositions[i*3] = (Math.random() - 0.5) * 200;
+                particlePositions[i*3+1] = Math.random() * 60;
+                particlePositions[i*3+2] = (Math.random() - 0.5) * 200;
             }
             particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
             const particleMat = new THREE.PointsMaterial({ color: 0x6c5ce7, size: 0.08, transparent: true, opacity: 0.4 });
@@ -557,6 +571,95 @@
             return { line: smoothLine, points: sphereGroup, startLabel, endLabel, nameLabel };
         }
 
+        // 创建轨迹段视觉元素（用于动态显示）
+        function createTrailVisualsSegment(methodId, data, segmentPoints) {
+            const color = data.color;
+            const smoothLine = createSmoothCurveLine(segmentPoints, color);
+            const sphereGroup = new THREE.Group();
+            segmentPoints.forEach(p => {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: color, emissive: 0x222222 }));
+                sphere.position.set(p[0], p[1], p[2]);
+                sphereGroup.add(sphere);
+            });
+            // 标签
+            const startDiv = document.createElement('div');
+            startDiv.textContent = '🚀 起点';
+            startDiv.style.cssText = 'color:#fff; font-size:10px; background:rgba(0,0,0,0.5); padding:2px 4px; border-radius:4px';
+            const startLabel = new CSS2DObject(startDiv);
+            startLabel.position.set(segmentPoints[0][0], segmentPoints[0][1] + 0.3, segmentPoints[0][2]);
+
+            const endDiv = document.createElement('div');
+            endDiv.textContent = '🏁 当前';
+            endDiv.style.cssText = startDiv.style.cssText;
+            const endLabel = new CSS2DObject(endDiv);
+            const lastPoint = segmentPoints[segmentPoints.length-1];
+            endLabel.position.set(lastPoint[0], lastPoint[1] + 0.3, lastPoint[2]);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.textContent = data.name;
+            nameDiv.style.cssText = `color:${color}; font-size:12px; font-weight:bold; background:rgba(0,0,0,0.6); padding:2px 6px; border-radius:12px`;
+            const nameLabel = new CSS2DObject(nameDiv);
+            const midIdx = Math.floor(segmentPoints.length / 2);
+            nameLabel.position.set(segmentPoints[midIdx][0], segmentPoints[midIdx][1] + 0.6, segmentPoints[midIdx][2]);
+
+            return { line: smoothLine, points: sphereGroup, startLabel, endLabel, nameLabel };
+        }
+
+        // 更新轨迹段（仅显示从起点到当前时间点的轨迹）
+        function updateTrailSegment(methodId, currentTime) {
+            const data = detectionMethods[methodId];
+            if (!data || !data.points.length || !data.timestamps.length) return;
+
+            const points = data.points;
+            const timestamps = data.timestamps;
+
+            // 找到当前时间所在的索引
+            let endIdx = 0;
+            while (endIdx < timestamps.length - 1 && timestamps[endIdx + 1] < currentTime) endIdx++;
+
+            // 截取到当前时间点的所有原始点
+            let segmentPoints = points.slice(0, endIdx + 1);
+
+            // 如果当前时间在两个点之间，且不是最后一个点，添加插值点
+            if (endIdx < points.length - 1 && currentTime > timestamps[endIdx] && currentTime < timestamps[endIdx + 1]) {
+                const ratio = (currentTime - timestamps[endIdx]) / (timestamps[endIdx + 1] - timestamps[endIdx]);
+                const interpPoint = [
+                    points[endIdx][0] + (points[endIdx+1][0] - points[endIdx][0]) * ratio,
+                    points[endIdx][1] + (points[endIdx+1][1] - points[endIdx][1]) * ratio,
+                    points[endIdx][2] + (points[endIdx+1][2] - points[endIdx][2]) * ratio
+                ];
+                segmentPoints.push(interpPoint);
+            }
+
+            // 移除旧视觉元素
+            if (lines[methodId]) {
+                if (lines[methodId].line) scene.remove(lines[methodId].line);
+                if (lines[methodId].points) scene.remove(lines[methodId].points);
+                if (lines[methodId].startLabel) scene.remove(lines[methodId].startLabel);
+                if (lines[methodId].endLabel) scene.remove(lines[methodId].endLabel);
+                if (lines[methodId].nameLabel) scene.remove(lines[methodId].nameLabel);
+            }
+
+            // 生成新的视觉元素
+            if (segmentPoints.length >= 2) {
+                const visuals = createTrailVisualsSegment(methodId, data, segmentPoints);
+                lines[methodId] = visuals;
+                if (visuals.line) scene.add(visuals.line);
+                scene.add(visuals.points);
+                if (visuals.startLabel) scene.add(visuals.startLabel);
+                if (visuals.endLabel) scene.add(visuals.endLabel);
+                if (visuals.nameLabel) scene.add(visuals.nameLabel);
+            } else if (segmentPoints.length === 1) {
+                // 只有一个点，只显示点云（无曲线）
+                const sphereGroup = new THREE.Group();
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
+                sphere.position.set(segmentPoints[0][0], segmentPoints[0][1], segmentPoints[0][2]);
+                sphereGroup.add(sphere);
+                lines[methodId] = { line: null, points: sphereGroup, startLabel: null, endLabel: null, nameLabel: null };
+                scene.add(sphereGroup);
+            }
+        }
+
         function createPredictionLine(methodId, predPoints, color) {
             if (!predPoints || predPoints.length < 2) return null;
             const vertices = predPoints.map(p => new THREE.Vector3(p[0], p[1], p[2]));
@@ -604,15 +707,19 @@
             updateStats(); updateParamPanel(); updateHeightChart();
         }
 
-        // 拖尾粒子系统（保持不变）
+        // 拖尾粒子系统
         function initTrailSystem(methodId, color) {
-            const particleCount = 30;
+            const particleCount = 2000;
             const geometry = new THREE.BufferGeometry();
             const positions = new Float32Array(particleCount * 3);
             const colors = new Float32Array(particleCount * 3);
             for (let i = 0; i < particleCount; i++) {
-                positions[i*3] = positions[i*3+1] = positions[i*3+2] = 0;
-                colors[i*3] = colors[i*3+1] = colors[i*3+2] = 0;
+                positions[i*3] = (Math.random() - 0.5) * 400;
+                positions[i*3+1] = Math.random() * 30;
+                positions[i*3+2] = (Math.random() - 0.5) * 400;
+                colors[i*3] = 0;
+                colors[i*3+1] = 0;
+                colors[i*3+2] = 0;
             }
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -709,6 +816,10 @@
                         if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
                         movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
                         addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
+                        // 仅在动画播放时动态更新轨迹段
+                        if (animationActive) {
+                            updateTrailSegment(id, timestamp);
+                        }
                     }
                 }
             } else {
@@ -722,6 +833,9 @@
                         movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
                         addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
                         if (pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
+                        if (animationActive) {
+                            updateTrailSegment(id, timestamp);
+                        }
                     }
                 }
             }
@@ -742,8 +856,8 @@
             const startTimestamp = range.start;
 
             function step(now) {
-                const elapsed = (now - animationStartTime) * animationSpeed;
-                const newTimestamp = startTimestamp + elapsed;
+                const elapsedSeconds = (now - animationStartTime) / 1000 * animationSpeed;
+                const newTimestamp = startTimestamp + elapsedSeconds;
                 if (newTimestamp >= range.end) {
                     stopAnimation();
                     updateAnimationByTime(range.end);
@@ -763,6 +877,8 @@
             if (animationId) cancelAnimationFrame(animationId);
             animationActive = false;
             animationId = null;
+            // 停止时恢复完整轨迹
+            refreshVisuals();
         }
 
         function createMovingSphere(color) {
@@ -1144,12 +1260,17 @@
             let move = new THREE.Vector3(0, 0, 0);
             if (keyState.w) move.add(forward);
             if (keyState.s) move.sub(forward);
-            if (keyState.d) move.add(right);
-            if (keyState.a) move.sub(right);
+            if (keyState.d) move.sub(right);   // 修正：D 向右
+            if (keyState.a) move.add(right);   // 修正：A 向左
             if (move.length() > 0) move.normalize();
+
+            // 移动相机位置
             camera.position.x += move.x * moveSpeed;
             camera.position.z += move.z * moveSpeed;
-            controls.target.set(6, 3, 6);
+            // 同步移动目标点，保持视线方向不变
+            controls.target.x += move.x * moveSpeed;
+            controls.target.z += move.z * moveSpeed;
+
             controls.update();
         }
         window.addEventListener('keydown', (e) => {
@@ -1203,11 +1324,36 @@
         document.getElementById('animationPlatform').addEventListener('change', (e) => {
             currentPlatformForAnim = e.target.value;
             if (!animationActive) {
+                refreshVisuals();               // 恢复完整轨迹
                 const range = getCurrentTimeRange();
-                updateAnimationByTime(range.start);
+                if (range.end > range.start) {
+                    updateAnimationByTime(range.start);
+                }
+                const slider = document.getElementById('timelineSlider');
+                if (slider) slider.value = 0;
             }
         });
         renderer.domElement.addEventListener('mousemove', onMouseMove);
+
+        // 滑块拖动事件
+        const timelineSlider = document.getElementById('timelineSlider');
+        timelineSlider.addEventListener('input', (e) => {
+            const progress = parseFloat(e.target.value) / 100;
+            const range = getCurrentTimeRange();
+            if (range.end <= range.start) return;
+            const targetTime = range.start + progress * (range.end - range.start);
+            if (animationActive) stopAnimation(); // 停止动画，但 stopAnimation 会恢复完整轨迹，我们随后要覆盖为轨迹段
+            // 更新位置和轨迹段（手动调用，因为动画已停止）
+            updateAnimationByTime(targetTime);    // 这会更新位置，但由于 animationActive=false，不会调用 updateTrailSegment
+            // 手动调用 updateTrailSegment 来显示到当前位置的轨迹段
+            if (currentPlatformForAnim === 'all') {
+                for (const id in detectionMethods) {
+                    updateTrailSegment(id, targetTime);
+                }
+            } else {
+                updateTrailSegment(currentPlatformForAnim, targetTime);
+            }
+        });
 
         showToast("系统已启动，按 WASD 移动相机，鼠标悬停显示坐标");
     </script>
