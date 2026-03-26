@@ -6,6 +6,7 @@
     <title>3D 无人机轨迹预测系统 | 多检测手段 + AI 建议</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
+        /* 样式部分保持不变 */
         body {
             margin: 0;
             overflow: hidden;
@@ -215,7 +216,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
-        /* 备份列表样式 */
         .backup-item {
             transition: background 0.2s;
         }
@@ -245,7 +245,6 @@
             <button id="clearAllBtn" style="background: #ff6b6b;">🗑️ 清理所有数据（备份）</button>
             <button id="restoreBtn" style="background: #ff8c42;">💾 恢复备份</button>
             <button id="restoreAllBtn" style="background: #6c5ce7;">🔄 一键恢复所有平台</button>
-            <!-- 备份列表模态框 -->
             <div id="backupModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
                 <div style="background: #1e1f22; border-radius: 24px; padding: 20px; width: 400px; max-width: 80%; border: 1px solid #6c5ce7;">
                     <h3 style="margin-top:0;">选择备份文件</h3>
@@ -344,12 +343,13 @@
         // ======================== 从后端注入数据 ========================
         const methodsData = {{ methods_data | tojson }};
         let detectionMethods = methodsData;
+        // 预测轨迹结构：{ points: [], times: [] }
         let predictedTrajectories = {};
-        for (const id in detectionMethods) predictedTrajectories[id] = [];
+        for (const id in detectionMethods) predictedTrajectories[id] = { points: [], times: [] };
 
         // Three.js 对象
         let scene, camera, renderer, labelRenderer, controls;
-        let lines = {}, predLines = {}, movingSpheres = {}, trailParticles = {}, pointLight = null;
+        let lines = {}, predLines = {}, movingSpheres = {}, predictedSpheres = {}, trailParticles = {}, pointLight = null;
         let animationActive = false, animationId = null, currentPlatformForAnim = 'all';
         let heightChart = null;
         let audioCtx = null;
@@ -438,15 +438,14 @@
                 });
             }
             heightChart.setOption({
-                title: { text: '高度变化', textStyle: { color: '#fff' } },
                 tooltip: { trigger: 'axis' },
                 xAxis: { type: 'category', data: series[0]?.data.map((_, i) => i+1) || [], axisLabel: { color: '#ccc' } },
                 yAxis: { type: 'value', name: '高度 (m)', axisLabel: { color: '#ccc' } },
                 legend: {
                     textStyle: { color: '#fff' },
-                    type: 'scroll',          // 水平滚动图例
+                    type: 'scroll',
                     orient: 'horizontal',
-                    bottom: 0,               // 放在图表底部
+                    bottom: 0,
                     itemWidth: 40,
                     itemHeight: 14
                 },
@@ -454,8 +453,8 @@
                 grid: {
                     containLabel: true,
                     backgroundColor: 'rgba(0,0,0,0.2)',
-                    top: 60,                 // 为标题留出空间
-                    bottom: 40,              // 为图例留出空间
+                    top: 35,
+                    bottom: 35,
                     left: 30,
                     right: 30
                 }
@@ -464,7 +463,7 @@
 
         function updatePredictionUI() {
             let totalPredPoints = 0;
-            for (const id in predictedTrajectories) totalPredPoints += predictedTrajectories[id].length;
+            for (const id in predictedTrajectories) totalPredPoints += predictedTrajectories[id].points.length;
             document.getElementById('predPoints').innerText = totalPredPoints;
             document.getElementById('confidence').innerText = (Math.random() * 30 + 70).toFixed(1) + '%';
         }
@@ -532,7 +531,6 @@
         function createSmoothCurveLine(points, color) {
             if (points.length < 2) return null;
             const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
-            // 采样更多点使曲线更平滑
             const divisions = Math.max(100, points.length * 5);
             const curvePoints = curve.getPoints(divisions);
             const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
@@ -540,12 +538,11 @@
             return new THREE.Line(geometry, material);
         }
 
+        // 创建完整轨迹视觉元素（用于初始化和停止后）
         function createTrailVisuals(id, data) {
             const points = data.points;
             if (points.length < 2) return;
-            // 平滑曲线
             const smoothLine = createSmoothCurveLine(points, data.color);
-            // 点云（小球）
             const sphereGroup = new THREE.Group();
             points.forEach(p => {
                 const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
@@ -571,7 +568,7 @@
             return { line: smoothLine, points: sphereGroup, startLabel, endLabel, nameLabel };
         }
 
-        // 创建轨迹段视觉元素（用于动态显示）
+        // 创建轨迹段视觉元素（用于动画动态显示，支持历史和预测混合）
         function createTrailVisualsSegment(methodId, data, segmentPoints) {
             const color = data.color;
             const smoothLine = createSmoothCurveLine(segmentPoints, color);
@@ -605,28 +602,52 @@
             return { line: smoothLine, points: sphereGroup, startLabel, endLabel, nameLabel };
         }
 
-        // 更新轨迹段（仅显示从起点到当前时间点的轨迹）
+        // 更新轨迹段：根据当前时间戳，显示从起点到当前位置的轨迹（历史+预测）
         function updateTrailSegment(methodId, currentTime) {
             const data = detectionMethods[methodId];
-            if (!data || !data.points.length || !data.timestamps.length) return;
-
+            if (!data) return;
             const points = data.points;
             const timestamps = data.timestamps;
+            const pred = predictedTrajectories[methodId];
 
-            // 找到当前时间所在的索引
+            // 构建完整的点序列（历史 + 预测）
+            let allPoints = [];
+            let allTimes = [];
+
+            // 添加历史点
+            if (points.length && timestamps.length) {
+                for (let i = 0; i < points.length; i++) {
+                    allPoints.push(points[i]);
+                    allTimes.push(timestamps[i]);
+                }
+            }
+            // 添加预测点（如果存在且预测时间大于最后历史时间）
+            if (pred && pred.points.length && pred.times.length) {
+                const lastHistTime = allTimes.length ? allTimes[allTimes.length-1] : -Infinity;
+                for (let i = 0; i < pred.points.length; i++) {
+                    if (pred.times[i] > lastHistTime) {
+                        allPoints.push(pred.points[i]);
+                        allTimes.push(pred.times[i]);
+                    }
+                }
+            }
+
+            if (allPoints.length === 0) return;
+
+            // 找到当前时间在组合序列中的位置
             let endIdx = 0;
-            while (endIdx < timestamps.length - 1 && timestamps[endIdx + 1] < currentTime) endIdx++;
+            while (endIdx < allTimes.length - 1 && allTimes[endIdx + 1] < currentTime) endIdx++;
 
-            // 截取到当前时间点的所有原始点
-            let segmentPoints = points.slice(0, endIdx + 1);
+            // 截取到当前时间点的所有点
+            let segmentPoints = allPoints.slice(0, endIdx + 1);
 
-            // 如果当前时间在两个点之间，且不是最后一个点，添加插值点
-            if (endIdx < points.length - 1 && currentTime > timestamps[endIdx] && currentTime < timestamps[endIdx + 1]) {
-                const ratio = (currentTime - timestamps[endIdx]) / (timestamps[endIdx + 1] - timestamps[endIdx]);
+            // 如果当前时间在两个点之间且不是最后一个点，添加插值点
+            if (endIdx < allPoints.length - 1 && currentTime > allTimes[endIdx] && currentTime < allTimes[endIdx + 1]) {
+                const ratio = (currentTime - allTimes[endIdx]) / (allTimes[endIdx + 1] - allTimes[endIdx]);
                 const interpPoint = [
-                    points[endIdx][0] + (points[endIdx+1][0] - points[endIdx][0]) * ratio,
-                    points[endIdx][1] + (points[endIdx+1][1] - points[endIdx][1]) * ratio,
-                    points[endIdx][2] + (points[endIdx+1][2] - points[endIdx][2]) * ratio
+                    allPoints[endIdx][0] + (allPoints[endIdx+1][0] - allPoints[endIdx][0]) * ratio,
+                    allPoints[endIdx][1] + (allPoints[endIdx+1][1] - allPoints[endIdx][1]) * ratio,
+                    allPoints[endIdx][2] + (allPoints[endIdx+1][2] - allPoints[endIdx][2]) * ratio
                 ];
                 segmentPoints.push(interpPoint);
             }
@@ -650,7 +671,6 @@
                 if (visuals.endLabel) scene.add(visuals.endLabel);
                 if (visuals.nameLabel) scene.add(visuals.nameLabel);
             } else if (segmentPoints.length === 1) {
-                // 只有一个点，只显示点云（无曲线）
                 const sphereGroup = new THREE.Group();
                 const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x222222 }));
                 sphere.position.set(segmentPoints[0][0], segmentPoints[0][1], segmentPoints[0][2]);
@@ -676,6 +696,11 @@
         }
 
         function refreshVisuals() {
+            // 清理预测球体
+            for (const id in predictedSpheres) {
+                scene.remove(predictedSpheres[id]);
+                delete predictedSpheres[id];
+            }
             for (const id in detectionMethods) {
                 const data = detectionMethods[id];
                 if (lines[id]) {
@@ -694,8 +719,8 @@
                     scene.add(visuals.startLabel);
                     scene.add(visuals.endLabel);
                     scene.add(visuals.nameLabel);
-                    if (predictedTrajectories[id] && predictedTrajectories[id].length > 0) {
-                        const predVis = createPredictionLine(id, predictedTrajectories[id], data.color);
+                    if (predictedTrajectories[id] && predictedTrajectories[id].points.length > 0) {
+                        const predVis = createPredictionLine(id, predictedTrajectories[id].points, data.color);
                         if (predVis) {
                             predLines[id] = predVis;
                             scene.add(predVis.line);
@@ -787,6 +812,7 @@
             ];
         }
 
+        // 获取当前动画的总时间范围（包含历史最大时间和预测最大时间）
         function getCurrentTimeRange() {
             if (currentPlatformForAnim === 'all') {
                 let minT = Infinity, maxT = -Infinity;
@@ -796,53 +822,102 @@
                         minT = Math.min(minT, ts[0]);
                         maxT = Math.max(maxT, ts[ts.length-1]);
                     }
+                    const pred = predictedTrajectories[id];
+                    if (pred && pred.times && pred.times.length) {
+                        maxT = Math.max(maxT, pred.times[pred.times.length-1]);
+                    }
                 }
                 return { start: minT !== Infinity ? minT : 0, end: maxT !== -Infinity ? maxT : 0 };
             } else {
-                const ts = detectionMethods[currentPlatformForAnim]?.timestamps;
-                if (ts && ts.length) return { start: ts[0], end: ts[ts.length-1] };
-                return { start: 0, end: 0 };
+                const id = currentPlatformForAnim;
+                const ts = detectionMethods[id]?.timestamps;
+                const pred = predictedTrajectories[id];
+                let start = (ts && ts.length) ? ts[0] : 0;
+                let end = (ts && ts.length) ? ts[ts.length-1] : 0;
+                if (pred && pred.times && pred.times.length) {
+                    end = Math.max(end, pred.times[pred.times.length-1]);
+                }
+                return { start, end };
             }
         }
 
+        // 更新动画位置：根据时间戳移动球体，支持历史和预测的无缝过渡
         function updateAnimationByTime(timestamp) {
             if (currentPlatformForAnim === 'all') {
                 for (const id in detectionMethods) {
                     const points = detectionMethods[id].points;
                     const timestamps = detectionMethods[id].timestamps;
-                    if (!points.length || !timestamps.length) continue;
-                    const pos = interpolatePosition(points, timestamps, timestamp);
-                    if (pos) {
-                        if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
-                        movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
-                        addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
-                        // 仅在动画播放时动态更新轨迹段
-                        if (animationActive) {
-                            updateTrailSegment(id, timestamp);
+                    const pred = predictedTrajectories[id];
+                    // 尝试在历史轨迹中查找
+                    if (points.length && timestamps.length && timestamp <= timestamps[timestamps.length-1]) {
+                        const pos = interpolatePosition(points, timestamps, timestamp);
+                        if (pos) {
+                            if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
+                            movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                            addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
                         }
+                        // 隐藏预测球体
+                        if (predictedSpheres[id]) scene.remove(predictedSpheres[id]);
+                    }
+                    // 如果在预测范围内
+                    else if (pred && pred.points.length && pred.times.length && timestamp <= pred.times[pred.times.length-1]) {
+                        const predPos = interpolatePosition(pred.points, pred.times, timestamp);
+                        if (predPos) {
+                            if (!predictedSpheres[id]) predictedSpheres[id] = createMovingSphere(detectionMethods[id].color, 0.2); // 预测球体稍小
+                            predictedSpheres[id].position.set(predPos[0], predPos[1], predPos[2]);
+                            addTrailParticle(id, predictedSpheres[id].position, detectionMethods[id].color);
+                        }
+                        // 隐藏历史球体
+                        if (movingSpheres[id]) scene.remove(movingSpheres[id]);
+                    }
+                    // 动画播放中更新轨迹段
+                    if (animationActive) {
+                        updateTrailSegment(id, timestamp);
                     }
                 }
             } else {
                 const id = currentPlatformForAnim;
                 const points = detectionMethods[id]?.points;
                 const timestamps = detectionMethods[id]?.timestamps;
-                if (points && timestamps && points.length) {
+                const pred = predictedTrajectories[id];
+                if (points && timestamps && points.length && timestamp <= timestamps[timestamps.length-1]) {
                     const pos = interpolatePosition(points, timestamps, timestamp);
                     if (pos) {
                         if (!movingSpheres[id]) movingSpheres[id] = createMovingSphere(detectionMethods[id].color);
                         movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
                         addTrailParticle(id, movingSpheres[id].position, detectionMethods[id].color);
                         if (pointLight) pointLight.position.set(pos[0], pos[1], pos[2]);
-                        if (animationActive) {
-                            updateTrailSegment(id, timestamp);
-                        }
                     }
+                    if (predictedSpheres[id]) scene.remove(predictedSpheres[id]);
+                } else if (pred && pred.points.length && pred.times.length && timestamp <= pred.times[pred.times.length-1]) {
+                    const predPos = interpolatePosition(pred.points, pred.times, timestamp);
+                    if (predPos) {
+                        if (!predictedSpheres[id]) predictedSpheres[id] = createMovingSphere(detectionMethods[id].color, 0.2);
+                        predictedSpheres[id].position.set(predPos[0], predPos[1], predPos[2]);
+                        addTrailParticle(id, predictedSpheres[id].position, detectionMethods[id].color);
+                        if (pointLight) pointLight.position.set(predPos[0], predPos[1], predPos[2]);
+                    }
+                    if (movingSpheres[id]) scene.remove(movingSpheres[id]);
+                }
+                if (animationActive) {
+                    updateTrailSegment(id, timestamp);
                 }
             }
         }
 
         function startAnimation() {
             if (animationActive) return;
+
+            // ========== 修改：动画播放时隐藏所有预测虚线 ==========
+            for (const id in predLines) {
+                if (predLines[id] && predLines[id].line) {
+                    predLines[id].line.visible = false;
+                }
+                if (predLines[id] && predLines[id].points) {
+                    predLines[id].points.visible = false;
+                }
+            }
+
             const range = getCurrentTimeRange();
             if (range.end <= range.start) {
                 showToast("所选平台没有有效时间数据，无法播放动画", true);
@@ -851,7 +926,6 @@
             animationActive = true;
             const speed = parseFloat(document.getElementById('speedSelect').value);
             animationSpeed = speed;
-            const totalDuration = (range.end - range.start) / animationSpeed;
             animationStartTime = performance.now();
             const startTimestamp = range.start;
 
@@ -863,7 +937,6 @@
                     updateAnimationByTime(range.end);
                 } else {
                     updateAnimationByTime(newTimestamp);
-                    // 同步滑块进度
                     const progress = (newTimestamp - range.start) / (range.end - range.start);
                     const slider = document.getElementById('timelineSlider');
                     if (slider) slider.value = progress * 100;
@@ -873,16 +946,18 @@
             animationId = requestAnimationFrame(step);
         }
 
-        function stopAnimation() {
+        // 修改 stopAnimation 函数，支持参数控制是否恢复视觉
+        function stopAnimation(restoreVisuals = true) {
             if (animationId) cancelAnimationFrame(animationId);
             animationActive = false;
             animationId = null;
-            // 停止时恢复完整轨迹
-            refreshVisuals();
+            if (restoreVisuals) {
+                refreshVisuals(); // 恢复完整轨迹（显示预测虚线）
+            }
         }
 
-        function createMovingSphere(color) {
-            const geometry = new THREE.SphereGeometry(0.25, 24, 24);
+        function createMovingSphere(color, size = 0.25) {
+            const geometry = new THREE.SphereGeometry(size, 24, 24);
             const material = new THREE.MeshStandardMaterial({ color: color, emissive: 0x442200 });
             const sphere = new THREE.Mesh(geometry, material);
             scene.add(sphere);
@@ -989,7 +1064,10 @@
                     const result = await response.json();
                     if (result.success) {
                         for (const [mid, predData] of Object.entries(result.results)) {
-                            predictedTrajectories[mid] = predData.prediction;
+                            predictedTrajectories[mid] = {
+                                points: predData.prediction,
+                                times: predData.pred_times
+                            };
                         }
                         refreshVisuals();
                         updatePredictionUI();
@@ -1026,7 +1104,10 @@
                     });
                     const result = await response.json();
                     if (result.success) {
-                        predictedTrajectories[methodId] = result.prediction;
+                        predictedTrajectories[methodId] = {
+                            points: result.prediction,
+                            times: result.pred_times
+                        };
                         refreshVisuals();
                         updatePredictionUI();
                         showToast("预测完成，虚线为预测轨迹");
@@ -1096,7 +1177,6 @@
                             <span style="font-size: 0.8rem;">${backup.filename}</span>
                         `;
                         div.addEventListener('click', () => {
-                            // 高亮选中
                             document.querySelectorAll('.backup-item').forEach(item => item.style.background = '#2a2c30');
                             div.style.background = '#6c5ce7';
                             window.selectedBackupFile = backup.filename;
@@ -1111,7 +1191,6 @@
             }
         }
 
-        // 确认恢复
         async function confirmRestore() {
             if (!window.selectedBackupFile) {
                 alert('请选择一个备份文件');
@@ -1143,7 +1222,6 @@
             }
         }
 
-        // 一键恢复所有平台
         async function restoreAllBackups() {
             if (!confirm('确认恢复所有平台的最新备份？这将覆盖当前所有轨迹数据。')) return;
             const btn = document.getElementById('restoreAllBtn');
@@ -1260,17 +1338,14 @@
             let move = new THREE.Vector3(0, 0, 0);
             if (keyState.w) move.add(forward);
             if (keyState.s) move.sub(forward);
-            if (keyState.d) move.sub(right);   // 修正：D 向右
-            if (keyState.a) move.add(right);   // 修正：A 向左
+            if (keyState.d) move.add(right);
+            if (keyState.a) move.sub(right);
             if (move.length() > 0) move.normalize();
 
-            // 移动相机位置
             camera.position.x += move.x * moveSpeed;
             camera.position.z += move.z * moveSpeed;
-            // 同步移动目标点，保持视线方向不变
             controls.target.x += move.x * moveSpeed;
             controls.target.z += move.z * moveSpeed;
-
             controls.update();
         }
         window.addEventListener('keydown', (e) => {
@@ -1324,7 +1399,7 @@
         document.getElementById('animationPlatform').addEventListener('change', (e) => {
             currentPlatformForAnim = e.target.value;
             if (!animationActive) {
-                refreshVisuals();               // 恢复完整轨迹
+                refreshVisuals();
                 const range = getCurrentTimeRange();
                 if (range.end > range.start) {
                     updateAnimationByTime(range.start);
@@ -1335,17 +1410,31 @@
         });
         renderer.domElement.addEventListener('mousemove', onMouseMove);
 
-        // 滑块拖动事件
+        // 获取滑块元素（修复未定义问题）
         const timelineSlider = document.getElementById('timelineSlider');
+
+        // 滑块拖动事件
         timelineSlider.addEventListener('input', (e) => {
             const progress = parseFloat(e.target.value) / 100;
             const range = getCurrentTimeRange();
             if (range.end <= range.start) return;
             const targetTime = range.start + progress * (range.end - range.start);
-            if (animationActive) stopAnimation(); // 停止动画，但 stopAnimation 会恢复完整轨迹，我们随后要覆盖为轨迹段
-            // 更新位置和轨迹段（手动调用，因为动画已停止）
-            updateAnimationByTime(targetTime);    // 这会更新位置，但由于 animationActive=false，不会调用 updateTrailSegment
-            // 手动调用 updateTrailSegment 来显示到当前位置的轨迹段
+
+            // 如果动画正在播放，停止但不恢复视觉（保持预测虚线隐藏）
+            if (animationActive) {
+                stopAnimation(false);
+            } else {
+                // 如果未播放，手动隐藏所有预测虚线（使其在手动拖动时也不显示）
+                for (const id in predLines) {
+                    if (predLines[id] && predLines[id].line && predLines[id].line.visible) {
+                        predLines[id].line.visible = false;
+                        if (predLines[id].points) predLines[id].points.visible = false;
+                    }
+                }
+            }
+
+            // 更新位置和轨迹段（手动）
+            updateAnimationByTime(targetTime);
             if (currentPlatformForAnim === 'all') {
                 for (const id in detectionMethods) {
                     updateTrailSegment(id, targetTime);
