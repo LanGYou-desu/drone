@@ -173,7 +173,7 @@ def load_data():
 # ---------------------- 预测所有平台 ----------------------
 @main_bp.route('/api/predict_all', methods=['POST'])
 def predict_all():
-    """对当前所有可见检测手段进行预测，并将结果保存到 data/predict/"""
+    """对当前所有可见检测手段进行预测，并将结果保存到 data/predict/，同时返回预测点和对应时间戳"""
     num_points = request.json.get('num_points', 6)
     time_step = request.json.get('time_step', 0.5)
     results = {}
@@ -184,6 +184,7 @@ def predict_all():
             pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
             if pred_points:
                 save_predict_data(method_id, pred_points, pred_times)
+                # 返回预测点及对应时间戳
                 results[method_id] = {'prediction': pred_points, 'pred_times': pred_times}
     return jsonify({'success': True, 'results': results})
 
@@ -191,6 +192,9 @@ def predict_all():
 # ---------------------- 单平台预测 ----------------------
 @main_bp.route('/api/predict', methods=['POST'])
 def predict():
+    """
+    对指定平台进行预测，返回预测点及对应时间戳
+    """
     data = request.json
     method_id = data.get('method_id')
     points = data.get('points', [])
@@ -229,6 +233,7 @@ def ai_suggestion():
         return jsonify({'success': False, 'error': str(e)})
 
 
+# ---------------------- 备份管理 ----------------------
 @main_bp.route('/api/list_backups', methods=['GET'])
 def list_backups():
     """列出 data/backup/ 目录下的所有备份文件"""
