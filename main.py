@@ -64,7 +64,7 @@ if __name__ == '__main__':
             title='鹰眼长空 — 低空无人机智能监测系统',
             url='http://127.0.0.1:5000',
             width=1280,
-            height=720,
+            height=800,
             resizable=True,
             fullscreen=False,
         )

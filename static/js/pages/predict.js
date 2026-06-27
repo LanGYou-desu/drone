@@ -10,9 +10,10 @@ const predCfg = predSettings || {};
 let scene, camera, renderer, controls, THREE;
 let lines = {}, predLines = {};
 let movingSpheres = {};
-let animActive = false, animId = null, animSpeed = 1.0, animStart = 0;
+let animActive = false, animId = null, animSpeed = 1.0;
+let animElapsed = 0;
 let animRange = { start: 0, end: 0 };
-let predictedData = {};  // { methodId: { prediction, pred_times } }
+let predictedData = {};
 
 // ═══════════════════════════ 3D 场景 ═══════════════════════════
 
@@ -218,51 +219,55 @@ function makeGlowSphere(color) {
     return g;
 }
 
-function startAnim() {
-    if (animActive) stopAnim();
+function startAnim(fromStart = false) {
+    if (fromStart) animElapsed = 0;
     if (Object.keys(predictedData).length === 0) { toast.warning('请先进行预测'); return; }
     if (!THREE) { toast.warning('3D 场景加载中，请稍候'); return; }
 
     calcRange();
     if (animRange.end <= animRange.start) { toast.warning('无有效时间数据'); return; }
+    if (animElapsed >= animRange.end - animRange.start) animElapsed = 0;
 
     animActive = true;
-    animStart = performance.now();
 
-    // 清除并创建球体（每个参与播放的平台一个）
-    for (const id in movingSpheres) { scene.remove(movingSpheres[id]); delete movingSpheres[id]; }
-
+    // 收集参与播放的平台
     const playIds = new Set();
     for (const id in predictedData) playIds.add(id);
-    // 也包含可见但未预测的平台（只播历史段）
     for (const [id, d] of Object.entries(detectionMethods)) {
         if (d.visible && d.points?.length >= 2) playIds.add(id);
     }
 
-    for (const id of playIds) {
-        const color = detectionMethods[id]?.color || '#fff';
-        const sphere = makeGlowSphere(color);
-        scene.add(sphere);
-        movingSpheres[id] = sphere;
+    // 仅在首次播放或重播时创建球体
+    if (fromStart || Object.keys(movingSpheres).length === 0) {
+        for (const id in movingSpheres) { scene.remove(movingSpheres[id]); delete movingSpheres[id]; }
+        for (const id of playIds) {
+            const color = detectionMethods[id]?.color || '#fff';
+            const sphere = makeGlowSphere(color);
+            scene.add(sphere);
+            movingSpheres[id] = sphere;
+        }
     }
 
+    const startWall = performance.now();
+    const startElapsed = animElapsed;
+
     const step = now => {
-        if (!animActive) return;
-        const ts = animRange.start + (now - animStart) / 1000 * animSpeed;
+        if (!animActive) {
+            animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
+            return;
+        }
+        animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
+        const ts = animRange.start + animElapsed;
 
         if (ts >= animRange.end) {
-            // 停在最终位置
             for (const id of playIds) {
                 const pred = predictedData[id];
                 if (pred?.prediction?.length) {
                     const last = pred.prediction[pred.prediction.length-1];
                     movingSpheres[id]?.position.set(last[0], last[1], last[2]);
-                } else {
-                    const pts = detectionMethods[id]?.points;
-                    if (pts?.length) { const p = pts[pts.length-1]; movingSpheres[id]?.position.set(p[0],p[1],p[2]); }
                 }
             }
-            stopAnim();
+            pauseAnim();
             return;
         }
 
@@ -270,14 +275,11 @@ function startAnim() {
             const data = detectionMethods[id];
             const s = movingSpheres[id];
             if (!s) continue;
-
-            // 先尝试历史轨迹
             const histPts = data?.points, histTs = data?.timestamps;
             if (histPts?.length && histTs?.length && ts <= histTs[histTs.length-1]) {
                 const pos = lerp(histPts, histTs, ts);
                 if (pos) { s.position.set(pos[0], pos[1], pos[2]); s.visible = true; continue; }
             }
-            // 超出历史范围 → 预测段
             const pred = predictedData[id];
             if (pred?.prediction?.length && pred?.pred_times?.length && ts <= pred.pred_times[pred.pred_times.length-1]) {
                 const pos = lerp(pred.prediction, pred.pred_times, ts);
@@ -285,16 +287,22 @@ function startAnim() {
             }
             s.visible = false;
         }
-
         animId = requestAnimationFrame(step);
     };
     animId = requestAnimationFrame(step);
-    toast.show('全程轨迹播放中');
+    toast.show('全程轨迹播放');
+}
+
+function pauseAnim() {
+    if (animId) cancelAnimationFrame(animId);
+    animActive = false; animId = null;
+    // 球体保持在当前位置不消失
 }
 
 function stopAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
+    animElapsed = 0;
     for (const id in movingSpheres) {
         scene.remove(movingSpheres[id]);
         delete movingSpheres[id];
@@ -313,8 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('predictBtn').addEventListener('click', runPrediction);
 
     // 播放/停止
-    document.getElementById('playBtn').addEventListener('click', startAnim);
-    document.getElementById('stopBtn').addEventListener('click', stopAnim);
+    document.getElementById('playBtn').addEventListener('click', () => startAnim(false));
+    document.getElementById('stopBtn').addEventListener('click', pauseAnim);
 
     // 倍速
     document.getElementById('speedSelect').addEventListener('change', e => {

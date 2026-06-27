@@ -21,16 +21,24 @@
     </div>
 </div>
 
-<!-- 右上角：实时参数 -->
-<div class="overlay-panel" style="top:72px;right:20px;width:220px;">
-    <h3>实时数据</h3>
-    <div style="font-size:0.82rem;" id="realtimeStats">
-        <div class="info-card" style="margin:4px 0;padding:8px 10px;">
-            <div class="row"><span class="label">轨迹点</span><span class="value" id="totalPoints">0</span></div>
-            <div class="row"><span class="label">速度</span><span class="value highlight" id="currentSpeed">--</span></div>
-            <div class="row"><span class="label">高度</span><span class="value" id="currentHeight">--</span></div>
+<!-- 右上角：各平台实时参数 -->
+<div class="overlay-panel" style="top:72px;right:20px;min-width:240px;">
+    <h3>平台状态</h3>
+    <div id="platformStats">
+        {% for id, m in methods_data.items() %}
+        <div id="stat-{{ id }}" style="font-size:0.78rem;margin-bottom:8px;{% if not m.visible %}display:none;{% endif %}">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                <span class="legend-dot" style="background:{{ m.color }};color:{{ m.color }};"></span>
+                <strong>{{ m.name }}</strong>
+                <span style="color:var(--text-tertiary);font-size:0.68rem;">{{ m.points|length }}点</span>
+            </div>
+            <div style="display:flex;gap:12px;padding-left:18px;color:var(--text-secondary);">
+                <span>v <b style="color:var(--text-primary);">--</b></span>
+                <span>h <b style="color:var(--text-primary);">--</b></span>
+                <span>p <b style="color:var(--text-primary);">--</b></span>
+            </div>
         </div>
-        <div style="font-size:0.7rem;color:var(--text-tertiary);text-align:right;" id="lastUpdate">--:--:--</div>
+        {% endfor %}
     </div>
 </div>
 

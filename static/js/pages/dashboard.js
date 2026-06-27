@@ -25,8 +25,10 @@ for (const id in detectionMethods) predictedTrajectories[id] = { points: [], tim
 let scene, camera, renderer, labelRenderer, controls, THREE, CSS2DObject;
 let lines = {}, predLines = {}, movingSpheres = {}, predictedSpheres = {};
 let trailSystems = {};
-let animActive = false, animId = null, animSpeed = 1.0, animStart = 0;
+let animActive = false, animId = null, animSpeed = 1.0;
+let animElapsed = 0;   // 已播放的时间（秒），暂停时保留
 let timeRange = { start: 0, end: 0 };
+let lastAnimTimestamp = 0;  // 当前动画时间戳
 
 // ═══════════════════════════════════════════
 // 场景初始化
@@ -433,28 +435,63 @@ function ensurePredSphere(id, color, size) {
     scene.add(g); predictedSpheres[id] = g;
 }
 
-function startAnim() {
+function startAnim(fromStart = false) {
+    if (fromStart) animElapsed = 0;  // 重播时从头开始
     if (animActive) return;
     calcRange();
     if (timeRange.end <= timeRange.start) { toast.warning('无有效时间数据'); return; }
-    animActive = true; animStart = performance.now();
+    if (animElapsed >= timeRange.end - timeRange.start) animElapsed = 0;  // 已播完则重置
+
+    animActive = true;
     setPredVisible(false);
+    const startWall = performance.now();
+    const startElapsed = animElapsed;  // 从暂停点开始
+
     const step = now => {
-        if (!animActive) return;
-        const ts = timeRange.start + (now - animStart)/1000*animSpeed;
-        if (ts >= timeRange.end) { stopAnim(true); animStep(timeRange.end); return; }
+        if (!animActive) {
+            animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
+            return;  // 被暂停时保存 elapsed
+        }
+        animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
+        const ts = timeRange.start + animElapsed;
+
+        if (ts >= timeRange.end) {
+            animStep(timeRange.end);
+            lastAnimTimestamp = timeRange.end;
+            pauseAnim();
+            return;
+        }
+
         animStep(ts);
+        lastAnimTimestamp = ts;
         const slider = document.getElementById('timelineSlider');
-        if (slider) slider.value = ((ts-timeRange.start)/(timeRange.end-timeRange.start))*100;
+        if (slider) slider.value = ((ts - timeRange.start) / (timeRange.end - timeRange.start)) * 100;
         animId = requestAnimationFrame(step);
     };
     animId = requestAnimationFrame(step);
 }
 
-function stopAnim(restore=true) {
+function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
-    if (restore) { setPredVisible(true); refreshAll(); }
+    // 不调用 refreshAll，保持球体在当前位置
+    setPredVisible(false);
+    updateStats();
+}
+
+function stopAnim() {
+    if (animId) cancelAnimationFrame(animId);
+    animActive = false; animId = null;
+    animElapsed = 0;
+    lastAnimTimestamp = 0;
+    setPredVisible(true);
+    // 清除动画球体
+    for (const id in movingSpheres) { scene.remove(movingSpheres[id]); delete movingSpheres[id]; }
+    for (const id in predictedSpheres) { scene.remove(predictedSpheres[id]); delete predictedSpheres[id]; }
+    refreshAll();
+    updateStats();
+    const slider = document.getElementById('timelineSlider');
+    if (slider) slider.value = 0;
 }
 
 // ═══════════════════════════════════════════
@@ -462,24 +499,31 @@ function stopAnim(restore=true) {
 // ═══════════════════════════════════════════
 
 function updateStats() {
-    let total = 0;
-    for (const id in detectionMethods) total += (detectionMethods[id].points || []).length;
-    const tpEl = document.getElementById('totalPoints');
-    if (tpEl) tpEl.textContent = total;
-
+    // 更新各平台实时数据
     for (const [id, data] of Object.entries(detectionMethods)) {
-        if (!data.visible || data.points?.length < 2) continue;
-        const pts = data.points, ts = data.timestamps || [], l = pts.length;
+        const container = document.getElementById('stat-' + id);
+        if (!container) continue;
+        container.style.display = data.visible ? '' : 'none';
+        if (!data.visible) continue;
+
+        const pts = data.points || [];
+        const ts = data.timestamps || [];
+        const l = pts.length;
+        if (l < 2) continue;
+
         const dt = ts[l-1] - ts[l-2] || 0.5;
         const spd = Math.sqrt((pts[l-1][0]-pts[l-2][0])**2 + (pts[l-1][2]-pts[l-2][2])**2) / dt;
-        const spdEl = document.getElementById('currentSpeed');
-        const htEl = document.getElementById('currentHeight');
-        if (spdEl) spdEl.textContent = spd.toFixed(1) + ' m/s';
-        if (htEl) htEl.textContent = pts[l-1][1].toFixed(1) + ' m';
-        break;
+        const ht = pts[l-1][1];
+        // 用最近两点估算方向角度
+        const angle = Math.atan2(pts[l-1][2]-pts[l-2][2], pts[l-1][0]-pts[l-2][0]) * 180 / Math.PI;
+
+        const bolds = container.querySelectorAll('b');
+        if (bolds.length >= 3) {
+            bolds[0].textContent = spd.toFixed(1) + ' m/s';
+            bolds[1].textContent = ht.toFixed(1) + ' m';
+            bolds[2].textContent = angle.toFixed(0) + '°';
+        }
     }
-    const luEl = document.getElementById('lastUpdate');
-    if (luEl) luEl.textContent = new Date().toLocaleTimeString('zh-CN');
 }
 
 // 暴露给 HTML onclick
@@ -487,6 +531,9 @@ window.toggleMethod = function(id) {
     detectionMethods[id].visible = !detectionMethods[id].visible;
     const badge = document.getElementById('status-' + id);
     if (badge) { badge.className = 'badge ' + (detectionMethods[id].visible ? 'badge-green' : 'badge-red'); badge.textContent = detectionMethods[id].visible ? '显示' : '隐藏'; }
+    // 同步显示/隐藏平台状态面板
+    const statPanel = document.getElementById('stat-' + id);
+    if (statPanel) statPanel.style.display = detectionMethods[id].visible ? '' : 'none';
     refreshAll(); updateStats();
 };
 
@@ -495,36 +542,80 @@ window.toggleMethod = function(id) {
 // ═══════════════════════════════════════════
 
 function bindEvents() {
-    document.getElementById('playBtn')?.addEventListener('click', startAnim);
-    document.getElementById('stopBtn')?.addEventListener('click', () => stopAnim(true));
+    document.getElementById('playBtn')?.addEventListener('click', () => startAnim(false));
+    document.getElementById('stopBtn')?.addEventListener('click', pauseAnim);
     document.getElementById('speedSelect')?.addEventListener('change', e => { animSpeed = parseFloat(e.target.value); });
     document.getElementById('timelineSlider')?.addEventListener('input', e => {
-        if (animActive) stopAnim(false);
+        if (animActive) pauseAnim();
         setPredVisible(false);
         calcRange();
         if (timeRange.end > timeRange.start) {
-            animStep(timeRange.start + parseFloat(e.target.value)/100*(timeRange.end-timeRange.start));
+            const ts = timeRange.start + parseFloat(e.target.value)/100*(timeRange.end-timeRange.start);
+            animStep(ts);
+            lastAnimTimestamp = ts;
+            animElapsed = ts - timeRange.start;
         }
     });
 
-    // 鼠标坐标
+    // 鼠标悬停 — 坐标点放大高亮
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    raycaster.params.Points.threshold = 0.3;
+    raycaster.params.Line = { threshold: 0.3 };
+    let hoveredSphere = null;
+
     renderer.domElement.addEventListener('mousemove', e => {
         mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
         mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
+
+        // 收集所有轨迹点球体（排除光晕子元素）
         const targets = [];
-        for (const id in lines) { if (lines[id]?.spheres) lines[id].spheres.children.forEach(s => targets.push(s)); }
+        for (const id in lines) {
+            if (lines[id]?.spheres) {
+                lines[id].spheres.children.forEach(s => {
+                    // 只取标准球体（非光晕）
+                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
+                        targets.push(s);
+                    }
+                });
+            }
+        }
+
         const hits = raycaster.intersectObjects(targets);
         const tip = document.getElementById('coordTooltip');
-        if (hits.length > 0 && tip) {
+
+        // 还原上一个高亮球体
+        if (hoveredSphere && (!hits.length || hits[0].object !== hoveredSphere)) {
+            hoveredSphere.scale.set(1, 1, 1);
+            if (hoveredSphere.material.emissiveIntensity !== undefined) {
+                hoveredSphere.material.emissiveIntensity = 0.4;
+            }
+            hoveredSphere = null;
+        }
+
+        if (hits.length > 0) {
+            const obj = hits[0].object;
             const p = hits[0].point;
-            tip.innerHTML = `📍 <span style="color:#0A84FF">X</span>${p.x.toFixed(2)} <span style="color:#30D158">Y</span>${p.y.toFixed(2)} <span style="color:#FF9F0A">Z</span>${p.z.toFixed(2)}`;
-            tip.style.display = 'block';
-            tip.style.left = (e.clientX + 14) + 'px';
-            tip.style.top = (e.clientY - 24) + 'px';
-        } else if (tip) { tip.style.display = 'none'; }
+
+            // 高亮当前球体（放大 2.5 倍 + 增强发光）
+            if (obj !== hoveredSphere) {
+                hoveredSphere = obj;
+                hoveredSphere.scale.set(2.5, 2.5, 2.5);
+                if (hoveredSphere.material.emissiveIntensity !== undefined) {
+                    hoveredSphere.material.emissiveIntensity = 1.5;
+                }
+            }
+
+            if (tip) {
+                tip.innerHTML = `📍 <span style="color:#FF453A">X</span>${p.x.toFixed(2)} <span style="color:#30D158">Y</span>${p.y.toFixed(2)} <span style="color:#0A84FF">Z</span>${p.z.toFixed(2)}`;
+                tip.style.display = 'block';
+                tip.style.left = (e.clientX + 16) + 'px';
+                tip.style.top = (e.clientY - 28) + 'px';
+            }
+        } else {
+            if (tip) tip.style.display = 'none';
+        }
     });
 
     window.addEventListener('resize', () => {
@@ -539,7 +630,7 @@ function bindKeyboard() {
     document.addEventListener('keydown', e => {
         if (e.code === 'Space' && e.target === document.body) {
             e.preventDefault();
-            animActive ? stopAnim(true) : startAnim();
+            animActive ? pauseAnim() : startAnim(false);
         }
     });
 }
