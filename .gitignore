@@ -20,6 +20,9 @@ data/predict/
 .DS_Store
 Thumbs.db
 
+# PDF
+*.pdf
+
 # Env
 .env
 # config.json is tracked (contains placeholder API key)
