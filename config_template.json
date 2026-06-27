@@ -1,6 +1,6 @@
 {
     "siliconflow": {
-        "api_key": "sk-qyrxnjkpmnjingyvjiwzymrypwxitkiysqcgvbyxjuxomxoh",
+        "api_key": "your-siliconflow-api-key-here",
         "url": "https://api.siliconflow.cn/v1/chat/completions",
         "model": "Qwen/Qwen2.5-7B-Instruct"
     },
