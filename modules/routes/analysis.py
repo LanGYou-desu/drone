@@ -18,7 +18,7 @@ def analysis_page():
             'color': data.get('color', '#999999'),
             'visible': data.get('visible', True),
         }
-    return render_template('analysis.html', methods_data=metadata)
+    return render_template('analysis.html', methods_data=metadata, active_page='analysis')
 
 
 @analysis_bp.route('/data')

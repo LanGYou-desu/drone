@@ -150,12 +150,10 @@ a:hover { color: var(--blue-light); }
    ============================================================ */
 .page {
     padding-top: 68px;
-    padding-left: 24px;
-    padding-right: 24px;
+    padding-left: 32px;
+    padding-right: 32px;
     padding-bottom: 40px;
     min-height: 100vh;
-    max-width: 1400px;
-    margin: 0 auto;
     animation: pageIn 0.3s var(--ease);
 }
 
@@ -346,8 +344,14 @@ label {
 
 @media (max-width: 768px) {
     .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-    .page { padding-left: 12px; padding-right: 12px; }
+    .page { padding-left: 16px; padding-right: 16px; }
     .navbar { padding: 0 12px; }
+}
+
+/* 宽屏优化 */
+@media (min-width: 1600px) {
+    .grid-2 { gap: 24px; }
+    .grid-3 { gap: 20px; }
 }
 
 /* ============================================================
