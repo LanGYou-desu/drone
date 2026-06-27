@@ -565,8 +565,9 @@ function bindEvents() {
     let hoveredSphere = null;
 
     renderer.domElement.addEventListener('mousemove', e => {
-        mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
-        mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
         // 收集所有轨迹点球体（排除光晕子元素）
