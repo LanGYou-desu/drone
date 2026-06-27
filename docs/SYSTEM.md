@@ -40,23 +40,25 @@ drone/
 │       ├── api_predict.py        #   预测 + AI API（3个端点）
 │       └── analysis.py           #   分析数据 API
 │
-├── templates/                    # 多页面 Jinja2 模板
-│   ├── base.html                 #   基础布局（导航栏 + toast）
-│   ├── index.html                #   总览（全屏 3D + 覆盖层）
-│   ├── predict.html              #   预测（参数 + 3D 预览）
-│   ├── analysis.html             #   分析（ECharts 四图表）
-│   ├── ai.html                   #   AI 策略
-│   └── data.html                 #   数据管理
-│
-├── static/                       # 前端
-│   ├── css/main.css              #   深色 Apple 全局样式
-│   └── js/
-│       ├── common/toast.js       #   共享通知组件
-│       └── pages/
-│           ├── dashboard.js      #   总览 3D 引擎
-│           ├── predict.js        #   预测页
-│           ├── ai.js             #   AI 页
-│           └── data.js           #   数据页
+├── web/                           # Web 资源
+│   ├── pages/                     #   多页面 Jinja2 模板
+│   │   ├── base.html              #     基础布局（导航栏 + toast）
+│   │   ├── index.html             #     总览（全屏 3D + 覆盖层）
+│   │   ├── predict.html           #     预测（参数 + 3D 预览）
+│   │   ├── analysis.html          #     分析（ECharts 四图表）
+│   │   ├── ai.html                #     AI 策略
+│   │   └── data.html              #     数据管理
+│   ├── static/                    #   前端 CSS + JS
+│   │   ├── css/main.css           #     深色 Apple 全局样式
+│   │   └── js/
+│   │       ├── common/toast.js    #     共享通知组件
+│   │       └── pages/
+│   │           ├── dashboard.js   #     总览 3D 引擎
+│   │           ├── predict.js     #     预测页
+│   │           ├── ai.js          #     AI 页
+│   │           └── data.js        #     数据页
+│   └── templates/                 #   配置模板
+│       └── config_template.json   #     config.json 模板
 │
 ├── data/
 │   ├── fact/                     # 默认轨迹（fact1/2/3.dat）

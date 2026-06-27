@@ -346,8 +346,10 @@ drone/
 │   ├── ai/              #   AI 服务
 │   ├── services/        #   业务逻辑
 │   └── routes/          #   HTTP 路由
-├── templates/           # 5 个页面模板
-├── static/              # CSS + JS
+├── web/                 # Web 资源
+│   ├── pages/            #   页面模板
+│   ├── static/           #   CSS + JS
+│   └── templates/        #   配置模板
 ├── data/                # 轨迹数据
 │   ├── fact/            #   默认数据
 │   ├── predict/         #   预测结果

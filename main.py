@@ -17,7 +17,7 @@ from modules.routes import register_blueprints, register_error_handlers
 
 def create_app() -> Flask:
     """Flask 应用工厂"""
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder='web/pages', static_folder='web/static')
 
     # 确保配置和数据目录
     ensure_config()
