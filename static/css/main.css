@@ -110,8 +110,8 @@ a:hover { color: var(--blue-light); }
     z-index: 100;
     display: flex;
     align-items: center;
-    padding: 0 24px;
-    gap: 8px;
+    padding: 0 28px;
+    gap: 4px;
 }
 
 .navbar-brand {
@@ -119,20 +119,21 @@ a:hover { color: var(--blue-light); }
     font-size: 0.95rem;
     color: var(--text-primary);
     letter-spacing: -0.02em;
-    margin-right: 24px;
+    margin-right: 28px;
     white-space: nowrap;
+    opacity: 0.9;
 }
 
 .navbar-links {
     display: flex;
-    gap: 4px;
+    gap: 2px;
 }
 
 .navbar-links a {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 6px 14px;
+    gap: 6px;
+    padding: 6px 16px;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-size: 0.85rem;
@@ -140,10 +141,10 @@ a:hover { color: var(--blue-light); }
     transition: all var(--fast);
     white-space: nowrap;
 }
-.navbar-links a:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
-.navbar-links a.active { background: rgba(10,132,255,0.15); color: var(--blue); }
+.navbar-links a:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+.navbar-links a.active { background: rgba(10,132,255,0.18); color: var(--blue); font-weight: 600; }
 
-.navbar-icon { font-size: 1rem; }
+.navbar-icon { font-size: 0.9rem; opacity: 0.8; }
 
 /* ============================================================
    页面容器
@@ -187,20 +188,20 @@ a:hover { color: var(--blue-light); }
    ============================================================ */
 .card {
     background: var(--bg-card);
-    border-radius: var(--radius-xl);
-    padding: 20px;
+    border-radius: var(--radius-2xl);
+    padding: 22px;
     border: 1px solid var(--separator-opaque);
-    transition: background var(--fast), box-shadow var(--fast);
+    transition: all var(--normal);
 }
-.card:hover { box-shadow: var(--shadow-md); }
+.card:hover { border-color: rgba(255,255,255,0.08); box-shadow: var(--shadow-lg); }
 .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 .card-header h3 {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-secondary);
     letter-spacing: -0.01em;
@@ -337,7 +338,7 @@ label {
 /* ============================================================
    网格布局
    ============================================================ */
-.grid { display: grid; gap: 16px; }
+.grid { display: grid; gap: 20px; }
 .grid-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
@@ -619,10 +620,27 @@ tbody tr:hover { background: rgba(255,255,255,0.03); }
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
     border: 1px solid var(--separator);
-    border-radius: var(--radius-xl);
-    padding: 16px;
-    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-2xl);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-xl);
     z-index: 10;
+    transition: all var(--normal);
+}
+.overlay-panel h3 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+.overlay-panel .list-item {
+    padding: 6px 10px;
+    margin: 0 -6px;
+    border-radius: var(--radius-md);
+}
+.overlay-panel .list-item-title {
+    font-weight: 500;
 }
 
 /* 平台图例 */

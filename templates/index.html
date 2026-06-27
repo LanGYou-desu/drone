@@ -6,11 +6,11 @@
 <div class="viewer-full" id="viewer"></div>
 
 <!-- 左上角：平台图例 -->
-<div class="overlay-panel" style="top:68px;left:16px;min-width:180px;">
-    <h3 style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;">📡 检测平台</h3>
+<div class="overlay-panel" style="top:72px;left:20px;min-width:200px;">
+    <h3>检测平台</h3>
     <div id="legendList">
         {% for id, m in methods_data.items() %}
-        <div class="list-item" data-id="{{ id }}" style="padding:6px 8px;"
+        <div class="list-item" data-id="{{ id }}"
              onclick="toggleMethod('{{ id }}')">
             <span class="legend-dot" style="background:{{ m.color }};color:{{ m.color }};"></span>
             <span class="list-item-title">{{ m.name }}</span>
@@ -22,37 +22,33 @@
 </div>
 
 <!-- 右上角：实时参数 -->
-<div class="overlay-panel" style="top:68px;right:16px;width:200px;">
-    <h3 style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;">📋 实时数据</h3>
-    <div style="font-size:0.8rem;" id="realtimeStats">
-        <div style="display:flex;justify-content:space-between;padding:3px 0;">
-            <span>轨迹点</span><span id="totalPoints" style="font-weight:600;">0</span>
+<div class="overlay-panel" style="top:72px;right:20px;width:220px;">
+    <h3>实时数据</h3>
+    <div style="font-size:0.82rem;" id="realtimeStats">
+        <div class="info-card" style="margin:4px 0;padding:8px 10px;">
+            <div class="row"><span class="label">轨迹点</span><span class="value" id="totalPoints">0</span></div>
+            <div class="row"><span class="label">速度</span><span class="value highlight" id="currentSpeed">--</span></div>
+            <div class="row"><span class="label">高度</span><span class="value" id="currentHeight">--</span></div>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;">
-            <span>速度</span><span id="currentSpeed" style="font-weight:600;">--</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;">
-            <span>高度</span><span id="currentHeight" style="font-weight:600;">--</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:3px 0;">
-            <span>更新时间</span><span id="lastUpdate" style="font-weight:600;">--</span>
-        </div>
+        <div style="font-size:0.7rem;color:var(--text-tertiary);text-align:right;" id="lastUpdate">--:--:--</div>
     </div>
 </div>
 
-<!-- 底部中央：快速操作 -->
-<div class="overlay-panel" style="bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:8px;">
-    <button class="btn btn-primary" id="playBtn">▶ 播放</button>
-    <button class="btn btn-secondary" id="stopBtn">⏹ 停止</button>
-    <select id="speedSelect" style="width:auto;margin:0;">
-        <option value="0.5">0.5×</option>
-        <option value="1" selected>1×</option>
-        <option value="2">2×</option>
-        <option value="4">4×</option>
-    </select>
-    <input type="range" id="timelineSlider" min="0" max="100" value="0"
-           style="width:200px;margin:0;">
-    <a href="/predict" class="btn btn-secondary">🔮 预测 →</a>
+<!-- 底部中央：播放控制条 -->
+<div class="overlay-panel" style="bottom:28px;left:50%;transform:translateX(-50%);padding:12px 20px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-primary btn-sm" id="playBtn" style="margin:0;width:auto;">▶ 播放</button>
+        <button class="btn btn-secondary btn-sm" id="stopBtn" style="margin:0;width:auto;">⏹ 停止</button>
+        <select id="speedSelect" style="width:72px;margin:0;">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+        </select>
+        <input type="range" id="timelineSlider" min="0" max="100" value="0"
+               style="width:180px;margin:0;" title="拖动调整播放进度">
+        <a href="/predict" class="btn btn-sm" style="margin:0;width:auto;text-decoration:none;white-space:nowrap;">🔮 预测</a>
+    </div>
 </div>
 
 <!-- 坐标提示 -->

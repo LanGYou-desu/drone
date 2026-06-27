@@ -178,7 +178,7 @@ async function runPrediction() {
     }
 }
 
-// ═══════════════════════════ 动画播放 ═══════════════════════════
+// ═══════════════════════════ 动画播放（历史+预测全程）══════════════════════════
 
 function lerp(pts, times, t) {
     if (!pts?.length || !times?.length) return null;
@@ -193,18 +193,29 @@ function lerp(pts, times, t) {
 }
 
 function calcRange() {
-    // 动画仅覆盖预测时间段（从第一个预测点到最后预测点）
     let min = Infinity, max = -Infinity;
+    // 历史轨迹时间范围
+    for (const id in detectionMethods) {
+        const ts = detectionMethods[id]?.timestamps;
+        if (ts?.length) { min = Math.min(min, ts[0]); max = Math.max(max, ts[ts.length-1]); }
+    }
+    // 预测时间范围
     for (const id in predictedData) {
         const times = predictedData[id]?.pred_times;
-        if (times?.length) {
-            min = Math.min(min, times[0]);
-            max = Math.max(max, times[times.length - 1]);
-        }
+        if (times?.length) max = Math.max(max, times[times.length-1]);
     }
-    if (min === Infinity) min = 0;
-    if (max === -Infinity) max = 0;
-    animRange = { start: min, end: max };
+    animRange = { start: min === Infinity ? 0 : min, end: max === -Infinity ? 0 : max };
+}
+
+function makeGlowSphere(color) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 16, 16),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.8, roughness: 0.2 })));
+    g.add(new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 12, 12),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
+    return g;
 }
 
 function startAnim() {
@@ -218,54 +229,67 @@ function startAnim() {
     animActive = true;
     animStart = performance.now();
 
-    // 清除旧的移动球体
+    // 清除并创建球体（每个参与播放的平台一个）
     for (const id in movingSpheres) { scene.remove(movingSpheres[id]); delete movingSpheres[id]; }
 
-    // 为每个预测平台创建发光球体
-    for (const [id, pred] of Object.entries(predictedData)) {
-        if (!pred.prediction?.length) continue;
+    const playIds = new Set();
+    for (const id in predictedData) playIds.add(id);
+    // 也包含可见但未预测的平台（只播历史段）
+    for (const [id, d] of Object.entries(detectionMethods)) {
+        if (d.visible && d.points?.length >= 2) playIds.add(id);
+    }
+
+    for (const id of playIds) {
         const color = detectionMethods[id]?.color || '#fff';
-        // 放置球体在预测起点
-        const startPos = pred.prediction[0];
-        const g = new THREE.Group();
-        g.add(new THREE.Mesh(
-            new THREE.SphereGeometry(0.15, 16, 16),
-            new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.8, roughness: 0.2 })));
-        g.add(new THREE.Mesh(
-            new THREE.SphereGeometry(0.3, 12, 12),
-            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
-        g.position.set(startPos[0], startPos[1], startPos[2]);
-        scene.add(g);
-        movingSpheres[id] = g;
+        const sphere = makeGlowSphere(color);
+        scene.add(sphere);
+        movingSpheres[id] = sphere;
     }
 
     const step = now => {
         if (!animActive) return;
-        const elapsed = (now - animStart) / 1000 * animSpeed;
-        const ts = animRange.start + elapsed;
+        const ts = animRange.start + (now - animStart) / 1000 * animSpeed;
 
         if (ts >= animRange.end) {
-            // 停在最后位置
-            for (const [id, pred] of Object.entries(predictedData)) {
-                if (!pred.prediction?.length || !movingSpheres[id]) continue;
-                const last = pred.prediction[pred.prediction.length - 1];
-                movingSpheres[id].position.set(last[0], last[1], last[2]);
+            // 停在最终位置
+            for (const id of playIds) {
+                const pred = predictedData[id];
+                if (pred?.prediction?.length) {
+                    const last = pred.prediction[pred.prediction.length-1];
+                    movingSpheres[id]?.position.set(last[0], last[1], last[2]);
+                } else {
+                    const pts = detectionMethods[id]?.points;
+                    if (pts?.length) { const p = pts[pts.length-1]; movingSpheres[id]?.position.set(p[0],p[1],p[2]); }
+                }
             }
             stopAnim();
             return;
         }
 
-        // 更新所有球体位置
-        for (const [id, pred] of Object.entries(predictedData)) {
-            if (!pred.prediction?.length || !pred.pred_times?.length || !movingSpheres[id]) continue;
-            const pos = lerp(pred.prediction, pred.pred_times, ts);
-            if (pos) movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+        for (const id of playIds) {
+            const data = detectionMethods[id];
+            const s = movingSpheres[id];
+            if (!s) continue;
+
+            // 先尝试历史轨迹
+            const histPts = data?.points, histTs = data?.timestamps;
+            if (histPts?.length && histTs?.length && ts <= histTs[histTs.length-1]) {
+                const pos = lerp(histPts, histTs, ts);
+                if (pos) { s.position.set(pos[0], pos[1], pos[2]); s.visible = true; continue; }
+            }
+            // 超出历史范围 → 预测段
+            const pred = predictedData[id];
+            if (pred?.prediction?.length && pred?.pred_times?.length && ts <= pred.pred_times[pred.pred_times.length-1]) {
+                const pos = lerp(pred.prediction, pred.pred_times, ts);
+                if (pos) { s.position.set(pos[0], pos[1], pos[2]); s.visible = true; continue; }
+            }
+            s.visible = false;
         }
 
         animId = requestAnimationFrame(step);
     };
     animId = requestAnimationFrame(step);
-    toast.show('预测轨迹播放中');
+    toast.show('全程轨迹播放中');
 }
 
 function stopAnim() {
