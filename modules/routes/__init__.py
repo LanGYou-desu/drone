@@ -9,10 +9,12 @@ def register_blueprints(app: Flask):
     from modules.routes.api import api_bp
     from modules.routes.api_predict import predict_bp
     from modules.routes.analysis import analysis_bp
+    from modules.routes.api_report import report_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(predict_bp)
+    app.register_blueprint(report_bp)
     app.register_blueprint(analysis_bp, url_prefix='/analysis')
 
 

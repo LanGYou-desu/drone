@@ -1,20 +1,31 @@
 /**
- * AI Page — 大模型捕捉策略生成
- * 高内聚：AI 对话逻辑封装在此模块
- * 低耦合：仅通过 POST /api/ai_suggestion 与后端通信
+ * AI Page — 捕捉策略生成
+ * - sessionStorage 持久化：切换页面不丢失文本
+ * - 滚动容器：长文本自动滚动
+ * - 保存报告：写入 reports/ 目录
  */
 import { toast } from '../common/toast.js';
 
 const { methodsData } = window._PAGE_DATA_ || {};
+const STORAGE_KEY = 'ai_suggestion_text';
 
+// ═══════ 恢复历史文本 ═══════
+const outputEl = document.getElementById('aiOutput');
+const saveBar = document.getElementById('saveBar');
+
+const savedText = sessionStorage.getItem(STORAGE_KEY);
+if (savedText) {
+    outputEl.textContent = savedText;
+    saveBar.style.display = 'flex';
+}
+
+// ═══════ 生成 ═══════
 async function generate() {
     const btn = document.getElementById('aiBtn');
-    const output = document.getElementById('aiOutput');
-    btn.disabled = true;
-    btn.textContent = '⏳ AI 分析中...';
-    output.innerHTML = '<p style="color:var(--text-secondary);"><span class="spinner"></span> 正在调用大模型分析多平台轨迹数据…</p>';
+    btn.disabled = true; btn.textContent = 'AI 分析中...';
+    outputEl.textContent = '';
+    saveBar.style.display = 'none';
 
-    // 收集选中的平台
     const checks = document.querySelectorAll('.ai-platform-check:checked');
     const selected = {};
     checks.forEach(cb => {
@@ -30,8 +41,7 @@ async function generate() {
 
     if (Object.keys(selected).length === 0) {
         toast.warning('请至少选择一个平台');
-        btn.disabled = false;
-        btn.textContent = '💡 生成捕捉策略';
+        btn.disabled = false; btn.textContent = '生成捕捉策略';
         return;
     }
 
@@ -43,27 +53,60 @@ async function generate() {
         });
         const result = await resp.json();
         if (result.success) {
-            output.innerHTML = `<div style="white-space:pre-wrap;line-height:1.7;font-size:0.85rem;">${escapeHtml(result.suggestion)}</div>`;
+            outputEl.textContent = result.suggestion;
+            sessionStorage.setItem(STORAGE_KEY, result.suggestion);
+            saveBar.style.display = 'flex';
             toast.success('AI 策略已生成');
         } else {
-            output.innerHTML = `<p style="color:var(--red);">❌ ${escapeHtml(result.error || '未知错误')}</p>`;
+            outputEl.textContent = '请求失败: ' + (result.error || '未知错误');
+            sessionStorage.removeItem(STORAGE_KEY);
             toast.error('AI 请求失败');
         }
     } catch (e) {
-        output.innerHTML = `<p style="color:var(--red);">网络错误: ${escapeHtml(e.message)}</p>`;
+        outputEl.textContent = '网络错误: ' + e.message;
+        sessionStorage.removeItem(STORAGE_KEY);
         toast.error('网络请求失败');
     } finally {
-        btn.disabled = false;
-        btn.textContent = '💡 生成捕捉策略';
+        btn.disabled = false; btn.textContent = '生成捕捉策略';
     }
 }
 
-function escapeHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+// ═══════ 保存报告 ═══════
+async function saveReport() {
+    const content = outputEl.textContent.trim();
+    if (!content) return toast.warning('无内容可保存');
+
+    const checks = document.querySelectorAll('.ai-platform-check:checked');
+    const names = [];
+    checks.forEach(cb => {
+        if (methodsData[cb.value]) names.push(methodsData[cb.value].name);
+    });
+
+    const btn = document.getElementById('saveReportBtn');
+    btn.disabled = true; btn.textContent = '保存中...';
+
+    try {
+        const resp = await fetch('/api/save_report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, platforms: names.join(', ') }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+            document.getElementById('savedPath').textContent = '已保存: ' + result.filepath;
+            toast.success('报告已保存');
+        } else {
+            toast.error('保存失败: ' + result.error);
+        }
+    } catch (e) {
+        toast.error('网络错误: ' + e.message);
+    } finally {
+        btn.disabled = false; btn.textContent = '💾 保存报告';
+    }
 }
 
+// ═══════ 初始化 ═══════
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('aiBtn').addEventListener('click', generate);
+    document.getElementById('saveReportBtn').addEventListener('click', saveReport);
 });
