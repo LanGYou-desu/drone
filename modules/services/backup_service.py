@@ -4,7 +4,7 @@
 import os
 from typing import Optional
 
-from modules.services.state import detection_methods
+from modules.state import detection_methods
 from modules.services.data_service import save_metadata
 from modules.data.data_loader import load_dat_file
 

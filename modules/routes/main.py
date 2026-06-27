@@ -4,7 +4,7 @@
 """
 from flask import Blueprint, render_template
 
-from modules.services.state import detection_methods
+from modules.state import detection_methods
 from modules.config.config_manager import ensure_config
 
 main_bp = Blueprint('main', __name__)

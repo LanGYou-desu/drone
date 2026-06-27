@@ -4,7 +4,7 @@
 from flask import Blueprint, jsonify, request
 
 from modules.services import predict_service
-from modules.services.state import detection_methods, SF_API_KEY, SF_URL, SF_MODEL
+from modules.state import detection_methods, SF_API_KEY, SF_URL, SF_MODEL
 from modules.ai.ai_service import get_ai_suggestion
 
 predict_bp = Blueprint('predict', __name__)

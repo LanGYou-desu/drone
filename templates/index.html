@@ -69,5 +69,12 @@
     }
 }
 </script>
+<script>
+    // 后端数据注入（静态 JS 无法使用 Jinja2 模板语法）
+    window._PAGE_DATA_ = {
+        methodsData: {{ methods_data | tojson }},
+        predSettings: {{ pred_settings | tojson }}
+    };
+</script>
 <script type="module" src="/static/js/pages/dashboard.js"></script>
 {% endblock %}

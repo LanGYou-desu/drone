@@ -3,7 +3,7 @@
 """
 from flask import Blueprint, render_template, jsonify
 
-from modules.services.state import detection_methods
+from modules.state import detection_methods
 
 analysis_bp = Blueprint('analysis', __name__)
 

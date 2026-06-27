@@ -1,7 +1,7 @@
 """
 预测编排服务 — 参数校验 + 调用预测算法 + 结果持久化
 """
-from modules.services.state import detection_methods
+from modules.state import detection_methods
 from modules.config.config_manager import ensure_config
 from modules.predict.prediction import generate_prediction
 from modules.data.data_loader import save_predict_data

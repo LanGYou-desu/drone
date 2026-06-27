@@ -10,7 +10,7 @@ import time
 from flask import Flask
 
 from modules.config.config_manager import ensure_config
-from modules.services.state import init_from_config
+from modules.state import init_from_config
 from modules.services.data_service import initialize_data
 from modules.routes import register_blueprints, register_error_handlers
 

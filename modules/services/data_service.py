@@ -6,7 +6,7 @@ import shutil
 import time
 from typing import Optional
 
-from modules.services.state import detection_methods
+from modules.state import detection_methods
 from modules.config.config_manager import save_config
 from modules.data.data_loader import load_dat_file, load_default_data
 
