@@ -1,12 +1,32 @@
+"""
+数据文件 I/O — .dat 轨迹文件的读写操作
+
+.dat 文件格式: 每行 `x y z t`，空格分隔
+  x, y, z — 三维坐标（浮点数）
+  t       — 时间戳（浮点数，秒）
+"""
 import os
 
-def load_dat_file(file_path):
-    """加载 .dat 文件，每行格式：x y z t，返回点列表和时间戳列表"""
-    points = []
-    timestamps = []
+
+def load_dat_file(file_path: str) -> tuple[list[list[float]], list[float]]:
+    """
+    加载 .dat 轨迹文件
+
+    Args:
+        file_path: 文件路径
+
+    Returns:
+        points:     三维坐标列表 [[x, y, z], ...]
+        timestamps: 时间戳列表 [t, ...]
+        若文件不存在或格式异常，返回两个空列表
+    """
+    points: list[list[float]] = []
+    timestamps: list[float] = []
+
     if not os.path.exists(file_path):
-        print(f"⚠️ 文件不存在: {file_path}")
-        return [], []
+        print(f'⚠️ 文件不存在: {file_path}')
+        return points, timestamps
+
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -18,29 +38,53 @@ def load_dat_file(file_path):
                     x, y, z, t = map(float, parts[:4])
                     points.append([x, y, z])
                     timestamps.append(t)
-        print(f"✅ 成功加载 {file_path}: {len(points)} 个点")
-    except Exception as e:
-        print(f"❌ 加载文件失败 {file_path}: {e}")
+        print(f'✅ 成功加载 {file_path}: {len(points)} 个轨迹点')
+    except (ValueError, IOError) as e:
+        print(f'❌ 加载文件失败 {file_path}: {e}')
+        return [], []
+
     return points, timestamps
 
-def save_predict_data(method_id, points, timestamps=None):
+
+def save_predict_data(method_id: str, points: list[list[float]],
+                      timestamps: list[float] | None = None):
+    """
+    将预测结果保存到 data/predict/pre{id}.dat
+
+    Args:
+        method_id:  平台 ID（visible→1, infrared→2, radar→3, self→self）
+        points:     预测点坐标
+        timestamps: 对应时间戳（若为 None 则用 index * 0.5）
+    """
     mapping = {'visible': '1', 'infrared': '2', 'radar': '3'}
     num = mapping.get(method_id, 'self')
-    filename = f"pre{num}.dat"
+    filename = f'pre{num}.dat'
     file_path = os.path.join('data', 'predict', filename)
+
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
     with open(file_path, 'w', encoding='utf-8') as f:
         for i, p in enumerate(points):
             t = timestamps[i] if timestamps and i < len(timestamps) else i * 0.5
-            f.write(f"{p[0]} {p[1]} {p[2]} {t}\n")
-    print(f"📁 预测数据已保存至 {file_path}")
+            f.write(f'{p[0]} {p[1]} {p[2]} {t}\n')
 
-def load_default_data():
+    print(f'📁 预测数据已保存至 {file_path}')
+
+
+def load_default_data() -> dict[str, dict[str, list]]:
+    """
+    加载 data/fact/ 下的默认轨迹数据
+
+    Returns:
+        { methodId: { 'points': [[x,y,z],...], 'timestamps': [t,...] } }
+    """
     method_ids = ['visible', 'infrared', 'radar']
     file_names = ['fact1.dat', 'fact2.dat', 'fact3.dat']
-    methods = {}
+
+    methods: dict[str, dict[str, list]] = {}
     for mid, fname in zip(method_ids, file_names):
         file_path = os.path.join('data', 'fact', fname)
         points, timestamps = load_dat_file(file_path)
         methods[mid] = {'points': points, 'timestamps': timestamps}
+
     return methods

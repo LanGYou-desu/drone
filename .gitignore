@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Data (runtime)
+data/backup/
+data/predict/
+*.dat
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+# config.json is tracked (contains placeholder API key)

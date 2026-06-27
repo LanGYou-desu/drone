@@ -1,238 +1,136 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>无人机轨迹详细分析</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            background: #05070a;
-            color: #eef2ff;
-            font-family: 'Segoe UI', system-ui;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1400px;
-            margin: auto;
-        }
-        h1 {
-            background: linear-gradient(135deg, #eef2ff, #b9c4f0);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .chart-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .chart-card {
-            background: rgba(17, 18, 22, 0.7);
-            backdrop-filter: blur(8px);
-            border-radius: 20px;
-            padding: 15px;
-            border: 1px solid rgba(108, 92, 231, 0.3);
-        }
-        .chart-card h3 {
-            margin-top: 0;
-            color: #cbd5ff;
-        }
-        .chart {
-            height: 400px;
-            width: 100%;
-        }
-        .legend {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
-        }
-        .back-button {
-            display: inline-block;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #6c5ce7, #a363d9);
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 40px;
-            font-weight: bold;
-            transition: transform 0.2s;
-        }
-        .back-button:hover {
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="back-button">← 返回主界面</a>
-        <h1>📊 无人机轨迹详细分析</h1>
-        <p>速度、加速度、曲率、高度等多项指标分析，帮助优化捕捉策略。</p>
-        <div class="legend" id="legend"></div>
-        <div class="chart-grid">
-            <div class="chart-card">
-                <h3>高度变化曲线</h3>
-                <div id="heightChart" class="chart"></div>
-            </div>
-            <div class="chart-card">
-                <h3>速度变化曲线</h3>
-                <div id="speedChart" class="chart"></div>
-            </div>
-            <div class="chart-card">
-                <h3>加速度变化曲线</h3>
-                <div id="accelChart" class="chart"></div>
-            </div>
-            <div class="chart-card">
-                <h3>曲率变化曲线 (转弯剧烈程度)</h3>
-                <div id="curvatureChart" class="chart"></div>
-            </div>
-        </div>
+{% extends "base.html" %}
+{% block title %}数据分析 — 鹰眼长空{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-card {
+        background: var(--bg-card);
+        border-radius: var(--radius-xl);
+        padding: 18px;
+        border: 1px solid var(--separator-opaque);
+    }
+    .chart-card h3 {
+        font-size: 0.85rem; font-weight: 600;
+        color: var(--text-secondary); margin-bottom: 8px;
+    }
+    .chart { height: 360px; width: 100%; }
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+        gap: 16px;
+    }
+    .legend-row {
+        display: flex; gap: 16px; flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .legend-item {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 14px;
+        background: var(--bg-card);
+        border-radius: var(--radius-pill);
+        font-size: 0.85rem; font-weight: 500;
+        border: 1px solid var(--separator-opaque);
+    }
+    @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page">
+    <div class="page-header">
+        <h1>📊 轨迹详细分析</h1>
+        <p>速度、加速度、曲率、高度 — 多维运动学指标</p>
     </div>
 
-    <script>
-        const methodsData = {{ methods_data | tojson }};
-        let allData = {};
+    <div class="legend-row" id="legend"></div>
 
-        async function loadAnalysisData() {
-            const response = await fetch('/analysis/data');
-            const data = await response.json();
-            allData = data;
-            renderCharts();
-            renderLegend();
-        }
+    <div class="chart-grid">
+        <div class="chart-card">
+            <h3>高度变化曲线</h3>
+            <div id="heightChart" class="chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>速度变化曲线</h3>
+            <div id="speedChart" class="chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>加速度变化曲线</h3>
+            <div id="accelChart" class="chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>曲率变化曲线（转弯剧烈程度）</h3>
+            <div id="curvatureChart" class="chart"></div>
+        </div>
+    </div>
+</div>
 
-        function renderLegend() {
-            const legendDiv = document.getElementById('legend');
-            legendDiv.innerHTML = '';
-            for (const id in allData) {
-                const info = allData[id];
-                const item = document.createElement('div');
-                item.className = 'legend-item';
-                item.innerHTML = `
-                    <div class="legend-color" style="background: ${info.color};"></div>
-                    <span>${info.name}</span>
-                `;
-                legendDiv.appendChild(item);
-            }
-        }
+{% endblock %}
 
-        function renderCharts() {
-            // 高度图
-            const heightChart = echarts.init(document.getElementById('heightChart'));
-            const heightSeries = [];
-            for (const id in allData) {
-                const info = allData[id];
-                heightSeries.push({
-                    name: info.name,
-                    type: 'line',
-                    data: info.heights,
-                    lineStyle: { color: info.color, width: 2 },
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    smooth: true
-                });
-            }
-            heightChart.setOption({
-                tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps || [] },
-                yAxis: { type: 'value', name: '高度 (m)' },
-                series: heightSeries,
-                legend: { show: false }
-            });
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    const methodsMeta = {{ methods_data | tojson }};
+    let allData = {};
 
-            // 速度图
-            const speedChart = echarts.init(document.getElementById('speedChart'));
-            const speedSeries = [];
-            for (const id in allData) {
-                const info = allData[id];
-                speedSeries.push({
-                    name: info.name,
-                    type: 'line',
-                    data: info.speeds,
-                    lineStyle: { color: info.color, width: 2 },
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    smooth: true
-                });
-            }
-            speedChart.setOption({
-                tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1) || [] },
-                yAxis: { type: 'value', name: '速度 (m/s)' },
-                series: speedSeries,
-                legend: { show: false }
-            });
+    async function load() {
+        const r = await (await fetch('/analysis/data')).json();
+        allData = r;
+        renderLegend();
+        renderAll();
+    }
 
-            // 加速度图
-            const accelChart = echarts.init(document.getElementById('accelChart'));
-            const accelSeries = [];
-            for (const id in allData) {
-                const info = allData[id];
-                accelSeries.push({
-                    name: info.name,
-                    type: 'line',
-                    data: info.accelerations,
-                    lineStyle: { color: info.color, width: 2 },
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    smooth: true
-                });
-            }
-            accelChart.setOption({
-                tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(2) || [] },
-                yAxis: { type: 'value', name: '加速度 (m/s²)' },
-                series: accelSeries,
-                legend: { show: false }
-            });
+    function renderLegend() {
+        const el = document.getElementById('legend');
+        el.innerHTML = Object.entries(allData).map(([id, info]) =>
+            `<div class="legend-item">
+                <span class="legend-dot" style="background:${info.color};color:${info.color};"></span>
+                ${info.name}
+            </div>`).join('');
+    }
 
-            // 曲率图
-            const curvatureChart = echarts.init(document.getElementById('curvatureChart'));
-            const curvatureSeries = [];
-            for (const id in allData) {
-                const info = allData[id];
-                curvatureSeries.push({
-                    name: info.name,
-                    type: 'line',
-                    data: info.curvatures,
-                    lineStyle: { color: info.color, width: 2 },
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    smooth: true
-                });
-            }
-            curvatureChart.setOption({
-                tooltip: { trigger: 'axis' },
-                xAxis: { type: 'category', name: '时间', data: allData[Object.keys(allData)[0]]?.time_steps.slice(1, -1) || [] },
-                yAxis: { type: 'value', name: '曲率 (1/m)' },
-                series: curvatureSeries,
-                legend: { show: false }
-            });
-        }
+    function darkOption(series, yName, xData) {
+        return {
+            tooltip: { trigger: 'axis', backgroundColor: '#2C2C2E', borderColor: '#48484A',
+                       textStyle: { color: '#F5F5F7', fontSize: 12 } },
+            legend: { show: false },
+            xAxis: { type: 'category', data: xData || [], axisLabel: { color: '#8E8E93', fontSize: 10 },
+                     axisLine: { lineStyle: { color: '#48484A' } } },
+            yAxis: { type: 'value', name: yName, nameTextStyle: { color: '#8E8E93', fontSize: 10 },
+                     axisLabel: { color: '#8E8E93', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#363639' } } },
+            series,
+            grid: { top: 12, bottom: 24, left: 8, right: 20, containLabel: true },
+        };
+    }
 
-        loadAnalysisData();
+    function renderAll() {
+        const ids = Object.keys(allData);
+        if (!ids.length) return;
+        const times = allData[ids[0]]?.time_steps || [];
 
-        // 窗口缩放自适应
-        window.addEventListener('resize', () => {
-            ['heightChart', 'speedChart', 'accelChart', 'curvatureChart'].forEach(id => {
-                const chart = echarts.getInstanceByDom(document.getElementById(id));
-                if (chart) chart.resize();
-            });
+        const makeSeries = field => ids.map(id => ({
+            name: allData[id].name, type: 'line', data: allData[id][field],
+            lineStyle: { color: allData[id].color, width: 2 },
+            itemStyle: { color: allData[id].color },
+            symbol: 'circle', symbolSize: 4, smooth: true,
+        }));
+
+        const init = id => echarts.init(document.getElementById(id));
+
+        init('heightChart').setOption(darkOption(makeSeries('heights'), '高度 (m)', times));
+        init('speedChart').setOption(darkOption(makeSeries('speeds'), '速度 (m/s)', times.slice(1)));
+        init('accelChart').setOption(darkOption(makeSeries('accelerations'), '加速度 (m/s²)', times.slice(2)));
+        init('curvatureChart').setOption(darkOption(makeSeries('curvatures'), '曲率 (1/m)', times.slice(1, -1)));
+    }
+
+    window.addEventListener('resize', () => {
+        ['heightChart','speedChart','accelChart','curvatureChart'].forEach(id => {
+            const inst = echarts.getInstanceByDom(document.getElementById(id));
+            if (inst) inst.resize();
         });
-    </script>
-</body>
-</html>
+    });
+
+    load();
+</script>
+{% endblock %}
