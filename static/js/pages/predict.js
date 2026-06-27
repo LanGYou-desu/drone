@@ -1,49 +1,56 @@
 /**
- * Predict Page — 轨迹预测 + 3D 预览
- * 高内聚：所有预测逻辑聚合在此模块
- * 低耦合：仅通过 API 与后端通信，不依赖其他页面模块
+ * Predict Page — 轨迹预测 + 3D 预览 + 动画播放
  */
 import { toast } from '../common/toast.js';
 
-// ---- 页面数据 ----
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
 const predCfg = predSettings || {};
 
-// ---- 3D 场景 ----
 let scene, camera, renderer, controls, THREE;
 let lines = {}, predLines = {};
+let movingSpheres = {};
+let animActive = false, animId = null, animSpeed = 1.0, animStart = 0;
+let animRange = { start: 0, end: 0 };
+let predictedData = {};  // { methodId: { prediction, pred_times } }
+
+// ═══════════════════════════ 3D 场景 ═══════════════════════════
 
 async function initViewer() {
     THREE = await import('three');
     const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
 
     const container = document.getElementById('predictViewer');
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0D0D0F);
+    const W = container.clientWidth, H = container.clientHeight;
 
-    camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(10, 8, 12);
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d0d18);
+    scene.fog = new THREE.Fog(0x0d0d18, 20, 100);
+
+    camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
+    camera.position.set(10, 7, 12);
     camera.lookAt(4, 2, 4);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
     container.appendChild(renderer.domElement);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.target.set(4, 2, 4);
+    controls.autoRotate = false;
 
     // 基础设施
-    const grid = new THREE.GridHelper(200, 200, 0x2C2C2E, 0x1C1C1E);
-    grid.position.y = -0.5;
-    scene.add(grid);
-    scene.add(new THREE.AxesHelper(6));
+    scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
+    scene.add(new THREE.AxesHelper(8));
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
-    const dir = new THREE.DirectionalLight(0xFFFFFF, 0.9);
-    dir.position.set(6, 10, 4);
-    scene.add(dir);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(8, 12, 6);
+    scene.add(sun);
+    scene.add(new THREE.DirectionalLight(0x4466aa, 0.3).position.set(-4, 2, -4));
 
     function loop() {
         requestAnimationFrame(loop);
@@ -68,19 +75,18 @@ function drawTrails() {
 
     for (const [id, data] of Object.entries(detectionMethods)) {
         if (!data.points || data.points.length < 2) continue;
-        const curve = new THREE.CatmullRomCurve3(data.points.map(p => new THREE.Vector3(p[0],p[1],p[2])));
+        const curve = new THREE.CatmullRomCurve3(data.points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
         const pts = curve.getPoints(100);
         const line = new THREE.Line(
             new THREE.BufferGeometry().setFromPoints(pts),
-            new THREE.LineBasicMaterial({ color: data.color })
+            new THREE.LineBasicMaterial({ color: data.color, transparent: true, opacity: 0.85 })
         );
         scene.add(line);
 
-        // 点球体
         const grp = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({ color: data.color, emissive: 0x111111 });
+        const mat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.3, roughness: 0.3 });
         data.points.forEach(p => {
-            const s = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), mat);
+            const s = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat);
             s.position.set(p[0], p[1], p[2]);
             grp.add(s);
         });
@@ -95,87 +101,182 @@ function removeObj(obj) {
     if (obj.points) scene.remove(obj.points);
 }
 
+// ═══════════════════════════ 预测 ═══════════════════════════
+
 async function runPrediction() {
     const platform = document.getElementById('predictPlatform').value;
     const numPoints = parseInt(document.getElementById('numPointsSlider').value);
-    const timeStep = parseFloat(document.getElementById('timeStep').value) || predCfg.defaultTimeStep;
-
+    const timeStep = parseFloat(document.getElementById('timeStep').value) || predCfg.defaultTimeStep || 0.5;
     const btn = document.getElementById('predictBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳ 预测中...';
+
+    btn.disabled = true; btn.textContent = '预测中...';
 
     try {
         const isAll = platform === 'all';
-        const url = isAll ? '/api/predict_all' : '/api/predict';
         const body = isAll
             ? { num_points: numPoints, time_step: timeStep }
             : { method_id: platform, points: detectionMethods[platform]?.points || [],
                 timestamps: detectionMethods[platform]?.timestamps || [],
                 num_points: numPoints, time_step: timeStep };
 
-        const resp = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const resp = await fetch(isAll ? '/api/predict_all' : '/api/predict', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
         const result = await resp.json();
 
         // 清除旧预测线
         for (const id in predLines) { removeObj(predLines[id]); }
         predLines = {};
+        predictedData = {};
 
         if (result.success) {
             const results = isAll ? result.results : { [platform]: { prediction: result.prediction, pred_times: result.pred_times } };
-
             const container = document.getElementById('predictResults');
             let html = '';
 
             for (const [mid, pred] of Object.entries(results)) {
                 if (!pred.prediction?.length) continue;
-                // 渲染虚线
+                predictedData[mid] = pred;
+
                 const color = detectionMethods[mid]?.color || '#ffffff';
-                const pts = pred.prediction.map(p => new THREE.Vector3(p[0],p[1],p[2]));
+                // 预测虚线
+                const pts = pred.prediction.map(p => new THREE.Vector3(p[0], p[1], p[2]));
                 const line = new THREE.Line(
                     new THREE.BufferGeometry().setFromPoints(pts),
-                    new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.2 })
+                    new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.5 })
                 );
                 line.computeLineDistances();
                 scene.add(line);
 
+                // 预测点球体
                 const grp = new THREE.Group();
-                const mat = new THREE.MeshStandardMaterial({ color, emissive: 0x111111, transparent: true, opacity: 0.6 });
+                const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, transparent: true, opacity: 0.5 });
                 pred.prediction.forEach(p => {
-                    const s = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), mat);
+                    const s = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), mat);
                     s.position.set(p[0], p[1], p[2]);
                     grp.add(s);
                 });
                 scene.add(grp);
                 predLines[mid] = { line, points: grp };
 
-                // 结果文本
-                html += `<div style="margin-bottom:8px;padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-md);">
+                html += `<div style="margin-bottom:6px;padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-md);">
                     <span class="legend-dot" style="background:${color};color:${color};"></span>
                     <strong>${detectionMethods[mid]?.name || mid}</strong>
-                    — ${pred.prediction.length} 个预测点
-                    <br><span style="font-size:0.75rem;color:var(--text-secondary);">
-                    终点: (${pred.prediction[pred.prediction.length-1].map(v=>v.toFixed(1)).join(', ')})
-                    </span>
+                    — ${pred.prediction.length} 预测点
                 </div>`;
             }
             container.innerHTML = html || '<p style="color:var(--text-secondary);">无有效预测结果</p>';
-            toast.success('预测完成');
+            toast.success('预测完成，点击 ▶ 播放动画');
         } else {
             toast.error('预测失败: ' + (result.error || ''));
         }
     } catch (e) {
         toast.error('请求失败: ' + e.message);
     } finally {
-        btn.disabled = false;
-        btn.textContent = '⚡ 开始预测';
+        btn.disabled = false; btn.textContent = '⚡ 开始预测';
     }
 }
 
-// ---- 初始化 ----
+// ═══════════════════════════ 动画播放 ═══════════════════════════
+
+function lerp(pts, times, t) {
+    if (!pts?.length || !times?.length) return null;
+    if (t <= times[0]) return [...pts[0]];
+    if (t >= times[times.length - 1]) return [...pts[times.length - 1]];
+    let i = 0;
+    while (i < times.length - 1 && times[i + 1] < t) i++;
+    const r = (t - times[i]) / (times[i + 1] - times[i]);
+    return [pts[i][0] + (pts[i+1][0] - pts[i][0]) * r,
+            pts[i][1] + (pts[i+1][1] - pts[i][1]) * r,
+            pts[i][2] + (pts[i+1][2] - pts[i][2]) * r];
+}
+
+function calcRange() {
+    let min = Infinity, max = -Infinity;
+    for (const id in detectionMethods) {
+        const ts = detectionMethods[id]?.timestamps;
+        if (ts?.length) { min = Math.min(min, ts[0]); max = Math.max(max, ts[ts.length - 1]); }
+    }
+    for (const id in predictedData) {
+        const times = predictedData[id]?.pred_times;
+        if (times?.length) max = Math.max(max, times[times.length - 1]);
+    }
+    animRange = { start: min === Infinity ? 0 : min, end: max === -Infinity ? 0 : max };
+}
+
+function startAnim() {
+    if (animActive) return;
+    if (Object.keys(predictedData).length === 0) { toast.warning('请先进行预测'); return; }
+    calcRange();
+    if (animRange.end <= animRange.start) { toast.warning('无有效时间数据'); return; }
+
+    animActive = true;
+    animStart = performance.now();
+
+    const step = now => {
+        if (!animActive) return;
+        const ts = animRange.start + (now - animStart) / 1000 * animSpeed;
+        if (ts >= animRange.end) { stopAnim(); return; }
+
+        // 在预测范围内移动球体
+        for (const id in predictedData) {
+            const pred = predictedData[id];
+            if (!pred?.prediction?.length || !pred?.pred_times?.length) continue;
+
+            if (ts >= pred.pred_times[0] && ts <= pred.pred_times[pred.pred_times.length - 1]) {
+                const pos = lerp(pred.prediction, pred.pred_times, ts);
+                if (pos) {
+                    const color = detectionMethods[id]?.color || '#fff';
+                    if (!movingSpheres[id]) {
+                        const g = new THREE.Group();
+                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16),
+                            new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.8, roughness: 0.2 })));
+                        g.add(new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12),
+                            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
+                        scene.add(g);
+                        movingSpheres[id] = g;
+                    }
+                    movingSpheres[id].position.set(pos[0], pos[1], pos[2]);
+                    movingSpheres[id].visible = true;
+                }
+            } else {
+                if (movingSpheres[id]) movingSpheres[id].visible = false;
+            }
+        }
+
+        animId = requestAnimationFrame(step);
+    };
+    animId = requestAnimationFrame(step);
+    toast.show('动画播放中');
+}
+
+function stopAnim() {
+    if (animId) cancelAnimationFrame(animId);
+    animActive = false; animId = null;
+    for (const id in movingSpheres) {
+        scene.remove(movingSpheres[id]);
+        delete movingSpheres[id];
+    }
+}
+
+// ═══════════════════════════ 初始化 ═══════════════════════════
+
 document.addEventListener('DOMContentLoaded', () => {
     initViewer();
+
     document.getElementById('numPointsSlider').addEventListener('input', e => {
         document.getElementById('numPointsLabel').textContent = e.target.value;
     });
+
     document.getElementById('predictBtn').addEventListener('click', runPrediction);
+
+    // 播放/停止
+    document.getElementById('playBtn').addEventListener('click', startAnim);
+    document.getElementById('stopBtn').addEventListener('click', stopAnim);
+
+    // 倍速
+    document.getElementById('speedSelect').addEventListener('change', e => {
+        animSpeed = parseFloat(e.target.value);
+    });
 });
