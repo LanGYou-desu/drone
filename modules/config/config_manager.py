@@ -93,7 +93,7 @@ def ensure_config(config_path: str = CONFIG_PATH) -> dict:
     if not os.path.exists(config_path):
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
-        print(f'📄 已创建默认配置文件 {config_path}')
+        print(f'[OK] 已创建默认配置文件 {config_path}')
         print('  请编辑文件填入硅基流动 API Key 后重启程序。')
         return DEFAULT_CONFIG.copy()
 

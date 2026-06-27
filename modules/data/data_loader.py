@@ -24,7 +24,7 @@ def load_dat_file(file_path: str) -> tuple[list[list[float]], list[float]]:
     timestamps: list[float] = []
 
     if not os.path.exists(file_path):
-        print(f'⚠️ 文件不存在: {file_path}')
+        print(f'[WARN] 文件不存在: {file_path}')
         return points, timestamps
 
     try:
@@ -38,9 +38,9 @@ def load_dat_file(file_path: str) -> tuple[list[list[float]], list[float]]:
                     x, y, z, t = map(float, parts[:4])
                     points.append([x, y, z])
                     timestamps.append(t)
-        print(f'✅ 成功加载 {file_path}: {len(points)} 个轨迹点')
+        print(f'[OK] 成功加载 {file_path}: {len(points)} 个轨迹点')
     except (ValueError, IOError) as e:
-        print(f'❌ 加载文件失败 {file_path}: {e}')
+        print(f'[ERR] 加载文件失败 {file_path}: {e}')
         return [], []
 
     return points, timestamps
@@ -68,7 +68,7 @@ def save_predict_data(method_id: str, points: list[list[float]],
             t = timestamps[i] if timestamps and i < len(timestamps) else i * 0.5
             f.write(f'{p[0]} {p[1]} {p[2]} {t}\n')
 
-    print(f'📁 预测数据已保存至 {file_path}')
+    print(f'[OK] 预测数据已保存至 {file_path}')
 
 
 def load_default_data() -> dict[str, dict[str, list]]:
