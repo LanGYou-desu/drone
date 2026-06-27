@@ -20,6 +20,7 @@ from typing import Any
 
 # 配置文件路径（相对于项目根目录）
 CONFIG_PATH: str = 'config.json'
+CONFIG_TEMPLATE: str = 'config.example.json'
 
 # ---- 默认配置 ----
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -87,15 +88,21 @@ def _validate_config(cfg: dict) -> dict:
 
 def ensure_config(config_path: str = CONFIG_PATH) -> dict:
     """
-    确保配置文件存在，若不存在则创建默认配置
+    确保配置文件存在，若不存在则从模板或默认配置创建
     返回经过校验的完整配置字典
     """
     if not os.path.exists(config_path):
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
-        print(f'[OK] 已创建默认配置文件 {config_path}')
-        print('  请编辑文件填入硅基流动 API Key 后重启程序。')
-        return DEFAULT_CONFIG.copy()
+        # 优先从模板文件复制
+        if os.path.exists(CONFIG_TEMPLATE):
+            import shutil
+            shutil.copy(CONFIG_TEMPLATE, config_path)
+            print(f'[OK] 从模板创建配置文件 {config_path}')
+        else:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
+            print(f'[OK] 已创建默认配置文件 {config_path}')
+            print('  请编辑文件填入硅基流动 API Key 后重启程序。')
+            return DEFAULT_CONFIG.copy()
 
     with open(config_path, 'r', encoding='utf-8') as f:
         cfg = json.load(f)

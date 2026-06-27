@@ -20,6 +20,9 @@ data/predict/
 .DS_Store
 Thumbs.db
 
+# Config (real keys, not tracked)
+config.json
+
 # Reports
 reports/
 
