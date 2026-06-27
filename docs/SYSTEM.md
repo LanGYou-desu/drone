@@ -57,8 +57,9 @@ drone/
 │   │           ├── predict.js     #     预测页
 │   │           ├── ai.js          #     AI 页
 │   │           └── data.js        #     数据页
-│   └── templates/                 #   配置模板
-│       └── config_template.json   #     config.json 模板
+│
+├── templates/                    # 配置模板文件
+│   └── config_template.json      #   config.json 模板
 │
 ├── data/
 │   ├── fact/                     # 默认轨迹（fact1/2/3.dat）

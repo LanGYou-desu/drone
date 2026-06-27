@@ -348,8 +348,8 @@ drone/
 │   └── routes/          #   HTTP 路由
 ├── web/                 # Web 资源
 │   ├── pages/            #   页面模板
-│   ├── static/           #   CSS + JS
-│   └── templates/        #   配置模板
+│   └── static/           #   CSS + JS
+├── templates/            # 配置模板文件
 ├── data/                # 轨迹数据
 │   ├── fact/            #   默认数据
 │   ├── predict/         #   预测结果

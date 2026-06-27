@@ -20,7 +20,7 @@ from typing import Any
 
 # 配置文件路径（相对于项目根目录）
 CONFIG_PATH: str = 'config.json'
-CONFIG_TEMPLATE: str = 'web/templates/config_template.json'
+CONFIG_TEMPLATE: str = 'templates/config_template.json'
 
 # ---- 默认配置 ----
 DEFAULT_CONFIG: dict[str, Any] = {
