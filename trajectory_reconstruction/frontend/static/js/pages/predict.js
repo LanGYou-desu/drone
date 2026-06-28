@@ -81,6 +81,7 @@ async function initViewer() {
 
     drawTrails();
     renderCachedPredictions();
+    calcRange();
 }
 
 function renderCachedPredictions() {
@@ -242,6 +243,8 @@ function calcRange() {
         if (times?.length) max = Math.max(max, times[times.length-1]);
     }
     animRange = { start: min === Infinity ? 0 : min, end: max === -Infinity ? 0 : max };
+    document.getElementById('animTimeLabel').textContent = animRange.start.toFixed(1) + 's';
+    document.getElementById('animEndLabel').textContent = animRange.end.toFixed(1) + 's';
 }
 
 function makeGlowSphere(color) {

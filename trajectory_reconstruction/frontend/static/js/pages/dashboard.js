@@ -61,6 +61,7 @@ async function init() {
 
         startLoop(orb, css);
         refreshAll();
+        calcRange();
         updateStats();
         bindEvents();
         bindKeyboard();
@@ -402,6 +403,9 @@ function calcRange() {
         if (pred?.times?.length) max = Math.max(max, pred.times[pred.times.length-1]);
     }
     timeRange = { start: min===Infinity?0:min, end: max===-Infinity?0:max };
+    const s = document.getElementById('timeStart'), e = document.getElementById('timeEnd');
+    if (s) s.textContent = timeRange.start.toFixed(1) + 's';
+    if (e) e.textContent = timeRange.end.toFixed(1) + 's';
 }
 
 function setPredVisible(v) {
