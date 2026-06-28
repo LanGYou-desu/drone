@@ -136,7 +136,7 @@ async function initViewer() {
             const obj = hits[0].object, p = hits[0].object.position;
             if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
             if (tip) {
-                tip.innerHTML = '📍 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(2);
+                tip.innerHTML = `📍 <span style="color:#FF453A">X</span>${p.x.toFixed(2)} <span style="color:#30D158">Y</span>${p.y.toFixed(2)} <span style="color:#0A84FF">Z</span>${p.z.toFixed(2)}`;
                 tip.style.display = 'block'; tip.style.left = (e.clientX + 16) + 'px'; tip.style.top = (e.clientY - 28) + 'px';
             }
         } else { if (tip) tip.style.display = 'none'; }
