@@ -15,10 +15,13 @@
   - [4. 预测（单平台）](#4-预测单平台)
   - [5. 预测（所有平台）](#5-预测所有平台)
   - [6. 获取 AI 建议](#6-获取-ai-建议)
-  - [7. 列出备份文件](#7-列出备份文件)
-  - [8. 恢复指定备份](#8-恢复指定备份)
-  - [9. 一键恢复所有备份](#9-一键恢复所有备份)
-  - [10. 获取分析数据](#10-获取分析数据)
+  - [7. 保存报告](#7-保存报告)
+  - [8. 列出备份](#8-列出备份)
+  - [9. 恢复指定备份](#9-恢复指定备份)
+  - [10. 一键恢复最新](#10-一键恢复最新)
+  - [11. 创建备份](#11-创建备份)
+  - [12. 删除备份](#12-删除备份)
+  - [13. 获取分析数据](#13-获取分析数据)
 - [数据格式说明](#数据格式说明)
 - [错误处理](#错误处理)
 
@@ -130,7 +133,7 @@ x2 y2 z2 t2
 
 ### 3. 清理所有数据并备份
 
-将当前内存中的轨迹数据和 `data/fact/`、`data/predict/` 下的文件备份到 `data/backup/`，然后清空。
+自动创建快照备份后清空全部数据。
 
 ```
 POST /api/clear_all_data
@@ -142,7 +145,8 @@ POST /api/clear_all_data
 ```json
 {
     "success": true,
-    "message": "所有数据已清理并备份"
+    "message": "数据已清理，备份: 20260629_143052_auto",
+    "backup_name": "20260629_143052_auto"
 }
 ```
 
@@ -284,9 +288,36 @@ const response = await fetch('/api/ai_suggestion', {
 
 ---
 
-### 7. 列出备份文件
+### 7. 保存报告
 
-列出 `data/backup/` 目录下所有备份文件。
+将 AI 生成的捕捉策略保存为报告文件（`reports/` 目录）。
+
+```
+POST /api/save_report
+Content-Type: application/json
+```
+
+**请求体:**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `content` | String | ✅ | 报告文本内容 |
+| `platforms` | String | ❌ | 分析平台名称 |
+
+**响应示例:**
+```json
+{
+    "success": true,
+    "filepath": "reports/capture_report_20260629_143052.txt",
+    "filename": "capture_report_20260629_143052.txt"
+}
+```
+
+---
+
+### 8. 列出备份
+
+列出 `data/backup/` 下所有快照备份，按时间倒序。
 
 ```
 GET /api/list_backups
@@ -298,10 +329,11 @@ GET /api/list_backups
     "success": true,
     "backups": [
         {
-            "filename": "visible_20260627_143052.dat",
-            "method": "visible",
-            "timestamp": "20260627_143052",
-            "full_path": "data/backup/visible_20260627_143052.dat"
+            "filename": "20260629_143052_auto",
+            "timestamp": "2026-06-29 14:30:52",
+            "label": "auto",
+            "method": "可见光 + 红外 + 雷达",
+            "point_count": 180
         }
     ]
 }
@@ -309,9 +341,9 @@ GET /api/list_backups
 
 ---
 
-### 8. 恢复指定备份
+### 9. 恢复指定备份
 
-从指定备份文件恢复某个平台的轨迹数据。
+先清空当前数据，再从快照完整恢复。自选平台也会正确恢复。
 
 ```
 POST /api/restore_backup
@@ -322,40 +354,82 @@ Content-Type: application/json
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `backup_file` | String | ✅ | 完整备份文件名（如 `visible_20260627_143052.dat`） |
+| `backup_file` | String | ✅ | 快照目录名（如 `20260629_143052_auto`） |
 
 **响应示例:**
 ```json
 {
     "success": true,
-    "message": "已从 visible_20260627_143052.dat 恢复 visible 数据"
+    "message": "已从 20260629_143052_auto 恢复 6 个平台"
 }
 ```
 
 ---
 
-### 9. 一键恢复所有备份
+### 10. 一键恢复最新
 
-自动找到每个平台的最新备份文件并恢复。
+恢复最新的快照备份。
 
 ```
 POST /api/restore_all_backups
 ```
 
-**请求体:** 无
-
 **响应示例:**
 ```json
 {
     "success": true,
-    "message": "已恢复 3 个平台",
-    "restored": ["visible", "infrared", "radar"]
+    "message": "已从 20260629_143052_auto 恢复 6 个平台",
+    "restored": ["20260629_143052_auto"]
 }
 ```
 
 ---
 
-### 10. 获取分析数据
+### 11. 创建备份
+
+手动创建当前数据的快照备份。
+
+```
+POST /api/backup/create
+```
+
+**响应示例:**
+```json
+{
+    "success": true,
+    "message": "备份已创建: 20260629_150000_manual",
+    "name": "20260629_150000_manual"
+}
+```
+
+---
+
+### 12. 删除备份
+
+删除指定快照备份。
+
+```
+POST /api/backup/delete
+Content-Type: application/json
+```
+
+**请求体:**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `backup_name` | String | ✅ | 快照目录名 |
+
+**响应示例:**
+```json
+{
+    "success": true,
+    "message": "已删除备份 20260629_150000_manual"
+}
+```
+
+---
+
+### 13. 获取分析数据
 
 获取各检测手段的详细分析数据（速度、加速度、曲率、高度）。
 

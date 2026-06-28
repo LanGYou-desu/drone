@@ -144,20 +144,22 @@ trajectory_recognition   ← 未来：读取 data/ 进行识别
 | AI | `/ai` | 多平台选择 + 硅基流动大模型捕捉策略生成 |
 | 数据 | `/data` | .dat 上传 + 备份恢复 + 当前数据表格 |
 
-## API 端点（11个）
+## API 端点（13个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/refresh_data` | 刷新默认轨迹 |
 | POST | `/api/load_data` | 上传 .dat 文件 |
-| POST | `/api/clear_all_data` | 清理并备份 |
+| POST | `/api/clear_all_data` | 清理并自动备份 |
 | POST | `/api/predict` | 单平台预测 |
 | POST | `/api/predict_all` | 全平台预测 |
 | POST | `/api/ai_suggestion` | AI 建议 |
 | POST | `/api/save_report` | 保存捕捉报告 |
-| GET | `/api/list_backups` | 列出备份 |
-| POST | `/api/restore_backup` | 恢复备份 |
-| POST | `/api/restore_all_backups` | 一键恢复 |
+| GET | `/api/list_backups` | 列出备份快照 |
+| POST | `/api/restore_backup` | 恢复指定快照 |
+| POST | `/api/restore_all_backups` | 一键恢复最新 |
+| POST | `/api/backup/create` | 手动创建备份 |
+| POST | `/api/backup/delete` | 删除备份 |
 | GET | `/analysis/data` | 运动学分析数据 |
 
 ## 3D 渲染特性
