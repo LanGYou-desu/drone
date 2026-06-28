@@ -79,8 +79,11 @@
             <h3>备份文件列表</h3>
             <div class="modal-body" id="backupList"></div>
             <div class="modal-footer">
+                <button class="btn btn-secondary" id="selectAllBtn">全选</button>
+                <button class="btn btn-danger" id="deleteSelectedBtn" disabled>删除选中</button>
+                <div style="flex:1;"></div>
                 <button class="btn btn-secondary" id="closeModalBtn">关闭</button>
-                <button class="btn btn-primary" id="restoreSelectedBtn">恢复选中</button>
+                <button class="btn btn-primary" id="restoreSelectedBtn" disabled>恢复选中</button>
             </div>
         </div>
     </div>

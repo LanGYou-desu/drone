@@ -60,29 +60,44 @@ document.getElementById('createBackupBtn').addEventListener('click', async () =>
 });
 
 // ---- 备份列表 ----
-let selectedBackup = null;
+let selectedBackups = new Set();
 
 async function loadBackupList() {
     const list = document.getElementById('backupList');
     list.innerHTML = '<p style="color:var(--text-secondary);"><span class="spinner"></span> 加载中...</p>';
-    selectedBackup = null;
+    selectedBackups.clear();
     try {
         const r = await (await fetch('/api/list_backups')).json();
         if (r.success && r.backups?.length) {
             list.innerHTML = '';
             r.backups.forEach(b => {
-                const labelTag = b.label === 'auto' ? ' [自动]' : b.label === 'manual' ? ' [手动]' : '';
-                const pts = b.point_count ? ` · ${b.point_count} 点` : '';
+                const labelTag = b.label === 'auto' ? '自动' : '手动';
+                const pts = b.point_count ? `${b.point_count} 点` : '';
 
                 const el = document.createElement('div');
                 el.className = 'backup-item';
-                el.innerHTML = `<div class="backup-item-name">${b.method}${labelTag}${pts}</div><div class="backup-item-date">${b.timestamp}</div>`;
+                el.style.cssText = 'display:flex;align-items:center;gap:10px;';
 
-                // 删除按钮 — 跟在数据后面
+                // 复选框
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.style.cssText = 'flex-shrink:0;cursor:pointer;';
+                cb.addEventListener('click', (e) => e.stopPropagation());
+                cb.addEventListener('change', () => {
+                    cb.checked ? selectedBackups.add(b.filename) : selectedBackups.delete(b.filename);
+                    updateBackupFooter();
+                });
+
+                // 信息区
+                const info = document.createElement('div');
+                info.style.cssText = 'flex:1;min-width:0;';
+                info.innerHTML = `<div class="backup-item-name">${b.method} · ${pts}</div><div class="backup-item-date">${b.timestamp} &nbsp;<span style="font-size:0.7rem;color:var(--text-secondary);">[${labelTag}]</span></div>`;
+
+                // 删除按钮
                 const delBtn = document.createElement('button');
                 delBtn.className = 'btn btn-danger';
                 delBtn.textContent = '删除';
-                delBtn.style.cssText = 'margin-top:6px;padding:3px 10px;font-size:0.75rem;';
+                delBtn.style.cssText = 'flex-shrink:0;padding:3px 10px;font-size:0.75rem;';
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (!confirm(`确认删除备份？\n${b.timestamp}`)) return;
@@ -93,22 +108,41 @@ async function loadBackupList() {
                             body: JSON.stringify({ backup_name: b.filename }),
                         })).json();
                         dr.success ? toast.success(dr.message) : toast.error(dr.error);
-                        if (dr.success) loadBackupList();
+                        if (dr.success) { selectedBackups.delete(b.filename); loadBackupList(); }
                     } catch (err) { toast.error(err.message); }
                 });
-                el.appendChild(delBtn);
 
+                // 点击行选中
                 el.addEventListener('click', (ev) => {
-                    if (ev.target.tagName === 'BUTTON') return;
-                    list.querySelectorAll('.backup-item').forEach(x => x.classList.remove('selected'));
-                    el.classList.add('selected');
-                    selectedBackup = b.filename;
+                    if (ev.target.tagName === 'BUTTON' || ev.target.tagName === 'INPUT') return;
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change'));
                 });
+
+                el.appendChild(cb);
+                el.appendChild(info);
+                el.appendChild(delBtn);
                 list.appendChild(el);
             });
         } else { list.innerHTML = '<p style="color:var(--text-secondary);">暂无备份</p>'; }
     } catch (e) { list.innerHTML = `<p style="color:var(--red);">加载失败</p>`; }
+    updateBackupFooter();
 }
+
+function updateBackupFooter() {
+    const btn = document.getElementById('deleteSelectedBtn');
+    const restoreBtn = document.getElementById('restoreSelectedBtn');
+    if (btn) btn.disabled = selectedBackups.size === 0;
+    if (restoreBtn) restoreBtn.disabled = selectedBackups.size === 0;
+}
+
+// 全选
+document.getElementById('selectAllBtn')?.addEventListener('click', () => {
+    const list = document.getElementById('backupList');
+    const cbs = list.querySelectorAll('input[type="checkbox"]');
+    const allChecked = Array.from(cbs).every(c => c.checked);
+    cbs.forEach(cb => { cb.checked = !allChecked; cb.dispatchEvent(new Event('change')); });
+});
 
 document.getElementById('listBackupsBtn').addEventListener('click', async () => {
     document.getElementById('backupModal').style.display = 'flex';
@@ -117,21 +151,45 @@ document.getElementById('listBackupsBtn').addEventListener('click', async () => 
 
 document.getElementById('closeModalBtn').addEventListener('click', () => {
     document.getElementById('backupModal').style.display = 'none';
-    selectedBackup = null;
+    selectedBackups.clear();
 });
 
+// 恢复选中（单个或批量恢复最新）
 document.getElementById('restoreSelectedBtn').addEventListener('click', async () => {
-    if (!selectedBackup) { toast.warning('请先选择一个备份'); return; }
+    if (selectedBackups.size === 0) { toast.warning('请先勾选备份'); return; }
+    const name = [...selectedBackups][0];
     try {
         const r = await (await fetch('/api/restore_backup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ backup_file: selectedBackup }),
+            body: JSON.stringify({ backup_file: name }),
         })).json();
         r.success ? toast.success(r.message) : toast.error(r.error);
         if (r.success) setTimeout(() => location.reload(), 800);
     } catch (e) { toast.error(e.message); }
 });
+
+// 批量删除选中
+async function deleteSelected() {
+    if (selectedBackups.size === 0) return;
+    if (!confirm(`确认删除 ${selectedBackups.size} 个备份？`)) return;
+    let ok = 0, fail = 0;
+    for (const name of selectedBackups) {
+        try {
+            const r = await (await fetch('/api/backup/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backup_name: name }),
+            })).json();
+            r.success ? ok++ : fail++;
+        } catch { fail++; }
+    }
+    if (ok > 0) toast.success(`已删除 ${ok} 个备份` + (fail ? `，${fail} 个失败` : ''));
+    else toast.error('删除失败');
+    loadBackupList();
+}
+
+document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelected);
 
 // ---- 一键恢复 ----
 document.getElementById('restoreAllBtn').addEventListener('click', async () => {
