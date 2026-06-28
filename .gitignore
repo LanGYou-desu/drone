@@ -28,6 +28,7 @@ reports/
 # PDF
 *.pdf
 !docs/鹰眼长空使用手册.pdf
+!docs/鹰眼长空开发文档.pdf
 
 # Env
 .env
