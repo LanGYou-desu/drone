@@ -64,15 +64,20 @@ async function initViewer() {
     controls.target.set(4, 2, 4);
     controls.autoRotate = false;
 
-    // 地面
-    const groundGeo = new THREE.PlaneGeometry(200, 200);
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.55;
-    scene.add(ground);
+    // 地面（与总览一致）
+    const gGeo = new THREE.PlaneGeometry(200, 200);
+    const gMat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
+    const plane = new THREE.Mesh(gGeo, gMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -0.55;
+    plane.receiveShadow = true;
+    scene.add(plane);
 
-    scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
+    // 网格
+    const grid = new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e);
+    grid.position.y = -0.5;
+    scene.add(grid);
+
     buildAxes(scene, CSS2DObject);
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
