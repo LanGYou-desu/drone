@@ -110,6 +110,7 @@ async function initViewer() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     raycaster.params.Points.threshold = 0.3;
+    raycaster.params.Line = { threshold: 0.3 };
     let hoveredSphere = null;
     renderer.domElement.addEventListener('mousemove', e => {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -118,19 +119,11 @@ async function initViewer() {
         raycaster.setFromCamera(mouse, camera);
         const targets = [];
         for (const id in lines) {
-            const spheres = lines[id]?.points;
-            if (spheres?.children) {
-                spheres.children.forEach(s => {
-                    if (s.isMesh && s.geometry?.type === 'SphereGeometry') targets.push(s);
-                });
-            }
-        }
-        // 也检查预测线球体
-        for (const id in predLines) {
-            const spheres = predLines[id]?.points;
-            if (spheres?.children) {
-                spheres.children.forEach(s => {
-                    if (s.isMesh && s.geometry?.type === 'SphereGeometry') targets.push(s);
+            if (lines[id]?.points) {
+                lines[id].points.children.forEach(s => {
+                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
+                        targets.push(s);
+                    }
                 });
             }
         }
