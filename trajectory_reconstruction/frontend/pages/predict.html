@@ -48,15 +48,10 @@
                 <span>h <b style="color:var(--text-primary);">--</b></span>
                 <span>p <b style="color:var(--text-primary);">--</b></span>
             </div>
+            <div id="pred-{{ id }}" style="padding-left:18px;font-size:0.7rem;color:var(--blue);display:none;"></div>
         </div>
         {% endfor %}
     </div>
-</div>
-
-<!-- 右上角下方：预测结果 -->
-<div class="overlay-panel" id="resultPanel" style="top:240px;right:20px;min-width:200px;display:none;">
-    <h3>预测结果</h3>
-    <div id="predictResults"></div>
 </div>
 
 <!-- 底部中央：播放控制条 -->
@@ -93,5 +88,5 @@
         predSettings: {{ pred_settings | tojson }}
     };
 </script>
-<script type="module" src="/static/js/pages/predict.js?v=4"></script>
+<script type="module" src="/static/js/pages/predict.js?v=5"></script>
 {% endblock %}

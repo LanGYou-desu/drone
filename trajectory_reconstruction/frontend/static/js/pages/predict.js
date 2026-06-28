@@ -115,14 +115,14 @@ function renderCachedPredictions() {
         scene.add(grp);
         predLines[mid] = { line, points: grp };
     }
-    document.getElementById('resultPanel').style.display = 'block';
-    const container = document.getElementById('predictResults');
-    container.innerHTML = Object.entries(predictedData).map(([mid, pred]) => {
-        const color = detectionMethods[mid]?.color || '#fff';
-        return `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
-            <span class="legend-dot" style="background:${color};color:${color};"></span>
-            <strong>${detectionMethods[mid]?.name || mid}</strong> · ${pred.prediction.length - 1}点</div>`;
-    }).join('') || '<p style="color:var(--text-secondary);font-size:0.75rem;">无有效预测结果</p>';
+    // 在平台状态面板下显示预测结果
+    for (const [mid, pred] of Object.entries(predictedData)) {
+        const el = document.getElementById('pred-' + mid);
+        if (el) {
+            el.style.display = '';
+            el.textContent = '预测 ' + (pred.prediction.length - 1) + ' 点';
+        }
+    }
 }
 
 // 起点标记
@@ -201,9 +201,6 @@ async function runPrediction() {
 
         if (result.success) {
             const results = isAll ? result.results : { [platform]: { prediction: result.prediction, pred_times: result.pred_times } };
-            const container = document.getElementById('predictResults');
-            document.getElementById('resultPanel').style.display = 'block';
-            let html = '';
 
             for (const [mid, pred] of Object.entries(results)) {
                 if (!pred.prediction?.length) continue;
@@ -218,7 +215,6 @@ async function runPrediction() {
                 line.computeLineDistances();
                 scene.add(line);
 
-                // 预测点球体
                 const grp = new THREE.Group();
                 const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, transparent: true, opacity: 0.5 });
                 pred.prediction.forEach(p => {
@@ -229,15 +225,12 @@ async function runPrediction() {
                 scene.add(grp);
                 predLines[mid] = { line, points: grp };
 
-                html += `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
-                    <span class="legend-dot" style="background:${color};color:${color};"></span>
-                    <strong>${detectionMethods[mid]?.name || mid}</strong>
-                    · ${pred.prediction.length - 1}点
-                </div>`;
+                // 在平台状态下方显示预测点数
+                const el = document.getElementById('pred-' + mid);
+                if (el) { el.style.display = ''; el.textContent = '预测 ' + (pred.prediction.length - 1) + ' 点'; }
             }
-            container.innerHTML = html || '<p style="color:var(--text-secondary);">无有效预测结果</p>';
             savePredictedData();
-            calcRange();  // 预测完成后立即更新时间范围
+            calcRange();
             toast.success('预测完成，点击 ▶ 播放动画');
         } else {
             toast.error('预测失败: ' + (result.error || ''));
