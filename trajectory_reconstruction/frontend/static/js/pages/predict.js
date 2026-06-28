@@ -260,6 +260,11 @@ function makeGlowSphere(color) {
     return g;
 }
 
+function togglePlay() {
+    if (animActive) { pauseAnim(); return; }
+    startAnim(animElapsed >= animRange.end - animRange.start);
+}
+
 function startAnim(fromStart = false) {
     if (fromStart) animElapsed = 0;
     if (!THREE) { toast.warning('3D 场景加载中，请稍候'); return; }
@@ -269,6 +274,7 @@ function startAnim(fromStart = false) {
     if (animElapsed >= animRange.end - animRange.start) animElapsed = 0;
 
     animActive = true;
+    document.getElementById('playBtn').textContent = '⏸';
 
     // 收集参与播放的平台
     const playIds = new Set();
@@ -303,6 +309,8 @@ function startAnim(fromStart = false) {
         const pct = ((ts - animRange.start) / duration) * 100;
         if (progressBar) progressBar.value = Math.min(100, Math.max(0, pct));
         document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
+        // 更新轨迹信息
+        updateTrajectoryInfo(ts);
     };
 
     const step = now => {
@@ -349,6 +357,7 @@ function startAnim(fromStart = false) {
 function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
+    document.getElementById('playBtn').textContent = '▶';
 }
 
 function stopAnim() {
@@ -357,10 +366,53 @@ function stopAnim() {
     animElapsed = 0;
     const bar = document.getElementById('animProgress');
     if (bar) bar.value = 0;
+    document.getElementById('playBtn').textContent = '▶';
     for (const id in movingSpheres) {
         scene.remove(movingSpheres[id]);
         delete movingSpheres[id];
     }
+}
+
+// ═══════════════════════════ 轨迹信息 ═══════════════════════════
+
+function updateTrajectoryInfo(ts) {
+    const lines = [];
+    for (const [id, data] of Object.entries(detectionMethods)) {
+        if (!data.visible || !data.points?.length) continue;
+        const histTs = data.timestamps;
+        let pos;
+        if (histTs?.length && ts <= histTs[histTs.length-1]) {
+            pos = lerp(data.points, histTs, ts);
+        } else {
+            const pred = predictedData[id];
+            if (pred?.prediction?.length && pred?.pred_times?.length && ts <= pred.pred_times[pred.pred_times.length-1]) {
+                pos = lerp(pred.prediction, pred.pred_times, ts);
+            }
+        }
+        if (pos) {
+            const speed = calcSpeed(data.points, histTs, ts);
+            lines.push(`<div style="margin-bottom:4px;">
+                <span class="legend-dot" style="background:${data.color};color:${data.color};"></span>
+                <strong>${data.name}</strong>
+                <div style="padding-left:14px;font-size:0.7rem;">
+                    x:${pos[0].toFixed(1)} y:${pos[1].toFixed(1)} z:${pos[2].toFixed(1)}<br>
+                    速度: ${speed} m/s
+                </div>
+            </div>`);
+        }
+    }
+    document.getElementById('trajectoryInfo').innerHTML = lines.join('') || '等待播放...';
+}
+
+function calcSpeed(pts, times, t) {
+    if (!pts || pts.length < 2 || !times || times.length < 2) return '--';
+    let i = 0;
+    while (i < times.length - 1 && times[i + 1] < t) i++;
+    if (i >= times.length - 1) i = times.length - 2;
+    const dt = times[i + 1] - times[i];
+    if (dt <= 0) return '--';
+    const dx = pts[i + 1][0] - pts[i][0], dz = pts[i + 1][2] - pts[i][2];
+    return (Math.sqrt(dx * dx + dz * dz) / dt).toFixed(1);
 }
 
 // ═══════════════════════════ 进度条拖拽 ═══════════════════════════
@@ -374,6 +426,7 @@ if (animProgress) {
         animElapsed = pct * duration;
         const ts = animRange.start + animElapsed;
         document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
+        updateTrajectoryInfo(ts);
 
         // 首次拖拽时创建球体
         if (Object.keys(movingSpheres).length === 0) {
@@ -421,8 +474,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('predictBtn').addEventListener('click', runPrediction);
 
     // 播放/停止
-    document.getElementById('playBtn').addEventListener('click', () => startAnim(false));
-    document.getElementById('stopBtn').addEventListener('click', pauseAnim);
+    document.getElementById('playBtn').addEventListener('click', togglePlay);
+    document.getElementById('stopBtn').addEventListener('click', stopAnim);
 
     // 倍速
     document.getElementById('speedSelect').addEventListener('change', e => {

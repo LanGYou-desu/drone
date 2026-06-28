@@ -32,8 +32,14 @@
     </div>
 </div>
 
-<!-- 右上角：预测结果 -->
-<div class="overlay-panel" id="resultPanel" style="top:72px;right:20px;min-width:200px;display:none;">
+<!-- 右上角：轨迹信息 -->
+<div class="overlay-panel" style="top:72px;right:20px;min-width:200px;">
+    <h3>轨迹信息</h3>
+    <div id="trajectoryInfo" style="font-size:0.75rem;color:var(--text-secondary);">等待播放...</div>
+</div>
+
+<!-- 右上角下方：预测结果 -->
+<div class="overlay-panel" id="resultPanel" style="top:180px;right:20px;min-width:200px;display:none;">
     <h3>预测结果</h3>
     <div id="predictResults"></div>
 </div>
