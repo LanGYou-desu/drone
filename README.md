@@ -1,107 +1,45 @@
-# 鹰眼长空 — 基于多平台协同的低空无人机智能监测系统
+# 鹰眼长空
 
-## 项目结构
+基于多平台协同的低空无人机智能监测系统。融合可见光、红外、雷达三种传感平台的轨迹数据，提供 3D 可视化、轨迹预测、AI 策略生成和多维运动学分析。
 
-```
-drone/
-├── main.py                              # 主入口 (Flask + pywebview)
-├── config.json                          # 运行时配置（不纳入版本控制）
-├── requirements.txt                     # Python 依赖
-│
-├── trajectory_reconstruction/           # 轨迹重建与分析模块
-│   ├── app.py                           #   Flask 应用工厂
-│   ├── __main__.py                      #   独立启动入口
-│   ├── core/                            #   核心领域逻辑
-│   │   ├── config/                      #     配置管理
-│   │   ├── io/                          #     轨迹文件读写
-│   │   ├── prediction/                  #     轨迹预测算法（线性外推）
-│   │   ├── ai/                          #     AI 建议服务（硅基流动 API）
-│   │   └── state.py                     #     共享运行时状态
-│   ├── services/                        #   业务逻辑层
-│   │   ├── data_service.py
-│   │   ├── predict_service.py
-│   │   └── backup_service.py
-│   ├── views/                           #   HTTP 视图层（页面 + API）
-│   │   ├── main.py                      #     页面视图
-│   │   ├── api.py                       #     数据 & 备份 API
-│   │   ├── api_predict.py               #     预测 & AI API
-│   │   ├── api_report.py                #     报告保存 API
-│   │   └── analysis.py                  #     运动学分析 API
-│   └── frontend/                        #   前端资源
-│       ├── pages/                       #     HTML 模板
-│       └── static/                      #     CSS / JS
-│
-├── trajectory_recognition/              # 轨迹识别模块（框架）
-│   ├── app.py                           #   Flask 应用工厂
-│   ├── __main__.py                      #   独立启动入口
-│   ├── features/                        #   特征提取
-│   ├── models/                          #   识别模型定义
-│   └── classifier/                      #   分类器
-│
-├── data/                                # 共享运行时数据（两模块交互）
-│   ├── fact/                            #   实际轨迹数据 (.dat)
-│   ├── predict/                         #   预测结果
-│   └── backup/                          #   备份
-│
-├── reports/                             # 捕捉策略报告
-├── templates/                           # 配置模板
-└── docs/                                # 文档
-    ├── manual.md                         #   使用手册（源文件）
-    ├── 鹰眼长空使用手册.pdf              #   使用手册（PDF）
-    ├── DEVELOPER.md                      #   开发文档（新人必读）
-    └── 鹰眼长空开发文档.pdf              #   开发文档（PDF）
-```
-
-## 架构说明
-
-两个模块通过根目录 `data/` 共享轨迹数据：
-
-- **trajectory_reconstruction** — 负责轨迹加载、重建、预测与运动学分析，将结果写入 `data/predict/`
-- **trajectory_recognition** — 读取 `data/` 下的轨迹数据进行模式识别与分类
+**技术栈：** Python Flask · pywebview · Three.js · ECharts · 硅基流动 AI
 
 ## 快速开始
 
 ```bash
 pip install -r requirements.txt
+
+python main.py               # 桌面窗口
+python main.py recon --headless   # HTTP 服务 → :5000
+python main.py recog         # 轨迹识别 → :5001
 ```
 
-### 统一入口
+编辑 `config.json` 填入硅基流动 API Key 后即可使用 AI 策略功能。
 
-```bash
-python main.py               # 轨迹重建与分析（桌面窗口）
-python main.py --headless    # 轨迹重建与分析（纯 HTTP）
-python main.py recon         # 轨迹重建与分析
-python main.py recog         # 轨迹识别
-python main.py all           # 同时启动两个模块
+## 项目结构
+
+```
+drone/
+├── main.py                              # 统一入口
+├── config.json                          # 运行时配置
+│
+├── trajectory_reconstruction/           # 轨迹重建与分析
+│   ├── core/                            #   领域逻辑（config/io/prediction/ai）
+│   ├── services/                        #   业务编排
+│   ├── views/                           #   HTTP 接口
+│   └── frontend/                        #   前端资源
+│
+├── trajectory_recognition/              # 轨迹识别（框架）
+│
+├── data/                                # 共享运行时数据
+├── reports/                             # AI 策略报告
+├── templates/                           # 配置模板
+└── docs/                                # 文档
 ```
 
-### 独立启动各模块
+## 文档
 
-```bash
-# 轨迹重建与分析 → http://127.0.0.1:5000
-python -m trajectory_reconstruction --headless
-
-# 轨迹识别 → http://127.0.0.1:5001
-python -m trajectory_recognition
-```
-
-## API 端点
-
-| 路由 | 方法 | 说明 |
-|------|------|------|
-| `/` | GET | 总览仪表板（3D 轨迹视图） |
-| `/predict` | GET | 轨迹预测页面 |
-| `/ai` | GET | AI 策略建议页面 |
-| `/data` | GET | 数据管理页面 |
-| `/analysis/` | GET | 运动学分析页面 |
-| `/analysis/data` | GET | 分析数据 JSON 接口 |
-| `/api/refresh_data` | POST | 重新加载默认轨迹 |
-| `/api/load_data` | POST | 上传自选数据 |
-| `/api/clear_all_data` | POST | 清理并备份全部数据 |
-| `/api/predict` | POST | 单平台轨迹预测 |
-| `/api/predict_all` | POST | 全平台轨迹预测 |
-| `/api/ai_suggestion` | POST | 获取 AI 捕捉策略 |
-| `/api/save_report` | POST | 保存捕捉报告 |
-| `/api/list_backups` | GET | 列出备份 |
-| `/api/restore_backup` | POST | 恢复指定备份 |
-| `/api/restore_all_backups` | POST | 一键恢复最新备份 |
+| 文档 | 说明 |
+|------|------|
+| [使用手册](docs/鹰眼长空使用手册.pdf) | 用户操作指南 |
+| [开发文档](docs/DEVELOPER.md) | 架构、API、开发指南（新人必读） |
