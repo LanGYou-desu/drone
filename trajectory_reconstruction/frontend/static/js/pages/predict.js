@@ -33,6 +33,8 @@ function savePredictedData() {
 async function initViewer() {
     THREE = await import('three');
     const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+    const css = await import('three/addons/renderers/CSS2DRenderer.js');
+    const CSS2DObject = css.CSS2DObject;
 
     const container = document.getElementById('predictViewer');
     const W = window.innerWidth, H = window.innerHeight;
@@ -52,6 +54,11 @@ async function initViewer() {
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
+    const labelRenderer = new css.CSS2DRenderer();
+    labelRenderer.setSize(W, H);
+    labelRenderer.domElement.style.cssText = 'position:absolute;top:0;pointer-events:none;';
+    container.appendChild(labelRenderer.domElement);
+
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.target.set(4, 2, 4);
@@ -66,7 +73,7 @@ async function initViewer() {
     scene.add(ground);
 
     scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
-    buildAxes(scene, null);
+    buildAxes(scene, CSS2DObject);
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(8, 12, 6);
@@ -79,6 +86,7 @@ async function initViewer() {
         requestAnimationFrame(loop);
         controls.update();
         renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
     }
     loop();
 
@@ -86,6 +94,7 @@ async function initViewer() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
     });
 
     drawTrails();
@@ -154,13 +163,14 @@ function drawTrails() {
         scene.add(grp);
         lines[id] = { line, points: grp };
 
-        // 起点标记
-        const startG = new THREE.Group();
-        startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0x30D158, emissive: 0x30D158, emissiveIntensity: 0.8 })));
-        startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshBasicMaterial({ color: 0x30D158, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
-        startG.position.set(data.points[0][0], data.points[0][1], data.points[0][2]);
-        scene.add(startG);
-        startMarkers[id] = startG;
+        // 起点标签
+        const div = document.createElement('div');
+        div.textContent = '🚀 起点';
+        div.style.cssText = 'color:#fff;font-size:10px;font-weight:600;background:rgba(0,0,0,0.7);padding:2px 8px;border-radius:10px;';
+        const label = new CSS2DObject(div);
+        label.position.set(data.points[0][0], data.points[0][1], data.points[0][2]);
+        scene.add(label);
+        startMarkers[id] = label;
     }
 }
 
