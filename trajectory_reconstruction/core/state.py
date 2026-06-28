@@ -11,10 +11,11 @@ _config = ensure_config()
 # { methodId: { name, color, visible, points, timestamps } }
 detection_methods: dict[str, dict] = {}
 
-# API 配置（硅基流动）
-SF_API_KEY: str = _config['siliconflow']['api_key']
-SF_URL: str = _config['siliconflow']['url']
-SF_MODEL: str = _config['siliconflow']['model']
+# AI 大模型配置（兼容旧 siliconflow 字段）
+_ai_cfg = _config.get('ai', _config.get('siliconflow', {}))
+AI_API_KEY: str = _ai_cfg.get('api_key', '')
+AI_URL: str = _ai_cfg.get('url', '')
+AI_MODEL: str = _ai_cfg.get('model', '')
 
 
 def init_from_config():

@@ -4,7 +4,7 @@
 from flask import Blueprint, jsonify, request
 
 from trajectory_reconstruction.services import predict_service
-from trajectory_reconstruction.core.state import detection_methods, SF_API_KEY, SF_URL, SF_MODEL
+from trajectory_reconstruction.core.state import detection_methods, AI_API_KEY, AI_URL, AI_MODEL
 from trajectory_reconstruction.core.ai.ai_service import get_ai_suggestion
 
 predict_bp = Blueprint('predict', __name__)
@@ -65,7 +65,7 @@ def ai_suggestion():
         return jsonify({'success': False, 'error': '缺少 methods_data'}), 400
 
     try:
-        suggestion = get_ai_suggestion(methods_data, SF_API_KEY, SF_URL, SF_MODEL)
+        suggestion = get_ai_suggestion(methods_data, AI_API_KEY, AI_URL, AI_MODEL)
         return jsonify({'success': True, 'suggestion': suggestion})
     except Exception as e:
         return jsonify({'success': False, 'error': f'AI 服务异常: {str(e)}'}), 500

@@ -2,7 +2,7 @@
 配置文件管理 — 读写 config.json
 
 配置文件结构:
-  siliconflow:         硅基流动 API 配置
+  ai:                  AI 大模型配置（支持 OpenAI 兼容接口）
     api_key            API 密钥（需用户填写）
     url                接口端点
     model              模型名称
@@ -24,8 +24,9 @@ CONFIG_TEMPLATE: str = 'templates/config_template.json'
 
 # ---- 默认配置 ----
 DEFAULT_CONFIG: dict[str, Any] = {
-    'siliconflow': {
-        'api_key': 'your-siliconflow-api-key-here',
+    'ai': {
+        'provider': 'siliconflow',
+        'api_key': 'your-api-key-here',
         'url': 'https://api.siliconflow.cn/v1/chat/completions',
         'model': 'Qwen/Qwen2.5-7B-Instruct',
     },
@@ -62,10 +63,10 @@ def _validate_config(cfg: dict) -> dict:
         if key not in cfg:
             cfg[key] = DEFAULT_CONFIG[key]
 
-    # 确保 siliconflow 子字段
-    for key in DEFAULT_CONFIG['siliconflow']:
-        if key not in cfg['siliconflow']:
-            cfg['siliconflow'][key] = DEFAULT_CONFIG['siliconflow'][key]
+    # 确保 ai 子字段
+    for key in DEFAULT_CONFIG['ai']:
+        if key not in cfg['ai']:
+            cfg['ai'][key] = DEFAULT_CONFIG['ai'][key]
 
     # 确保 detection_methods 子字段
     for mid in DEFAULT_CONFIG['detection_methods']:
