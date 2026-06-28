@@ -2,66 +2,56 @@
 {% block title %}轨迹预测 — 鹰眼长空{% endblock %}
 {% block content %}
 
-<div class="page">
-    <div class="page-header">
-        <h1>🔮 轨迹预测</h1>
-        <p>基于历史轨迹的线性外推预测，支持单平台和全平台预测</p>
+<!-- 全屏 3D 视图 -->
+<div class="viewer-full" id="predictViewer"></div>
+
+<!-- 左上角：预测参数 -->
+<div class="overlay-panel" style="top:72px;left:20px;min-width:220px;">
+    <h3>预测参数</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+            <label>目标平台</label>
+            <select id="predictPlatform">
+                <option value="all">所有平台</option>
+                {% for id, m in methods_data.items() %}
+                <option value="{{ id }}">{{ m.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>预测点数: <strong id="numPointsLabel">{{ pred_settings.default_points }}</strong></label>
+            <input type="range" id="numPointsSlider"
+                   min="{{ pred_settings.min_points }}" max="{{ pred_settings.max_points }}"
+                   value="{{ pred_settings.default_points }}" step="1">
+        </div>
+        <div>
+            <label>时间步长 (秒)</label>
+            <input type="number" id="timeStep" value="{{ pred_settings.time_step }}" step="0.1" min="0.1" max="5">
+        </div>
+        <button class="btn btn-primary" id="predictBtn">⚡ 开始预测</button>
     </div>
+</div>
 
-    <div class="grid grid-2" style="margin-bottom:20px;">
-        <!-- 预测参数 -->
-        <div class="card">
-            <div class="card-header"><h3>预测参数</h3></div>
-            <div style="display:flex;flex-direction:column;gap:12px;">
-                <div>
-                    <label>目标平台</label>
-                    <select id="predictPlatform">
-                        <option value="all">所有平台</option>
-                        {% for id, m in methods_data.items() %}
-                        <option value="{{ id }}">{{ m.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label>预测点数: <strong id="numPointsLabel">{{ pred_settings.default_points }}</strong></label>
-                    <input type="range" id="numPointsSlider"
-                           min="{{ pred_settings.min_points }}" max="{{ pred_settings.max_points }}"
-                           value="{{ pred_settings.default_points }}" step="1">
-                </div>
-                <div>
-                    <label>时间步长 (秒)</label>
-                    <input type="number" id="timeStep" value="{{ pred_settings.time_step }}" step="0.1" min="0.1" max="5">
-                </div>
-                <button class="btn btn-primary btn-lg" id="predictBtn">⚡ 开始预测</button>
-            </div>
-        </div>
+<!-- 右上角：预测结果 -->
+<div class="overlay-panel" id="resultPanel" style="top:72px;right:20px;min-width:200px;display:none;">
+    <h3>预测结果</h3>
+    <div id="predictResults"></div>
+</div>
 
-        <!-- 预测结果 -->
-        <div class="card">
-            <div class="card-header"><h3>预测结果</h3></div>
-            <div id="predictResults">
-                <p style="color:var(--text-secondary);font-size:0.85rem;">选择参数后点击"开始预测"</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- 3D 预览 -->
-    <div class="card">
-        <div class="card-header">
-            <h3>预测轨迹预览</h3>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <span id="animTimeLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
-                <input type="range" id="animProgress" min="0" max="100" value="0" step="0.1" style="width:180px;">
-                <span id="animEndLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
-                <button class="btn btn-sm btn-primary" id="playBtn">▶</button>
-                <button class="btn btn-sm btn-secondary" id="stopBtn">⏹</button>
-                <select id="speedSelect" style="width:58px;margin:0;padding:4px 6px;font-size:0.75rem;">
-                    <option value="0.5">½</option><option value="1" selected>1×</option>
-                    <option value="2">2×</option><option value="4">4×</option>
-                </select>
-            </div>
-        </div>
-        <div class="viewer-panel" id="predictViewer"></div>
+<!-- 底部中央：播放控制条 -->
+<div class="overlay-panel" style="bottom:28px;left:50%;transform:translateX(-50%);padding:12px 20px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn btn-primary btn-sm" id="playBtn" style="margin:0;width:auto;">▶ 播放</button>
+        <button class="btn btn-secondary btn-sm" id="stopBtn" style="margin:0;width:auto;">⏹ 停止</button>
+        <select id="speedSelect" style="width:72px;margin:0;">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+        </select>
+        <span id="animTimeLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
+        <input type="range" id="animProgress" min="0" max="100" value="0" step="0.1" style="width:180px;margin:0;">
+        <span id="animEndLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
     </div>
 </div>
 

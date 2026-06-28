@@ -23,21 +23,21 @@ async function initViewer() {
     const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
 
     const container = document.getElementById('predictViewer');
-    const W = container.clientWidth, H = container.clientHeight;
+    const W = window.innerWidth, H = window.innerHeight;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d0d18);
-    scene.fog = new THREE.Fog(0x0d0d18, 20, 100);
+    scene.fog = new THREE.Fog(0x0d0d18, 30, 120);
 
     camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
-    camera.position.set(10, 7, 12);
+    camera.position.set(12, 7, 14);
     camera.lookAt(4, 2, 4);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
     controls = new OrbitControls(camera, renderer.domElement);
@@ -45,7 +45,6 @@ async function initViewer() {
     controls.target.set(4, 2, 4);
     controls.autoRotate = false;
 
-    // 基础设施
     scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
     scene.add(new THREE.AxesHelper(8));
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
@@ -64,9 +63,9 @@ async function initViewer() {
     loop();
 
     window.addEventListener('resize', () => {
-        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
     drawTrails();
@@ -137,6 +136,7 @@ async function runPrediction() {
         if (result.success) {
             const results = isAll ? result.results : { [platform]: { prediction: result.prediction, pred_times: result.pred_times } };
             const container = document.getElementById('predictResults');
+            document.getElementById('resultPanel').style.display = 'block';
             let html = '';
 
             for (const [mid, pred] of Object.entries(results)) {
