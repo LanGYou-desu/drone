@@ -3,6 +3,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
+import { buildAxes } from '../common/three-utils.js';
 
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
@@ -57,7 +58,7 @@ async function initViewer() {
     controls.autoRotate = false;
 
     scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
-    scene.add(new THREE.AxesHelper(8));
+    buildAxes(scene, null);  // 自定义坐标系（无 CSS2D 标签）
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(8, 12, 6);

@@ -5,6 +5,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
+import { buildAxes } from '../common/three-utils.js';
 
 // ═══════════════════════════════════════════
 // 数据加载（从 HTML 模板注入的 window._PAGE_DATA_）
@@ -139,77 +140,7 @@ function buildGrid() {
     grid.position.y = -0.5;
     scene.add(grid);
 
-    // ★ 自定义坐标轴（带标签和刻度）★
-    buildAxes();
-}
-
-function buildAxes() {
-    const origin = new THREE.Vector3(0, -0.48, 0);
-    const len = 15;
-    const tickStep = 2;
-    const tickSize = 0.2;
-
-    // 轴线颜色
-    const colors = { x: 0xff4444, y: 0x44ff44, z: 0x4488ff };
-    const dirs = {
-        x: new THREE.Vector3(1, 0, 0),
-        y: new THREE.Vector3(0, 1, 0),
-        z: new THREE.Vector3(0, 0, 1),
-    };
-
-    for (const [axis, dir] of Object.entries(dirs)) {
-        const color = colors[axis];
-
-        // 主线
-        const end = origin.clone().add(dir.clone().multiplyScalar(len));
-        const lineGeo = new THREE.BufferGeometry().setFromPoints([origin, end]);
-        scene.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color, linewidth: 1 })));
-
-        // 负半轴（虚线）
-        const negEnd = origin.clone().add(dir.clone().multiplyScalar(-len * 0.3));
-        const dashGeo = new THREE.BufferGeometry().setFromPoints([origin, negEnd]);
-        scene.add(new THREE.Line(dashGeo, new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.4 })));
-
-        // 刻度标记
-        for (let t = tickStep; t <= len; t += tickStep) {
-            const tickCenter = origin.clone().add(dir.clone().multiplyScalar(t));
-            // X轴刻度沿Z方向，Y/Z轴刻度沿X方向
-            const crossA = axis === 'x' ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
-            const crossB = crossA.clone().multiplyScalar(-1);
-            const a = tickCenter.clone().add(crossA.clone().multiplyScalar(tickSize));
-            const b = tickCenter.clone().add(crossB.clone().multiplyScalar(tickSize));
-            scene.add(new THREE.Line(
-                new THREE.BufferGeometry().setFromPoints([a, b]),
-                new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 })
-            ));
-
-            // 刻度数字标签
-            const div = document.createElement('div');
-            div.textContent = String(t);
-            div.style.cssText = `color:#${color.toString(16).padStart(6,'0')};font-size:9px;font-weight:600;font-family:SF Mono,monospace;`;
-            const label = new CSS2DObject(div);
-            label.position.copy(tickCenter);
-            label.position.y -= 0.3;
-            scene.add(label);
-        }
-
-        // 轴尖箭头（小锥体）
-        const arrowGeo = new THREE.ConeGeometry(0.15, 0.5, 6);
-        const arrowMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 });
-        const arrow = new THREE.Mesh(arrowGeo, arrowMat);
-        arrow.position.copy(end);
-        if (axis === 'x') arrow.rotation.z = -Math.PI / 2;
-        else if (axis === 'z') arrow.rotation.x = Math.PI / 2;
-        scene.add(arrow);
-
-        // 轴字母标签
-        const letterDiv = document.createElement('div');
-        letterDiv.textContent = axis.toUpperCase();
-        letterDiv.style.cssText = `color:#${color.toString(16).padStart(6,'0')};font-size:13px;font-weight:700;font-family:SF Pro Display,sans-serif;`;
-        const letterLabel = new CSS2DObject(letterDiv);
-        letterLabel.position.copy(end.clone().add(dir.clone().multiplyScalar(0.7)));
-        scene.add(letterLabel);
-    }
+    buildAxes(scene, CSS2DObject);
 }
 
 function buildStarfield() {
