@@ -9,7 +9,7 @@ const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
 const predCfg = predSettings || {};
 
-let scene, camera, renderer, controls, THREE;
+let scene, camera, renderer, controls, THREE, CSS2DObject;
 let lines = {}, predLines = {};
 let movingSpheres = {};
 let animActive = false, animId = null, animSpeed = 1.0;
@@ -34,7 +34,7 @@ async function initViewer() {
     THREE = await import('three');
     const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
     const css = await import('three/addons/renderers/CSS2DRenderer.js');
-    const CSS2DObject = css.CSS2DObject;
+    CSS2DObject = css.CSS2DObject;
 
     const container = document.getElementById('predictViewer');
     const W = window.innerWidth, H = window.innerHeight;
