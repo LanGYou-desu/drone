@@ -301,6 +301,7 @@ function startAnim(fromStart = false) {
     const updateProgress = (ts) => {
         const pct = ((ts - animRange.start) / duration) * 100;
         if (progressBar) progressBar.value = Math.min(100, Math.max(0, pct));
+        document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
     };
 
     const step = now => {

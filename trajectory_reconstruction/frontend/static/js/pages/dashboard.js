@@ -407,6 +407,8 @@ function startAnim(fromStart = false) {
         lastAnimTimestamp = ts;
         const slider = document.getElementById('timelineSlider');
         if (slider) slider.value = ((ts - timeRange.start) / (timeRange.end - timeRange.start)) * 100;
+        const cur = document.getElementById('timeCurrent');
+        if (cur) cur.textContent = ts.toFixed(1) + 's';
         animId = requestAnimationFrame(step);
     };
     animId = requestAnimationFrame(step);
@@ -495,6 +497,8 @@ function bindEvents() {
             animStep(ts);
             lastAnimTimestamp = ts;
             animElapsed = ts - timeRange.start;
+            const cur = document.getElementById('timeCurrent');
+            if (cur) cur.textContent = ts.toFixed(1) + 's';
         }
     });
 

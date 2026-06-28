@@ -1,4 +1,5 @@
 // Three.js 共享 3D 工具 — buildAxes（自定义彩色坐标轴）
+import * as THREE from 'three';
 
 export function buildAxes(scene, CSS2DObject) {
     const origin = new THREE.Vector3(0, -0.48, 0);
