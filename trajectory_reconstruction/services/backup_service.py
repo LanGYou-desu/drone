@@ -147,9 +147,28 @@ def list_backups() -> list[dict]:
     return result
 
 
+def _clear_all():
+    """清空所有数据和文件（为恢复做准备）"""
+    # 清空内存
+    for mid in detection_methods:
+        detection_methods[mid]['points'] = []
+        detection_methods[mid]['timestamps'] = []
+    # 删除自选平台
+    if 'self' in detection_methods:
+        del detection_methods['self']
+    # 清空磁盘文件
+    for subdir in ('fact', 'predict'):
+        d = os.path.join('data', subdir)
+        if os.path.isdir(d):
+            for fname in os.listdir(d):
+                fp = os.path.join(d, fname)
+                if os.path.isfile(fp):
+                    os.remove(fp)
+
+
 def restore_backup(name: str) -> tuple[bool, str]:
     """
-    从指定快照恢复全部数据。
+    先清空当前数据，再恢复快照的全部内容。
     返回 (success, message)。
     """
     snap_path = _snapshot_path(name)
@@ -159,6 +178,9 @@ def restore_backup(name: str) -> tuple[bool, str]:
     manifest = _read_manifest(name)
     if manifest is None:
         return False, '备份 manifest 丢失或损坏'
+
+    # 先清空
+    _clear_all()
 
     restored_count = 0
 
@@ -174,18 +196,25 @@ def restore_backup(name: str) -> tuple[bool, str]:
         _copy_dir(predict_src, 'data/predict')
         restored_count += 1
 
-    # 恢复内存数据
+    # 恢复内存数据（重新注册自选平台）
     from trajectory_reconstruction.core.io.data_loader import load_dat_file
     from trajectory_reconstruction.services.data_service import save_metadata
 
     memory_src = os.path.join(snap_path, 'memory')
     if os.path.isdir(memory_src):
-        for fname in os.listdir(memory_src):
+        for fname in sorted(os.listdir(memory_src)):
             if not fname.endswith('.dat'):
                 continue
-            method_id = fname[:-4]  # 去掉 .dat 后缀
+            method_id = fname[:-4]
             if method_id not in detection_methods:
-                continue
+                # 自选平台需要重新注册
+                detection_methods[method_id] = {
+                    'name': manifest.get('methods', {}).get(method_id, {}).get('name', method_id),
+                    'color': manifest.get('methods', {}).get(method_id, {}).get('color', '#FF9500'),
+                    'visible': True,
+                    'points': [],
+                    'timestamps': [],
+                }
             points, timestamps = load_dat_file(os.path.join(memory_src, fname))
             if points:
                 detection_methods[method_id]['points'] = points
