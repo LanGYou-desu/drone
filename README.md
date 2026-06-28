@@ -46,6 +46,11 @@ drone/
 ├── reports/                             # 捕捉策略报告
 ├── templates/                           # 配置模板
 └── docs/                                # 文档
+    ├── API.md                            #   API 接口文档
+    ├── SYSTEM.md                         #   系统架构
+    ├── DEVELOPER.md                      #   开发文档（新人必读）
+    ├── manual.md                         #   使用手册（源文件）
+    └── 鹰眼长空使用手册.pdf              #   使用手册（PDF）
 ```
 
 ## 架构说明
