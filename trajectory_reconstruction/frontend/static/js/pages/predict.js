@@ -248,14 +248,25 @@ function startAnim(fromStart = false) {
 
     const startWall = performance.now();
     const startElapsed = animElapsed;
+    const duration = animRange.end - animRange.start;
+    const progressBar = document.getElementById('animProgress');
+
+    // 设置进度条范围
+    if (fromStart) {
+        document.getElementById('animTimeLabel').textContent = animRange.start.toFixed(1) + 's';
+        document.getElementById('animEndLabel').textContent = animRange.end.toFixed(1) + 's';
+    }
+
+    const updateProgress = (ts) => {
+        const pct = ((ts - animRange.start) / duration) * 100;
+        if (progressBar) progressBar.value = Math.min(100, Math.max(0, pct));
+    };
 
     const step = now => {
-        if (!animActive) {
-            animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
-            return;
-        }
+        if (!animActive) { return; }
         animElapsed = startElapsed + (now - startWall) / 1000 * animSpeed;
-        const ts = animRange.start + animElapsed;
+        const ts = Math.min(animRange.start + animElapsed, animRange.end);
+        updateProgress(ts);
 
         if (ts >= animRange.end) {
             for (const id of playIds) {
@@ -266,6 +277,7 @@ function startAnim(fromStart = false) {
                 }
             }
             pauseAnim();
+            updateProgress(animRange.end);
             return;
         }
 
@@ -294,17 +306,47 @@ function startAnim(fromStart = false) {
 function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
-    // 球体保持在当前位置不消失
 }
 
 function stopAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
     animElapsed = 0;
+    const bar = document.getElementById('animProgress');
+    if (bar) bar.value = 0;
     for (const id in movingSpheres) {
         scene.remove(movingSpheres[id]);
         delete movingSpheres[id];
     }
+}
+
+// ═══════════════════════════ 进度条拖拽 ═══════════════════════════
+const animProgress = document.getElementById('animProgress');
+if (animProgress) {
+    animProgress.addEventListener('input', () => {
+        if (animActive) pauseAnim();
+        const pct = parseFloat(animProgress.value) / 100;
+        const duration = animRange.end - animRange.start;
+        animElapsed = pct * duration;
+        // 立即更新球体位置
+        const ts = animRange.start + animElapsed;
+        for (const id in movingSpheres) {
+            const data = detectionMethods[id];
+            const s = movingSpheres[id];
+            if (!s) continue;
+            const histPts = data?.points, histTs = data?.timestamps;
+            if (histPts?.length && histTs?.length && ts <= histTs[histTs.length-1]) {
+                const pos = lerp(histPts, histTs, ts);
+                if (pos) { s.position.set(pos[0], pos[1], pos[2]); s.visible = true; continue; }
+            }
+            const pred = predictedData[id];
+            if (pred?.prediction?.length && pred?.pred_times?.length && ts <= pred.pred_times[pred.pred_times.length-1]) {
+                const pos = lerp(pred.prediction, pred.pred_times, ts);
+                if (pos) { s.position.set(pos[0], pos[1], pos[2]); s.visible = true; continue; }
+            }
+            s.visible = false;
+        }
+    });
 }
 
 // ═══════════════════════════ 初始化 ═══════════════════════════
