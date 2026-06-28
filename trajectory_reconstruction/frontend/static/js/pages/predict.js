@@ -140,7 +140,7 @@ async function initViewer() {
             hoveredSphere.scale.set(1, 1, 1); hoveredSphere = null;
         }
         if (hits.length) {
-            const obj = hits[0].object, p = hits[0].point;
+            const obj = hits[0].object, p = hits[0].object.position;
             if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
             if (tip) {
                 tip.innerHTML = '📍 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(2);

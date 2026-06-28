@@ -540,7 +540,7 @@ function bindEvents() {
 
         if (hits.length > 0) {
             const obj = hits[0].object;
-            const p = hits[0].point;
+            const p = hits[0].object.position;
 
             // 高亮当前球体（放大 2.5 倍 + 增强发光）
             if (obj !== hoveredSphere) {
