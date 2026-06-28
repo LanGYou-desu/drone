@@ -14,7 +14,18 @@ let movingSpheres = {};
 let animActive = false, animId = null, animSpeed = 1.0;
 let animElapsed = 0;
 let animRange = { start: 0, end: 0 };
+const PREDICT_KEY = 'predictedData';
+
+// 从 sessionStorage 恢复预测数据
 let predictedData = {};
+try {
+    const saved = sessionStorage.getItem(PREDICT_KEY);
+    if (saved) predictedData = JSON.parse(saved);
+} catch {}
+
+function savePredictedData() {
+    try { sessionStorage.setItem(PREDICT_KEY, JSON.stringify(predictedData)); } catch {}
+}
 
 // ═══════════════════════════ 3D 场景 ═══════════════════════════
 
@@ -69,6 +80,39 @@ async function initViewer() {
     });
 
     drawTrails();
+    renderCachedPredictions();
+}
+
+function renderCachedPredictions() {
+    if (!Object.keys(predictedData).length) return;
+    for (const [mid, pred] of Object.entries(predictedData)) {
+        if (!pred.prediction?.length) continue;
+        const color = detectionMethods[mid]?.color || '#ffffff';
+        const pts = pred.prediction.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+        const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.5 })
+        );
+        line.computeLineDistances();
+        scene.add(line);
+        const grp = new THREE.Group();
+        const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, transparent: true, opacity: 0.5 });
+        pred.prediction.forEach(p => {
+            const s = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), mat);
+            s.position.set(p[0], p[1], p[2]);
+            grp.add(s);
+        });
+        scene.add(grp);
+        predLines[mid] = { line, points: grp };
+    }
+    document.getElementById('resultPanel').style.display = 'block';
+    const container = document.getElementById('predictResults');
+    container.innerHTML = Object.entries(predictedData).map(([mid, pred]) => {
+        const color = detectionMethods[mid]?.color || '#fff';
+        return `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
+            <span class="legend-dot" style="background:${color};color:${color};"></span>
+            <strong>${detectionMethods[mid]?.name || mid}</strong> · ${pred.prediction.length}点</div>`;
+    }).join('') || '<p style="color:var(--text-secondary);font-size:0.75rem;">无有效预测结果</p>';
 }
 
 function drawTrails() {
@@ -163,13 +207,14 @@ async function runPrediction() {
                 scene.add(grp);
                 predLines[mid] = { line, points: grp };
 
-                html += `<div style="margin-bottom:6px;padding:8px 12px;background:var(--bg-input);border-radius:var(--radius-md);">
+                html += `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
                     <span class="legend-dot" style="background:${color};color:${color};"></span>
                     <strong>${detectionMethods[mid]?.name || mid}</strong>
-                    — ${pred.prediction.length} 预测点
+                    · ${pred.prediction.length}点
                 </div>`;
             }
             container.innerHTML = html || '<p style="color:var(--text-secondary);">无有效预测结果</p>';
+            savePredictedData();
             toast.success('预测完成，点击 ▶ 播放动画');
         } else {
             toast.error('预测失败: ' + (result.error || ''));
