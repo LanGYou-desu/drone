@@ -70,7 +70,8 @@ python -m trajectory_recognition --headless       # → :5001
 
 ```json
 {
-    "siliconflow": {
+    "ai": {
+        "provider": "siliconflow",
         "api_key": "your-api-key-here",
         "url": "https://api.siliconflow.cn/v1/chat/completions",
         "model": "Qwen/Qwen2.5-7B-Instruct"

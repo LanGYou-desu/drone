@@ -37,7 +37,8 @@ pip install flask pywebview requests
 
 ```json
 {
-    "siliconflow": {
+    "ai": {
+        "provider": "siliconflow",
         "api_key": "你的API密钥",
         "url": "https://api.siliconflow.cn/v1/chat/completions",
         "model": "Qwen/Qwen2.5-7B-Instruct"
