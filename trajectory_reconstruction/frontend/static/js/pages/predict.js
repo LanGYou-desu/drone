@@ -57,8 +57,16 @@ async function initViewer() {
     controls.target.set(4, 2, 4);
     controls.autoRotate = false;
 
+    // 地面
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.55;
+    scene.add(ground);
+
     scene.add(new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e).translateY(-0.5));
-    buildAxes(scene, null);  // 自定义坐标系（无 CSS2D 标签）
+    buildAxes(scene, null);
     scene.add(new THREE.AmbientLight(0x445566, 0.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(8, 12, 6);
@@ -117,9 +125,14 @@ function renderCachedPredictions() {
     }).join('') || '<p style="color:var(--text-secondary);font-size:0.75rem;">无有效预测结果</p>';
 }
 
+// 起点/终点标记
+let startMarkers = {}, endMarkers = {};
+
 function drawTrails() {
     for (const id in lines) { removeObj(lines[id]); }
     for (const id in predLines) { removeObj(predLines[id]); }
+    for (const id in startMarkers) { scene.remove(startMarkers[id]); delete startMarkers[id]; }
+    for (const id in endMarkers) { scene.remove(endMarkers[id]); delete endMarkers[id]; }
     lines = {}; predLines = {};
 
     for (const [id, data] of Object.entries(detectionMethods)) {
@@ -141,6 +154,23 @@ function drawTrails() {
         });
         scene.add(grp);
         lines[id] = { line, points: grp };
+
+        // 起点标记（绿色发光）
+        const startG = new THREE.Group();
+        startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0x30D158, emissive: 0x30D158, emissiveIntensity: 0.8 })));
+        startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshBasicMaterial({ color: 0x30D158, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
+        startG.position.set(data.points[0][0], data.points[0][1], data.points[0][2]);
+        scene.add(startG);
+        startMarkers[id] = startG;
+
+        // 终点标记（红色发光）
+        const endG = new THREE.Group();
+        const last = data.points[data.points.length - 1];
+        endG.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0xFF453A, emissive: 0xFF453A, emissiveIntensity: 0.8 })));
+        endG.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshBasicMaterial({ color: 0xFF453A, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
+        endG.position.set(last[0], last[1], last[2]);
+        scene.add(endG);
+        endMarkers[id] = endG;
     }
 }
 
