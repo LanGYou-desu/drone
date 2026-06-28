@@ -220,13 +220,11 @@ function refreshAll() {
         const pts = data.points;
         const startLab = addLabel('🚀 起点', pts[0], LABEL_CSS);
         const endLab = addLabel('🏁 终点', pts[pts.length-1], LABEL_CSS);
-        const nameLab = addLabel(data.name, pts[Math.floor(pts.length/2)],
-            `color:${data.color};font-size:12px;font-weight:700;background:rgba(0,0,0,0.75);padding:4px 12px;border-radius:14px;backdrop-filter:blur(8px);border:1px solid ${data.color}44;`);
 
-        lines[id] = { trail, spheres, startLab, endLab, nameLab };
+        lines[id] = { trail, spheres, startLab, endLab };
         if (trail) scene.add(trail);
         scene.add(spheres);
-        scene.add(startLab); scene.add(endLab); scene.add(nameLab);
+        scene.add(startLab); scene.add(endLab);
 
         // 预测线
         const pred = predictedTrajectories[id];
@@ -253,7 +251,7 @@ function removeTrail(id) {
     const o = lines[id]; if (!o) return;
     if (o.trail) scene.remove(o.trail);
     scene.remove(o.spheres);
-    scene.remove(o.startLab); scene.remove(o.endLab); scene.remove(o.nameLab);
+    scene.remove(o.startLab); scene.remove(o.endLab);
     delete lines[id];
 }
 
