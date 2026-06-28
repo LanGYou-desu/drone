@@ -212,7 +212,6 @@ function makeGlowSphere(color) {
 
 function startAnim(fromStart = false) {
     if (fromStart) animElapsed = 0;
-    if (Object.keys(predictedData).length === 0) { toast.warning('请先进行预测'); return; }
     if (!THREE) { toast.warning('3D 场景加载中，请稍候'); return; }
 
     calcRange();
