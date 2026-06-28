@@ -1,0 +1,53 @@
+"""
+轨迹重建与分析 — Flask 应用工厂
+
+可独立启动，也可被根目录 main.py 统一加载。
+"""
+import os
+import sys
+
+from flask import Flask
+
+# 确保项目根目录在 sys.path 且为工作目录（支持任意 cwd 启动）
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_MODULE_DIR)
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+os.chdir(_PROJECT_ROOT)
+
+
+def create_app() -> Flask:
+    """创建轨迹重建与分析 Flask 应用"""
+    # 路径均相对于项目根目录
+    app = Flask(
+        __name__,
+        template_folder=os.path.join(_MODULE_DIR, 'frontend', 'pages'),
+        static_folder=os.path.join(_MODULE_DIR, 'frontend', 'static'),
+    )
+
+    # 延迟导入，避免循环依赖
+    from trajectory_reconstruction.core.config.config_manager import ensure_config
+    from trajectory_reconstruction.core.state import init_from_config
+    from trajectory_reconstruction.services.data_service import initialize_data
+    from trajectory_reconstruction.views import register_blueprints, register_error_handlers
+
+    # 确保配置和数据目录
+    ensure_config()
+    data_root = os.path.join(_PROJECT_ROOT, 'data')
+    os.makedirs(os.path.join(data_root, 'fact'), exist_ok=True)
+    os.makedirs(os.path.join(data_root, 'predict'), exist_ok=True)
+    os.makedirs(os.path.join(data_root, 'backup'), exist_ok=True)
+
+    # 清理旧版备份文件
+    from trajectory_reconstruction.services.backup_service import migrate_legacy
+    migrate_legacy()
+
+    # 初始化共享状态
+    init_from_config()
+    initialize_data()
+
+    # 注册蓝图和错误处理
+    register_blueprints(app)
+    register_error_handlers(app)
+
+    return app

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}数据管理 — 鹰眼长空{% endblock %}
+{% block content %}
+
+<div class="page">
+    <div class="page-header">
+        <h1>💾 数据管理</h1>
+        <p>轨迹数据的上传、备份、恢复与清理</p>
+    </div>
+
+    <div class="grid grid-3" style="margin-bottom:20px;">
+        <!-- 上传 -->
+        <div class="card">
+            <div class="card-header"><h3>📂 上传数据</h3></div>
+            <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
+                支持 .dat 格式（每行: x y z t）
+            </p>
+            <input type="file" id="dataFile" accept=".dat,.txt" style="margin-bottom:8px;">
+            <button class="btn btn-primary" id="uploadBtn">上传为自选平台</button>
+        </div>
+
+        <!-- 备份管理 -->
+        <div class="card">
+            <div class="card-header"><h3>💿 备份管理</h3></div>
+            <button class="btn btn-primary" id="createBackupBtn">📸 立即备份</button>
+            <button class="btn btn-secondary" id="listBackupsBtn" style="margin-top:6px;">📋 查看备份列表</button>
+            <button class="btn btn-primary" id="restoreAllBtn" style="margin-top:6px;">🔄 一键恢复最新</button>
+        </div>
+
+        <!-- 危险操作 -->
+        <div class="card" style="border-color:var(--red);">
+            <div class="card-header"><h3 style="color:var(--red);">⚠️ 危险操作</h3></div>
+            <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
+                清空所有轨迹数据（自动备份到 backup/）
+            </p>
+            <button class="btn btn-danger" id="clearAllBtn">🗑️ 清理全部数据</button>
+            <button class="btn btn-secondary" id="refreshBtn" style="margin-top:6px;">🔄 重置为默认数据</button>
+        </div>
+    </div>
+
+    <!-- 数据概览表格 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>📊 当前数据概览</h3>
+            <span id="dataTimestamp" style="font-size:0.75rem;color:var(--text-secondary);">更新于 --:--:--</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>平台</th><th>颜色</th><th>状态</th><th>轨迹点数</th>
+                        <th>时间范围</th><th>起点</th><th>终点</th>
+                    </tr>
+                </thead>
+                <tbody id="dataTableBody">
+                    {% for id, m in methods_data.items() %}
+                    <tr>
+                        <td><span class="legend-dot" style="background:{{ m.color }};color:{{ m.color }};"></span> {{ m.name }}</td>
+                        <td>{{ m.color }}</td>
+                        <td><span class="badge {% if m.visible %}badge-green{% else %}badge-red{% endif %}">{% if m.visible %}显示{% else %}隐藏{% endif %}</span></td>
+                        <td>{{ m.points|length if m.points else 0 }}</td>
+                        <td>
+                            {% if m.timestamps and m.timestamps|length > 0 %}
+                            {{ "%.1f"|format(m.timestamps[0]) }} ~ {{ "%.1f"|format(m.timestamps[-1]) }}s
+                            {% else %}--{% endif %}
+                        </td>
+                        <td>{% if m.points and m.points|length > 0 %}({{ "%.1f"|format(m.points[0][0]) }}, {{ "%.1f"|format(m.points[0][1]) }}, {{ "%.1f"|format(m.points[0][2]) }}){% else %}--{% endif %}</td>
+                        <td>{% if m.points and m.points|length > 0 %}({{ "%.1f"|format(m.points[-1][0]) }}, {{ "%.1f"|format(m.points[-1][1]) }}, {{ "%.1f"|format(m.points[-1][2]) }}){% else %}--{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 备份列表模态框 -->
+    <div id="backupModal" class="modal-overlay" style="display:none;">
+        <div class="modal">
+            <h3>备份文件列表</h3>
+            <div class="modal-body" id="backupList"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeModalBtn">关闭</button>
+                <button class="btn btn-primary" id="restoreSelectedBtn">恢复选中</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window._PAGE_DATA_ = {
+        methodsData: {{ methods_data | tojson }}
+    };
+</script>
+<script type="module" src="/static/js/pages/data.js"></script>
+{% endblock %}

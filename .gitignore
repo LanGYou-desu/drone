@@ -11,10 +11,9 @@ venv/
 .vscode/
 *.swp
 
-# Data (runtime)
+# Data (runtime — generated outputs, not tracked)
 data/backup/
 data/predict/
-*.dat
 
 # OS
 .DS_Store
@@ -23,7 +22,7 @@ Thumbs.db
 # Config (real keys, not tracked)
 config.json
 
-# Reports
+# Reports (generated, not tracked)
 reports/
 
 # PDF

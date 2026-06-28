@@ -1,71 +1,67 @@
 """
-鹰眼长空 — 无人机智能监测系统 主入口
-启动 Flask 后端 + Windows 原生窗口（pywebview）
+鹰眼长空 — 无人机智能监测系统 统一入口
+
+用法:
+  python main.py               # 轨迹重建与分析（桌面窗口）
+  python main.py --headless    # 轨迹重建与分析（纯 HTTP）
+  python main.py recon         # 轨迹重建与分析
+  python main.py recog         # 轨迹识别
+  python main.py all           # 同时启动两个模块
+
+也可独立启动各模块:
+  python -m trajectory_reconstruction --headless   # → :5000
+  python -m trajectory_recognition                  # → :5001
 """
-import os
 import sys
 import threading
 import time
 
-from flask import Flask
 
-from modules.config.config_manager import ensure_config
-from modules.state import init_from_config
-from modules.services.data_service import initialize_data
-from modules.routes import register_blueprints, register_error_handlers
+def start_recon(headless=False):
+    """启动轨迹重建与分析模块"""
+    from trajectory_reconstruction.app import create_app
+    app = create_app()
 
-
-def create_app() -> Flask:
-    """Flask 应用工厂"""
-    app = Flask(__name__, template_folder='web/pages', static_folder='web/static')
-
-    # 确保配置和数据目录
-    ensure_config()
-    os.makedirs('data/fact', exist_ok=True)
-    os.makedirs('data/predict', exist_ok=True)
-    os.makedirs('data/backup', exist_ok=True)
-
-    # 初始化共享状态
-    init_from_config()
-    initialize_data()
-
-    # 注册蓝图和错误处理
-    register_blueprints(app)
-    register_error_handlers(app)
-
-    return app
-
-
-def run_flask(app: Flask, host: str = '127.0.0.1', port: int = 5000):
-    """后台线程中运行 Flask"""
-    app.run(host=host, port=port, debug=False, use_reloader=False)
-
-
-if __name__ == '__main__':
-    # 创建应用
-    flask_app = create_app()
-
-    # 检查是否需要无窗口模式（命令行参数 --no-window）
-    if '--no-window' in sys.argv:
-        print(f'🚀 服务启动: http://127.0.0.1:5000')
-        run_flask(flask_app)
+    if headless:
+        print('[recon] http://127.0.0.1:5000')
+        app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
     else:
         import webview
 
-        # 后台启动 Flask
-        flask_thread = threading.Thread(
-            target=run_flask, args=(flask_app,), daemon=True
-        )
+        def _run():
+            app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+
+        flask_thread = threading.Thread(target=_run, daemon=True)
         flask_thread.start()
         time.sleep(2)
 
-        # 创建桌面窗口
         webview.create_window(
-            title='鹰眼长空 — 低空无人机智能监测系统',
+            title='鹰眼长空 — 轨迹重建与分析',
             url='http://127.0.0.1:5000',
-            width=1280,
-            height=800,
-            resizable=True,
-            fullscreen=False,
+            width=1280, height=800,
+            resizable=True, fullscreen=False,
         )
         webview.start()
+
+
+def start_recog():
+    """启动轨迹识别模块"""
+    from trajectory_recognition.app import create_app
+    app = create_app()
+    print('[recog] http://127.0.0.1:5001')
+    app.run(host='127.0.0.1', port=5001, debug=False, use_reloader=False)
+
+
+if __name__ == '__main__':
+    args = set(sys.argv[1:])
+    headless = '--headless' in args
+
+    if 'all' in args:
+        threading.Thread(target=start_recog, daemon=True).start()
+        time.sleep(1)
+        start_recon(headless=headless)
+    elif 'recog' in args:
+        start_recog()
+    else:
+        # 默认或无参数 / recon → 轨迹重建与分析
+        start_recon(headless=headless)
