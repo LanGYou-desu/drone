@@ -113,7 +113,7 @@ function updateBackupFooter() {
     const btn = document.getElementById('deleteSelectedBtn');
     const restoreBtn = document.getElementById('restoreSelectedBtn');
     if (btn) btn.disabled = selectedBackups.size === 0;
-    if (restoreBtn) restoreBtn.disabled = selectedBackups.size === 0;
+    if (restoreBtn) restoreBtn.disabled = selectedBackups.size !== 1;
 }
 
 // 全选
