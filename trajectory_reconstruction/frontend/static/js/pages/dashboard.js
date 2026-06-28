@@ -347,6 +347,7 @@ function animStep(ts) {
             if (movingSpheres[id]) movingSpheres[id].visible = false;
         }
     }
+    updateStats(ts);
 }
 
 function ensureMovingSphere(id, color, size) {
@@ -437,8 +438,7 @@ function stopAnim() {
 // UI 更新
 // ═══════════════════════════════════════════
 
-function updateStats() {
-    // 更新各平台实时数据
+function updateStats(ts) {
     for (const [id, data] of Object.entries(detectionMethods)) {
         const container = document.getElementById('stat-' + id);
         if (!container) continue;
@@ -446,15 +446,20 @@ function updateStats() {
         if (!data.visible) continue;
 
         const pts = data.points || [];
-        const ts = data.timestamps || [];
-        const l = pts.length;
-        if (l < 2) continue;
+        const tsArr = data.timestamps || [];
+        if (pts.length < 2) continue;
 
-        const dt = ts[l-1] - ts[l-2] || 0.5;
-        const spd = Math.sqrt((pts[l-1][0]-pts[l-2][0])**2 + (pts[l-1][2]-pts[l-2][2])**2) / dt;
-        const ht = pts[l-1][1];
-        // 用最近两点估算方向角度
-        const angle = Math.atan2(pts[l-1][2]-pts[l-2][2], pts[l-1][0]-pts[l-2][0]) * 180 / Math.PI;
+        let pos, prevPos;
+        if (ts !== undefined && tsArr.length) {
+            pos = lerp(pts, tsArr, Math.min(ts, tsArr[tsArr.length - 1]));
+            prevPos = lerp(pts, tsArr, Math.max(tsArr[0], ts - 0.1));
+        }
+        pos = pos || pts[pts.length - 1];
+        prevPos = prevPos || (pts.length >= 2 ? pts[pts.length - 2] : pos);
+
+        const spd = Math.sqrt((pos[0] - prevPos[0]) ** 2 + (pos[2] - prevPos[2]) ** 2) / 0.1;
+        const ht = pos[1];
+        const angle = Math.atan2(pos[2] - prevPos[2], pos[0] - prevPos[0]) * 180 / Math.PI;
 
         const bolds = container.querySelectorAll('b');
         if (bolds.length >= 3) {
@@ -492,6 +497,7 @@ function bindEvents() {
             animStep(ts);
             lastAnimTimestamp = ts;
             animElapsed = ts - timeRange.start;
+            updateStats(ts);
             const cur = document.getElementById('timeCurrent');
             if (cur) cur.textContent = ts.toFixed(1) + 's';
         }
