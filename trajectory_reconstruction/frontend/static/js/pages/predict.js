@@ -372,6 +372,7 @@ if (animProgress) {
         const duration = animRange.end - animRange.start;
         animElapsed = pct * duration;
         const ts = animRange.start + animElapsed;
+        document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
 
         // 首次拖拽时创建球体
         if (Object.keys(movingSpheres).length === 0) {
