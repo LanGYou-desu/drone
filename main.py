@@ -2,11 +2,10 @@
 鹰眼长空 — 无人机智能监测系统 统一入口
 
 用法:
-  python main.py               # 轨迹重建与分析（桌面窗口）
-  python main.py --headless    # 轨迹重建与分析（纯 HTTP）
-  python main.py recon         # 轨迹重建与分析
-  python main.py recog         # 轨迹识别
-  python main.py all           # 同时启动两个模块
+  python main.py               # 默认同时启动两个模块
+  python main.py recon         # 仅轨迹重建与分析
+  python main.py recog         # 仅轨迹识别
+  python main.py --headless    # 纯 HTTP 模式
 
 也可独立启动各模块:
   python -m trajectory_reconstruction --headless   # → :5000
@@ -57,12 +56,12 @@ if __name__ == '__main__':
     args = set(sys.argv[1:])
     headless = '--headless' in args
 
-    if 'all' in args:
+    if 'recog' in args and 'recon' not in args:
+        start_recog()
+    elif 'recon' in args:
+        start_recon(headless=headless)
+    else:
+        # 默认同时启动两个模块
         threading.Thread(target=start_recog, daemon=True).start()
         time.sleep(1)
-        start_recon(headless=headless)
-    elif 'recog' in args:
-        start_recog()
-    else:
-        # 默认或无参数 / recon → 轨迹重建与分析
         start_recon(headless=headless)
