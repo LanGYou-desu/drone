@@ -144,14 +144,7 @@ async function runPrediction() {
                 predictedData[mid] = pred;
 
                 const color = detectionMethods[mid]?.color || '#ffffff';
-                // 预测虚线：从原始轨迹最后一点连到预测点，消除断连
-                const pts = [];
-                const histPts = detectionMethods[mid]?.points;
-                if (histPts?.length) {
-                    const last = histPts[histPts.length - 1];
-                    pts.push(new THREE.Vector3(last[0], last[1], last[2]));
-                }
-                pred.prediction.forEach(p => pts.push(new THREE.Vector3(p[0], p[1], p[2])));
+                const pts = pred.prediction.map(p => new THREE.Vector3(p[0], p[1], p[2]));
                 const line = new THREE.Line(
                     new THREE.BufferGeometry().setFromPoints(pts),
                     new THREE.LineDashedMaterial({ color, dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.5 })

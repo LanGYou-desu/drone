@@ -306,10 +306,7 @@ function refreshAll() {
 }
 
 function addPredLine(id, pred, color, lastHistPt) {
-    // 用原始轨迹最后一点连接预测线，消除断连
-    const allPts = [];
-    if (lastHistPt) allPts.push(new THREE.Vector3(lastHistPt[0], lastHistPt[1], lastHistPt[2]));
-    pred.points.forEach(p => allPts.push(new THREE.Vector3(p[0], p[1], p[2])));
+    const allPts = pred.points.map(p => new THREE.Vector3(p[0], p[1], p[2]));
     const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(allPts),
         new THREE.LineDashedMaterial({ color, dashSize: 0.35, gapSize: 0.2, transparent: true, opacity: 0.55 })

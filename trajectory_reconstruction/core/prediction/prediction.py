@@ -54,6 +54,10 @@ def generate_prediction(
     pred_points: list[list[float]] = []
     pred_times: list[float] = []
 
+    # 第一个点是历史最后点，确保动画平滑过渡不断连
+    pred_points.append(list(last))
+    pred_times.append(last_t)
+
     for i in range(1, num_points + 1):
         t = last_t + i * time_step
         pred_points.append([
