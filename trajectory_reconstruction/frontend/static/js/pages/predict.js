@@ -106,6 +106,39 @@ async function initViewer() {
         labelRenderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // 鼠标悬停坐标拾取
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    raycaster.params.Points.threshold = 0.3;
+    let hoveredSphere = null;
+    renderer.domElement.addEventListener('mousemove', e => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const targets = [];
+        for (const id in lines) {
+            if (lines[id]?.points) {
+                lines[id].points.children.forEach(s => {
+                    if (s.geometry?.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) targets.push(s);
+                });
+            }
+        }
+        const hits = raycaster.intersectObjects(targets);
+        const tip = document.getElementById('coordTooltip');
+        if (hoveredSphere && (!hits.length || hits[0].object !== hoveredSphere)) {
+            hoveredSphere.scale.set(1, 1, 1); hoveredSphere = null;
+        }
+        if (hits.length) {
+            const obj = hits[0].object, p = hits[0].point;
+            if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
+            if (tip) {
+                tip.innerHTML = '📍 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(2);
+                tip.style.display = 'block'; tip.style.left = (e.clientX + 16) + 'px'; tip.style.top = (e.clientY - 28) + 'px';
+            }
+        } else { if (tip) tip.style.display = 'none'; }
+    });
+
     drawTrails();
     renderCachedPredictions();
     calcRange();

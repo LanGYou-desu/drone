@@ -4,6 +4,7 @@
 
 <!-- 全屏 3D 视图 -->
 <div class="viewer-full" id="predictViewer"></div>
+<div class="tooltip" id="coordTooltip" style="display:none;"></div>
 
 <!-- 左上角：预测参数 -->
 <div class="overlay-panel" style="top:72px;left:20px;min-width:220px;">
@@ -88,5 +89,5 @@
         predSettings: {{ pred_settings | tojson }}
     };
 </script>
-<script type="module" src="/static/js/pages/predict.js?v=6"></script>
+<script type="module" src="/static/js/pages/predict.js?v=7"></script>
 {% endblock %}
