@@ -1,7 +1,6 @@
 /* ============================================================
    鹰眼长空 — 全局样式表
    深色 Apple Human Interface 风格
-   特征：深色背景、毛玻璃、大圆角、SF 字体、轻阴影、系统蓝
    ============================================================ */
 
 /* ---------- 设计令牌 ---------- */
@@ -241,32 +240,41 @@ a:hover { color: var(--blue-light); }
     color: white;
     box-shadow: 0 2px 8px rgba(10,132,255,0.3);
 }
-.btn-primary:hover { background: var(--blue-light); box-shadow: 0 4px 12px rgba(10,132,255,0.4); }
-.btn-primary:active { background: var(--blue-dark); transform: scale(0.975); }
+.btn-primary:hover { background: var(--blue-light); box-shadow: 0 4px 14px rgba(10,132,255,0.45); transform: translateY(-1px); }
+.btn-primary:active { background: var(--blue-dark); transform: scale(0.97); }
 
 .btn-secondary {
     background: var(--bg-input);
     color: var(--text-primary);
     border: 1px solid var(--separator-opaque);
 }
-.btn-secondary:hover { background: var(--gray-700); }
+.btn-secondary:hover { background: var(--gray-700); border-color: var(--gray-600); }
+.btn-secondary:active { background: var(--gray-600); transform: scale(0.975); }
 
 .btn-danger { background: var(--red); color: white; }
-.btn-danger:hover { background: #FF5A52; }
+.btn-danger:hover { background: #FF5A52; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,69,58,0.35); }
+.btn-danger:active { background: #D93A32; transform: scale(0.97); }
 
 .btn-success { background: var(--green); color: var(--text-inverse); }
-.btn-success:hover { background: #40E068; }
+.btn-success:hover { background: #40E068; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(48,209,88,0.3); }
+.btn-success:active { background: #28B848; transform: scale(0.97); }
 
 .btn-ghost {
     background: transparent;
     color: var(--blue);
 }
-.btn-ghost:hover { background: rgba(10,132,255,0.08); }
+.btn-ghost:hover { background: rgba(10,132,255,0.1); }
+.btn-ghost:active { background: rgba(10,132,255,0.18); transform: scale(0.975); }
+
+.btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
 
 .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
 .btn-lg { padding: 12px 28px; font-size: 1rem; font-weight: 600; }
 .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 50%; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; filter: grayscale(0.3); }
 
 .btn-group {
     display: flex;
@@ -460,7 +468,7 @@ tbody tr:hover { background: rgba(255,255,255,0.03); }
     pointer-events: none;
     opacity: 0;
     transform: translateY(8px) scale(0.96);
-    transition: all var(--spring);
+    transition: opacity var(--spring), transform var(--spring);
     box-shadow: var(--shadow-lg);
     backdrop-filter: var(--blur);
     -webkit-backdrop-filter: var(--blur);
@@ -540,10 +548,12 @@ tbody tr:hover { background: rgba(255,255,255,0.03); }
     width: 100%;
     height: 360px;
     background: var(--bg-card);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     border: 1px solid var(--separator-opaque);
     overflow: hidden;
+    transition: border-color var(--normal), box-shadow var(--normal);
 }
+.chart-box:hover { border-color: rgba(255,255,255,0.08); box-shadow: var(--shadow-md); }
 
 /* ============================================================
    AI 对话
@@ -638,7 +648,10 @@ tbody tr:hover { background: rgba(255,255,255,0.03); }
     padding: 6px 10px;
     margin: 0 -6px;
     border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--fast);
 }
+.overlay-panel .list-item:hover { background: rgba(255,255,255,0.06); }
 .overlay-panel .list-item-title {
     font-weight: 500;
 }
@@ -650,6 +663,41 @@ tbody tr:hover { background: rgba(255,255,255,0.03); }
     border-radius: 50%;
     margin-right: 6px;
     box-shadow: 0 0 6px currentColor;
+}
+
+/* ============================================================
+   复选框
+   ============================================================ */
+input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px; height: 18px;
+    border: 2px solid var(--gray-500);
+    border-radius: 5px;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--fast);
+    flex-shrink: 0;
+}
+input[type="checkbox"]:hover { border-color: var(--blue); }
+input[type="checkbox"]:checked {
+    background: var(--blue);
+    border-color: var(--blue);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4l2.5 2.5L9 1' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: 10px 8px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* ============================================================
+   减少动画（无障碍）
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 /* ============================================================
