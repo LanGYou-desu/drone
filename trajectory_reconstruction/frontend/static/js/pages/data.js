@@ -78,12 +78,11 @@ async function loadBackupList() {
                 el.className = 'backup-item';
                 el.innerHTML = `<div class="backup-item-name">${b.method}${labelTag}${pts}</div><div class="backup-item-date">${b.timestamp}</div>`;
 
-                // 删除按钮
+                // 删除按钮 — 跟在数据后面
                 const delBtn = document.createElement('button');
-                delBtn.className = 'btn btn-danger btn-sm';
-                delBtn.textContent = '✕';
-                delBtn.title = '删除此备份';
-                delBtn.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);padding:2px 6px;font-size:0.7rem;';
+                delBtn.className = 'btn btn-danger';
+                delBtn.textContent = '删除';
+                delBtn.style.cssText = 'margin-top:6px;padding:3px 10px;font-size:0.75rem;';
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (!confirm(`确认删除备份？\n${b.timestamp}`)) return;
