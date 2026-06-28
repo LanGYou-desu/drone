@@ -111,7 +111,7 @@ function renderCachedPredictions() {
         const color = detectionMethods[mid]?.color || '#fff';
         return `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
             <span class="legend-dot" style="background:${color};color:${color};"></span>
-            <strong>${detectionMethods[mid]?.name || mid}</strong> · ${pred.prediction.length}点</div>`;
+            <strong>${detectionMethods[mid]?.name || mid}</strong> · ${pred.prediction.length - 1}点</div>`;
     }).join('') || '<p style="color:var(--text-secondary);font-size:0.75rem;">无有效预测结果</p>';
 }
 
@@ -210,7 +210,7 @@ async function runPrediction() {
                 html += `<div style="margin-bottom:4px;padding:5px 10px;background:var(--bg-input);border-radius:var(--radius-md);font-size:0.75rem;">
                     <span class="legend-dot" style="background:${color};color:${color};"></span>
                     <strong>${detectionMethods[mid]?.name || mid}</strong>
-                    · ${pred.prediction.length}点
+                    · ${pred.prediction.length - 1}点
                 </div>`;
             }
             container.innerHTML = html || '<p style="color:var(--text-secondary);">无有效预测结果</p>';
