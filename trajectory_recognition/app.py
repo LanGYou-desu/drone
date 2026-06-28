@@ -47,8 +47,4 @@ def create_app() -> Flask:
             'classifier': 'pending',
         })
 
-    # ---- TODO: 注册识别蓝图 ----
-    # from trajectory_recognition.routes import register_recognition_routes
-    # register_recognition_routes(app)
-
     return app
