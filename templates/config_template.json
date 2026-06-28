@@ -1,9 +1,9 @@
 {
     "ai": {
-        "provider": "siliconflow",
+        "provider": "your-provider-here",
         "api_key": "your-api-key-here",
-        "url": "https://api.siliconflow.cn/v1/chat/completions",
-        "model": "Qwen/Qwen2.5-7B-Instruct"
+        "url": "your-api-url-here",
+        "model": "your-model-here"
     },
     "detection_methods": {
         "visible": {
