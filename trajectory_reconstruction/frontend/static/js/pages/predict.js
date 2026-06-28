@@ -310,7 +310,7 @@ function startAnim(fromStart = false) {
         if (progressBar) progressBar.value = Math.min(100, Math.max(0, pct));
         document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
         // 更新轨迹信息
-        updateTrajectoryInfo(ts);
+        updateStats(ts);
     };
 
     const step = now => {
@@ -373,46 +373,47 @@ function stopAnim() {
     }
 }
 
-// ═══════════════════════════ 轨迹信息 ═══════════════════════════
+// ═══════════════════════════ 平台状态更新 ═══════════════════════════
 
-function updateTrajectoryInfo(ts) {
-    const lines = [];
+function updateStats(ts) {
     for (const [id, data] of Object.entries(detectionMethods)) {
-        if (!data.visible || !data.points?.length) continue;
-        const histTs = data.timestamps;
-        let pos;
-        if (histTs?.length && ts <= histTs[histTs.length-1]) {
-            pos = lerp(data.points, histTs, ts);
-        } else {
-            const pred = predictedData[id];
-            if (pred?.prediction?.length && pred?.pred_times?.length && ts <= pred.pred_times[pred.pred_times.length-1]) {
-                pos = lerp(pred.prediction, pred.pred_times, ts);
-            }
+        const container = document.getElementById('stat-' + id);
+        if (!container) continue;
+        container.style.display = data.visible ? '' : 'none';
+        if (!data.visible) continue;
+
+        const histPts = data.points || [];
+        const histTs = data.timestamps || [];
+        const pred = predictedData[id];
+        const predPts = pred?.prediction || [];
+        const predTs = pred?.pred_times || [];
+
+        // 合并历史+预测数据用于插值
+        let allPts = [...histPts], allTs = [...histTs];
+        if (predPts.length && predTs.length) {
+            // 跳过预测第一个点（=历史最后点，避免重复）
+            allPts = [...histPts, ...predPts.slice(1)];
+            allTs = [...histTs, ...predTs.slice(1)];
         }
-        if (pos) {
-            const speed = calcSpeed(data.points, histTs, ts);
-            lines.push(`<div style="margin-bottom:4px;">
-                <span class="legend-dot" style="background:${data.color};color:${data.color};"></span>
-                <strong>${data.name}</strong>
-                <div style="padding-left:14px;font-size:0.7rem;">
-                    x:${pos[0].toFixed(1)} y:${pos[1].toFixed(1)} z:${pos[2].toFixed(1)}<br>
-                    速度: ${speed} m/s
-                </div>
-            </div>`);
+        if (allPts.length < 2) continue;
+
+        const pos = lerp(allPts, allTs, Math.min(ts, allTs[allTs.length - 1]));
+        const prevT = Math.max(allTs[0], ts - 0.1);
+        const prevPos = lerp(allPts, allTs, prevT);
+        if (!pos || !prevPos) continue;
+
+        const dt = 0.1;
+        const spd = Math.sqrt((pos[0] - prevPos[0]) ** 2 + (pos[2] - prevPos[2]) ** 2) / dt;
+        const ht = pos[1];
+        const angle = Math.atan2(pos[2] - prevPos[2], pos[0] - prevPos[0]) * 180 / Math.PI;
+
+        const bolds = container.querySelectorAll('b');
+        if (bolds.length >= 3) {
+            bolds[0].textContent = spd.toFixed(1) + ' m/s';
+            bolds[1].textContent = ht.toFixed(1) + ' m';
+            bolds[2].textContent = angle.toFixed(0) + '°';
         }
     }
-    document.getElementById('trajectoryInfo').innerHTML = lines.join('') || '等待播放...';
-}
-
-function calcSpeed(pts, times, t) {
-    if (!pts || pts.length < 2 || !times || times.length < 2) return '--';
-    let i = 0;
-    while (i < times.length - 1 && times[i + 1] < t) i++;
-    if (i >= times.length - 1) i = times.length - 2;
-    const dt = times[i + 1] - times[i];
-    if (dt <= 0) return '--';
-    const dx = pts[i + 1][0] - pts[i][0], dz = pts[i + 1][2] - pts[i][2];
-    return (Math.sqrt(dx * dx + dz * dz) / dt).toFixed(1);
 }
 
 // ═══════════════════════════ 进度条拖拽 ═══════════════════════════
@@ -426,7 +427,7 @@ if (animProgress) {
         animElapsed = pct * duration;
         const ts = animRange.start + animElapsed;
         document.getElementById('animTimeLabel').textContent = ts.toFixed(1) + 's';
-        updateTrajectoryInfo(ts);
+        updateStats(ts);
 
         // 首次拖拽时创建球体
         if (Object.keys(movingSpheres).length === 0) {
