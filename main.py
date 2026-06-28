@@ -10,7 +10,8 @@
 
 也可独立启动各模块:
   python -m trajectory_reconstruction --headless   # → :5000
-  python -m trajectory_recognition                  # → :5001
+  python -m trajectory_recognition --headless       # → :5001
+  python -m trajectory_recognition                  # 桌面窗口
 """
 import sys
 import threading
