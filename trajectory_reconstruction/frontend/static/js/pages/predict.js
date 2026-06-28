@@ -50,7 +50,10 @@ async function initViewer() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
@@ -79,9 +82,10 @@ async function initViewer() {
     scene.add(grid);
 
     buildAxes(scene, CSS2DObject);
-    scene.add(new THREE.AmbientLight(0x445566, 0.8));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-    sun.position.set(8, 12, 6);
+    scene.add(new THREE.AmbientLight(0x334466, 0.8));
+    scene.add(new THREE.HemisphereLight(0x8899cc, 0x223344, 0.5));
+    const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+    sun.position.set(12, 20, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100; sun.shadow.camera.left = -30; sun.shadow.camera.right = 30; sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30; sun.shadow.bias = -0.0001;
     scene.add(sun);
     const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
     fill.position.set(-4, 2, -4);
