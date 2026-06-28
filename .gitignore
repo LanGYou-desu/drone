@@ -33,3 +33,4 @@ reports/
 # Env
 .env
 # config.json is tracked (contains placeholder API key)
+.playwright-mcp/

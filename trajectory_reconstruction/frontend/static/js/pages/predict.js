@@ -52,7 +52,9 @@ async function initViewer() {
     const sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(8, 12, 6);
     scene.add(sun);
-    scene.add(new THREE.DirectionalLight(0x4466aa, 0.3).position.set(-4, 2, -4));
+    const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
+    fill.position.set(-4, 2, -4);
+    scene.add(fill);
 
     function loop() {
         requestAnimationFrame(loop);

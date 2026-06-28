@@ -105,7 +105,9 @@ function buildLights() {
     sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
     sun.shadow.bias = -0.0001;
     scene.add(sun);
-    scene.add(new THREE.DirectionalLight(0x4466aa, 0.3).position.set(-5, 3, -5));
+    const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
+    fill.position.set(-5, 3, -5);
+    scene.add(fill);
 }
 
 function buildGround() {
@@ -381,14 +383,6 @@ function updateAllTrails() {
 // ═══════════════════════════════════════════
 // 时间轴动画
 // ═══════════════════════════════════════════
-
-    if (!pts?.length || !times?.length) return null;
-    if (t <= times[0]) return [...pts[0]];
-    if (t >= times[times.length-1]) return [...pts[times.length-1]];
-    let i = 0;
-    while (i < times.length-1 && times[i+1] < t) i++;
-    const r = (t - times[i]) / (times[i+1] - times[i]);
-    return [pts[i][0]+(pts[i+1][0]-pts[i][0])*r, pts[i][1]+(pts[i+1][1]-pts[i][1])*r, pts[i][2]+(pts[i+1][2]-pts[i][2])*r];
 
 function calcRange() {
     let min = Infinity, max = -Infinity;
