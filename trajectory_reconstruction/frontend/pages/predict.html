@@ -49,16 +49,14 @@
     <div class="card">
         <div class="card-header">
             <h3>预测轨迹预览</h3>
-            <div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:16px;">
-                <span id="animTimeLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);white-space:nowrap;">0.0s</span>
-                <input type="range" id="animProgress" min="0" max="100" value="0" step="0.1" style="flex:1;max-width:280px;">
-                <span id="animEndLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);white-space:nowrap;">0.0s</span>
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-sm btn-secondary" id="playBtn">▶ 播放</button>
-                <button class="btn btn-sm btn-secondary" id="stopBtn">⏹ 停止</button>
-                <select id="speedSelect" style="width:auto;margin:0;">
-                    <option value="0.5">0.5×</option><option value="1" selected>1×</option>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span id="animTimeLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
+                <input type="range" id="animProgress" min="0" max="100" value="0" step="0.1" style="width:180px;">
+                <span id="animEndLabel" style="font-size:0.75rem;color:var(--text-secondary);font-family:var(--mono);">0.0s</span>
+                <button class="btn btn-sm btn-primary" id="playBtn">▶</button>
+                <button class="btn btn-sm btn-secondary" id="stopBtn">⏹</button>
+                <select id="speedSelect" style="width:58px;margin:0;padding:4px 6px;font-size:0.75rem;">
+                    <option value="0.5">½</option><option value="1" selected>1×</option>
                     <option value="2">2×</option><option value="4">4×</option>
                 </select>
             </div>
