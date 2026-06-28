@@ -6,11 +6,9 @@
 """
 from trajectory_reconstruction.core.config.config_manager import ensure_config
 
-# 加载配置
 _config = ensure_config()
 
-# 检测手段运行时数据: { methodId: { name, color, visible, points, timestamps } }
-# 从 config.json 读取元信息（名称、颜色、可见性），轨迹数据从文件动态加载
+# { methodId: { name, color, visible, points, timestamps } }
 detection_methods: dict[str, dict] = {}
 
 # API 配置（硅基流动）

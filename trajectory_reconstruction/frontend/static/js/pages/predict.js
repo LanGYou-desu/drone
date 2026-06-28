@@ -2,6 +2,7 @@
  * Predict Page — 轨迹预测 + 3D 预览 + 动画播放
  */
 import { toast } from '../common/toast.js';
+import { lerp } from '../common/utils.js';
 
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
@@ -187,17 +188,6 @@ async function runPrediction() {
 
 // ═══════════════════════════ 动画播放（历史+预测全程）══════════════════════════
 
-function lerp(pts, times, t) {
-    if (!pts?.length || !times?.length) return null;
-    if (t <= times[0]) return [...pts[0]];
-    if (t >= times[times.length - 1]) return [...pts[times.length - 1]];
-    let i = 0;
-    while (i < times.length - 1 && times[i + 1] < t) i++;
-    const r = (t - times[i]) / (times[i + 1] - times[i]);
-    return [pts[i][0] + (pts[i+1][0] - pts[i][0]) * r,
-            pts[i][1] + (pts[i+1][1] - pts[i][1]) * r,
-            pts[i][2] + (pts[i+1][2] - pts[i][2]) * r];
-}
 
 function calcRange() {
     let min = Infinity, max = -Infinity;

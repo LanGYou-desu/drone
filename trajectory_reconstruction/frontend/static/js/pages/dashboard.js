@@ -4,6 +4,7 @@
  * 低耦合：仅通过 window._PAGE_DATA_ 获取初始数据，后续通过 API 刷新
  */
 import { toast } from '../common/toast.js';
+import { lerp } from '../common/utils.js';
 
 // ═══════════════════════════════════════════
 // 数据加载（从 HTML 模板注入的 window._PAGE_DATA_）
@@ -381,7 +382,6 @@ function updateAllTrails() {
 // 时间轴动画
 // ═══════════════════════════════════════════
 
-function lerp(pts, times, t) {
     if (!pts?.length || !times?.length) return null;
     if (t <= times[0]) return [...pts[0]];
     if (t >= times[times.length-1]) return [...pts[times.length-1]];
@@ -389,7 +389,6 @@ function lerp(pts, times, t) {
     while (i < times.length-1 && times[i+1] < t) i++;
     const r = (t - times[i]) / (times[i+1] - times[i]);
     return [pts[i][0]+(pts[i+1][0]-pts[i][0])*r, pts[i][1]+(pts[i+1][1]-pts[i][1])*r, pts[i][2]+(pts[i+1][2]-pts[i][2])*r];
-}
 
 function calcRange() {
     let min = Infinity, max = -Infinity;
