@@ -274,7 +274,7 @@ function startAnim(fromStart = false) {
     if (animElapsed >= animRange.end - animRange.start) animElapsed = 0;
 
     animActive = true;
-    document.getElementById('playBtn').textContent = '⏸';
+    document.getElementById('playBtn').innerHTML = '⏸ 暂停';
 
     // 收集参与播放的平台
     const playIds = new Set();
@@ -357,7 +357,7 @@ function startAnim(fromStart = false) {
 function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
-    document.getElementById('playBtn').textContent = '▶';
+    document.getElementById('playBtn').innerHTML = '▶ 播放';
 }
 
 function stopAnim() {
@@ -366,7 +366,7 @@ function stopAnim() {
     animElapsed = 0;
     const bar = document.getElementById('animProgress');
     if (bar) bar.value = 0;
-    document.getElementById('playBtn').textContent = '▶';
+    document.getElementById('playBtn').innerHTML = '▶ 播放';
     for (const id in movingSpheres) {
         scene.remove(movingSpheres[id]);
         delete movingSpheres[id];
@@ -475,7 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 播放/停止
     document.getElementById('playBtn').addEventListener('click', togglePlay);
-    document.getElementById('stopBtn').addEventListener('click', stopAnim);
 
     // 倍速
     document.getElementById('speedSelect').addEventListener('change', e => {

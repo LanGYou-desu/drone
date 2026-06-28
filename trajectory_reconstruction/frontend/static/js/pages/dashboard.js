@@ -364,6 +364,11 @@ function ensurePredSphere(id, color, size) {
     scene.add(g); predictedSpheres[id] = g;
 }
 
+function togglePlay() {
+    if (animActive) { pauseAnim(); return; }
+    startAnim(animElapsed >= timeRange.end - timeRange.start);
+}
+
 function startAnim(fromStart = false) {
     if (fromStart) animElapsed = 0;  // 重播时从头开始
     if (animActive) return;
@@ -372,6 +377,8 @@ function startAnim(fromStart = false) {
     if (animElapsed >= timeRange.end - timeRange.start) animElapsed = 0;  // 已播完则重置
 
     animActive = true;
+    const btn = document.getElementById('playBtn');
+    if (btn) btn.innerHTML = '⏸ 暂停';
     setPredVisible(false);
     const startWall = performance.now();
     const startElapsed = animElapsed;  // 从暂停点开始
@@ -405,7 +412,8 @@ function startAnim(fromStart = false) {
 function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
-    // 不调用 refreshAll，保持球体在当前位置
+    const btn = document.getElementById('playBtn');
+    if (btn) btn.innerHTML = '▶ 播放';
     setPredVisible(false);
     updateStats();
 }
@@ -473,8 +481,7 @@ window.toggleMethod = function(id) {
 // ═══════════════════════════════════════════
 
 function bindEvents() {
-    document.getElementById('playBtn')?.addEventListener('click', () => startAnim(false));
-    document.getElementById('stopBtn')?.addEventListener('click', pauseAnim);
+    document.getElementById('playBtn')?.addEventListener('click', togglePlay);
     document.getElementById('speedSelect')?.addEventListener('change', e => { animSpeed = parseFloat(e.target.value); });
     document.getElementById('timelineSlider')?.addEventListener('input', e => {
         if (animActive) pauseAnim();
