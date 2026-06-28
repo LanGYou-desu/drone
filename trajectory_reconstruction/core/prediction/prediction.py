@@ -10,7 +10,6 @@
   - 转弯后预测精度下降
   - 预测步数越多误差越大
 """
-from typing import Optional
 
 
 def generate_prediction(

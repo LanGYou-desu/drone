@@ -19,15 +19,6 @@ SF_URL: str = _config['siliconflow']['url']
 SF_MODEL: str = _config['siliconflow']['model']
 
 
-def reload_config():
-    """刷新 API 配置（当 config.json 更新后调用）"""
-    global SF_API_KEY, SF_URL, SF_MODEL
-    cfg = ensure_config()
-    SF_API_KEY = cfg['siliconflow']['api_key']
-    SF_URL = cfg['siliconflow']['url']
-    SF_MODEL = cfg['siliconflow']['model']
-
-
 def init_from_config():
     """从配置文件初始化 detection_methods 元信息"""
     cfg = ensure_config()
