@@ -9,9 +9,10 @@
 ```bash
 pip install -r requirements.txt
 
-python main.py               # 桌面窗口
-python main.py recon --headless   # HTTP 服务 → :5000
-python main.py recog         # 轨迹识别 → :5001
+python main.py               # 默认同时启动两个模块（桌面窗口）
+python main.py --headless    # 纯 HTTP 模式
+python main.py recon         # 仅重建分析 → :5000
+python main.py recog         # 仅轨迹识别 → :5001
 ```
 
 编辑 `config.json` 填入硅基流动 API Key 后即可使用 AI 策略功能。

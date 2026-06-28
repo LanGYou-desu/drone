@@ -42,19 +42,13 @@ python main.py --headless
 # → 浏览器访问 http://127.0.0.1:5000
 ```
 
-### 模块单独启动
+### 启动方式
 
 ```bash
-# 轨迹重建与分析（默认）
-python main.py recon          # 桌面窗口
-python main.py recon --headless   # 纯 HTTP → :5000
-
-# 轨迹识别（桌面窗口 / 纯 HTTP）
-python main.py recog               # 桌面窗口
-python main.py recog --headless    # → :5001
-
-# 同时启动两个模块
-python main.py all --headless
+python main.py               # 默认同时启动两个模块（桌面窗口）
+python main.py --headless    # 纯 HTTP 模式
+python main.py recon         # 仅重建分析 → :5000
+python main.py recog         # 仅轨迹识别 → :5001
 ```
 
 ### 独立模块入口
