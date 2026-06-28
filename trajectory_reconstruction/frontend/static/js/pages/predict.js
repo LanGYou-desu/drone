@@ -125,14 +125,13 @@ function renderCachedPredictions() {
     }).join('') || '<p style="color:var(--text-secondary);font-size:0.75rem;">无有效预测结果</p>';
 }
 
-// 起点/终点标记
-let startMarkers = {}, endMarkers = {};
+// 起点标记
+let startMarkers = {};
 
 function drawTrails() {
     for (const id in lines) { removeObj(lines[id]); }
     for (const id in predLines) { removeObj(predLines[id]); }
     for (const id in startMarkers) { scene.remove(startMarkers[id]); delete startMarkers[id]; }
-    for (const id in endMarkers) { scene.remove(endMarkers[id]); delete endMarkers[id]; }
     lines = {}; predLines = {};
 
     for (const [id, data] of Object.entries(detectionMethods)) {
@@ -155,22 +154,13 @@ function drawTrails() {
         scene.add(grp);
         lines[id] = { line, points: grp };
 
-        // 起点标记（绿色发光）
+        // 起点标记
         const startG = new THREE.Group();
         startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0x30D158, emissive: 0x30D158, emissiveIntensity: 0.8 })));
         startG.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshBasicMaterial({ color: 0x30D158, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
         startG.position.set(data.points[0][0], data.points[0][1], data.points[0][2]);
         scene.add(startG);
         startMarkers[id] = startG;
-
-        // 终点标记（红色发光）
-        const endG = new THREE.Group();
-        const last = data.points[data.points.length - 1];
-        endG.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0xFF453A, emissive: 0xFF453A, emissiveIntensity: 0.8 })));
-        endG.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), new THREE.MeshBasicMaterial({ color: 0xFF453A, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })));
-        endG.position.set(last[0], last[1], last[2]);
-        scene.add(endG);
-        endMarkers[id] = endG;
     }
 }
 
