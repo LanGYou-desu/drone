@@ -217,6 +217,7 @@ async function runPrediction() {
             }
             container.innerHTML = html || '<p style="color:var(--text-secondary);">无有效预测结果</p>';
             savePredictedData();
+            calcRange();  // 预测完成后立即更新时间范围
             toast.success('预测完成，点击 ▶ 播放动画');
         } else {
             toast.error('预测失败: ' + (result.error || ''));
