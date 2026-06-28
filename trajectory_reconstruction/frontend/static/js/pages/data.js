@@ -93,35 +93,15 @@ async function loadBackupList() {
                 info.style.cssText = 'flex:1;min-width:0;';
                 info.innerHTML = `<div class="backup-item-name">${b.method} · ${pts}</div><div class="backup-item-date">${b.timestamp} &nbsp;<span style="font-size:0.7rem;color:var(--text-secondary);">[${labelTag}]</span></div>`;
 
-                // 删除按钮
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn btn-danger';
-                delBtn.textContent = '删除';
-                delBtn.style.cssText = 'flex-shrink:0;padding:3px 10px;font-size:0.75rem;';
-                delBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    if (!confirm(`确认删除备份？\n${b.timestamp}`)) return;
-                    try {
-                        const dr = await (await fetch('/api/backup/delete', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ backup_name: b.filename }),
-                        })).json();
-                        dr.success ? toast.success(dr.message) : toast.error(dr.error);
-                        if (dr.success) { selectedBackups.delete(b.filename); loadBackupList(); }
-                    } catch (err) { toast.error(err.message); }
-                });
-
-                // 点击行选中
+                // 点击行切换选中
                 el.addEventListener('click', (ev) => {
-                    if (ev.target.tagName === 'BUTTON' || ev.target.tagName === 'INPUT') return;
+                    if (ev.target.tagName === 'INPUT') return;
                     cb.checked = !cb.checked;
                     cb.dispatchEvent(new Event('change'));
                 });
 
                 el.appendChild(cb);
                 el.appendChild(info);
-                el.appendChild(delBtn);
                 list.appendChild(el);
             });
         } else { list.innerHTML = '<p style="color:var(--text-secondary);">暂无备份</p>'; }
