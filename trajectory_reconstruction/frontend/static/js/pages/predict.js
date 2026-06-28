@@ -362,11 +362,27 @@ const animProgress = document.getElementById('animProgress');
 if (animProgress) {
     animProgress.addEventListener('input', () => {
         if (animActive) pauseAnim();
+        calcRange();
         const pct = parseFloat(animProgress.value) / 100;
         const duration = animRange.end - animRange.start;
         animElapsed = pct * duration;
-        // 立即更新球体位置
         const ts = animRange.start + animElapsed;
+
+        // 首次拖拽时创建球体
+        if (Object.keys(movingSpheres).length === 0) {
+            const ids = new Set();
+            for (const id in predictedData) ids.add(id);
+            for (const [id, d] of Object.entries(detectionMethods)) {
+                if (d.visible && d.points?.length >= 2) ids.add(id);
+            }
+            for (const id of ids) {
+                const color = detectionMethods[id]?.color || '#fff';
+                const sphere = makeGlowSphere(color);
+                scene.add(sphere);
+                movingSpheres[id] = sphere;
+            }
+        }
+
         for (const id in movingSpheres) {
             const data = detectionMethods[id];
             const s = movingSpheres[id];
