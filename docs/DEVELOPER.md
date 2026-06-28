@@ -65,15 +65,16 @@ python main.py
 # 纯 HTTP 服务（调试推荐）
 python main.py recon --headless
 
-# 仅轨迹识别
+# 轨迹识别（桌面窗口 / 纯 HTTP）
 python main.py recog
+python main.py recog --headless
 
 # 同时启动两个模块
 python main.py all --headless
 
 # 独立模块入口
 python -m trajectory_reconstruction --headless
-python -m trajectory_recognition
+python -m trajectory_recognition --headless
 ```
 
 ### 2.4 测试数据

@@ -49,8 +49,9 @@ python main.py --headless
 python main.py recon          # 桌面窗口
 python main.py recon --headless   # 纯 HTTP → :5000
 
-# 轨迹识别
-python main.py recog          # → :5001
+# 轨迹识别（桌面窗口 / 纯 HTTP）
+python main.py recog               # 桌面窗口
+python main.py recog --headless    # → :5001
 
 # 同时启动两个模块
 python main.py all --headless
@@ -60,7 +61,7 @@ python main.py all --headless
 
 ```bash
 python -m trajectory_reconstruction --headless   # → :5000
-python -m trajectory_recognition                  # → :5001
+python -m trajectory_recognition --headless       # → :5001
 ```
 
 ## 配置文件
