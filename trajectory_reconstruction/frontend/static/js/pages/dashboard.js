@@ -51,7 +51,6 @@ async function init() {
         startLoop(orb, css);
         refreshAll();
         calcRange();
-        updateStats();
         bindEvents();
         bindKeyboard();
 
