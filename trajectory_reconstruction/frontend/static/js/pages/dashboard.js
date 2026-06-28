@@ -19,19 +19,7 @@ if (!methodsData) {
 let detectionMethods = JSON.parse(JSON.stringify(methodsData));
 const predCfg = predSettings || { minPoints: 1, maxPoints: 20, defaultPoints: 6, defaultTimeStep: 0.5 };
 let predictedTrajectories = {};
-// 从 sessionStorage 恢复预测数据（跨页面）
-try {
-    const saved = sessionStorage.getItem('predictedData');
-    if (saved) {
-        const data = JSON.parse(saved);
-        for (const [id, pred] of Object.entries(data)) {
-            predictedTrajectories[id] = { points: pred.prediction || [], times: pred.pred_times || [] };
-        }
-    }
-} catch {}
-for (const id in detectionMethods) {
-    if (!predictedTrajectories[id]) predictedTrajectories[id] = { points: [], times: [] };
-}
+for (const id in detectionMethods) predictedTrajectories[id] = { points: [], times: [] };
 
 // ═══════════════════════════════════════════
 // Three.js 引用
