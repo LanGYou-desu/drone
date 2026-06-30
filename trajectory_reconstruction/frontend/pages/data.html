@@ -20,16 +20,6 @@
             <button class="btn btn-primary-green" id="uploadBtn">上传为自选平台</button>
         </div>
 
-        <!-- 备份管理 -->
-        <div class="card">
-            <div class="card-header"><h3>{{ icon_disc() }} 备份管理</h3></div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-                <button class="btn btn-primary" id="createBackupBtn" style="width:60%;">{{ icon_camera() }} 立即备份</button>
-                <button class="btn btn-primary" id="restoreAllBtn" style="width:60%;">{{ icon_refresh() }} 一键恢复最新</button>
-                <button class="btn btn-primary" id="listBackupsBtn" style="width:60%;">{{ icon_list() }} 查看备份列表</button>
-            </div>
-        </div>
-
         <!-- 数据更新 -->
         <div class="card">
             <div class="card-header"><h3>{{ icon_refresh() }} 数据更新</h3></div>
@@ -39,6 +29,16 @@
             <div style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary-green" id="refreshBtn" style="width:60%;">{{ icon_refresh() }} 更新全部数据</button>
                 <button class="btn btn-danger" id="clearAllBtn" style="width:60%;">{{ icon_trash() }} 清理全部数据</button>
+            </div>
+        </div>
+
+        <!-- 备份管理 -->
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_disc() }} 备份管理</h3></div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-primary" id="createBackupBtn" style="width:60%;">{{ icon_camera() }} 立即备份</button>
+                <button class="btn btn-primary" id="restoreAllBtn" style="width:60%;">{{ icon_refresh() }} 一键恢复最新</button>
+                <button class="btn btn-primary" id="listBackupsBtn" style="width:60%;">{{ icon_list() }} 查看备份列表</button>
             </div>
         </div>
     </div>
