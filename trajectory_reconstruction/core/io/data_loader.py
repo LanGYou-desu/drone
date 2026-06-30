@@ -65,7 +65,7 @@ def save_predict_data(method_id: str, points: list[list[float]],
 
     with open(file_path, 'w', encoding='utf-8') as f:
         for i, p in enumerate(points):
-            t = timestamps[i] if timestamps and i < len(timestamps) else i * 0.3
+            t = timestamps[i] if timestamps and i < len(timestamps) else i * 0.5
             f.write(f'{p[0]} {p[1]} {p[2]} {t}\n')
 
     print(f'[OK] 预测数据已保存至 {file_path}')

@@ -53,6 +53,7 @@ async function init() {
         calcRange();
         bindEvents();
         bindWASD(camera, controls, () => (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12);
+        bindKeyboard();
 
         toast.success('就绪 — 左键旋转 | 滚轮缩放 | 右键平移 | 空格播放');
     } catch (e) {
