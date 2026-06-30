@@ -1,33 +1,64 @@
 {% extends "base.html" %}
 {% block title %}设置 — 鹰眼长空{% endblock %}
-{% from "icons.html" import icon_settings, icon_moon, icon_sun %}
+{% from "icons.html" import icon_settings, icon_moon, icon_sun, icon_target, icon_predict %}
 {% block content %}
 
 <div class="page" style="max-width:640px;margin:0 auto;">
     <div class="page-header">
         <h1>{{ icon_settings() }} 设置</h1>
-        <p>应用偏好与主题配置</p>
+        <p>应用偏好与参数配置</p>
     </div>
 
     <!-- 外观 -->
     <div class="card" style="margin-bottom:16px;">
         <div class="card-header"><h3>外观</h3></div>
-
-        <div style="display:flex;flex-direction:column;gap:16px;">
-            <!-- 主题切换 -->
-            <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
-                <div style="display:flex;align-items:center;gap:12px;flex:1;">
-                    <span id="themeIcon" style="display:flex;align-items:center;color:var(--text-secondary);">
-                        {{ icon_moon('1.2em') }}
-                    </span>
-                    <div>
-                        <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">主题模式</div>
-                        <div style="font-size:0.78rem;color:var(--text-secondary);" id="themeLabel">深色模式</div>
-                    </div>
+        <div class="theme-toggle" onclick="toggleTheme()">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                <span id="themeIcon">{{ icon_moon('1.2em') }}</span>
+                <div>
+                    <div style="font-weight:600;font-size:0.9rem;">主题模式</div>
+                    <div style="font-size:0.78rem;color:var(--text-secondary);" id="themeLabel">深色模式</div>
                 </div>
-                <div class="toggle-switch" id="themeSwitch"></div>
             </div>
+            <div class="toggle-switch" id="themeSwitch"></div>
         </div>
+    </div>
+
+    <!-- 平台名称与颜色 -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>{{ icon_target() }} 平台名称与颜色</h3></div>
+        <div id="platformSettings">
+            {% for id, m in methods_data.items() %}
+            {% if id != 'synthetic' %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <input type="color" value="{{ m.color }}" data-mid="{{ id }}" class="platform-color" style="width:32px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;">
+                <input type="text" value="{{ m.name }}" data-mid="{{ id }}" data-field="name" class="platform-name" style="width:80px;padding:4px 8px;font-size:0.85rem;">
+                <span style="font-size:0.75rem;color:var(--text-secondary);">权重</span>
+                <input type="range" min="0" max="3" step="0.1" value="{{ m.weight }}"
+                       data-mid="{{ id }}" class="synth-slider" style="flex:1;margin:0;">
+                <span style="width:30px;text-align:right;font-size:0.85rem;color:var(--text-primary);">{{ m.weight }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="savePlatforms()" style="margin-top:8px;">保存平台设置</button>
+    </div>
+
+    <!-- 捕捉时机评分权重 -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>{{ icon_predict() }} 捕捉时机评分权重</h3></div>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;">各项指标在最佳捕捉时机评分中的占比</p>
+        <div id="captureWeights">
+            {% for key, label in [('height','高度'), ('speed','速度'), ('acceleration','加速度'), ('curvature','曲率')] %}
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span style="width:50px;font-size:0.85rem;">{{ label }}</span>
+                <input type="range" min="0" max="1" step="0.05" value="{{ capture_weights[key] }}"
+                       data-key="{{ key }}" class="capture-slider" style="flex:1;margin:0;">
+                <span class="capture-val" style="width:35px;text-align:right;font-size:0.85rem;">{{ capture_weights[key] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveCaptureWeights()" style="margin-top:8px;">保存捕捉权重</button>
     </div>
 
     <!-- 关于 -->
@@ -45,40 +76,60 @@
 
 {% block scripts %}
 <script>
-    // 初始化主题 UI 状态
+    // Theme
     function updateThemeUI() {
         var theme = document.documentElement.getAttribute('data-theme') || 'dark';
         var isDark = theme === 'dark';
-        var sw = document.getElementById('themeSwitch');
-        var label = document.getElementById('themeLabel');
-        var icon = document.getElementById('themeIcon');
-
-        if (isDark) {
-            sw.classList.add('active');
-            label.textContent = '深色模式';
-            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:middle;"><path d="M13.5 10.5A6 6 0 0 1 5.5 2.5 6 6 0 1 0 13.5 10.5z"/></svg>';
-        } else {
-            sw.classList.remove('active');
-            label.textContent = '浅色模式';
-            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" style="vertical-align:middle;"><circle cx="8" cy="8" r="3.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="13" y1="3" x2="11.5" y2="4.5"/><line x1="4.5" y1="11.5" x2="3" y2="13"/></svg>';
-        }
+        document.getElementById('themeSwitch').classList.toggle('active', isDark);
+        document.getElementById('themeLabel').textContent = isDark ? '深色模式' : '浅色模式';
+        document.getElementById('themeIcon').innerHTML = isDark
+            ? '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 10.5A6 6 0 0 1 5.5 2.5 6 6 0 1 0 13.5 10.5z"/></svg>'
+            : '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><circle cx="8" cy="8" r="3.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="13" y1="3" x2="11.5" y2="4.5"/><line x1="4.5" y1="11.5" x2="3" y2="13"/></svg>';
     }
-
     function toggleTheme() {
-        var current = document.documentElement.getAttribute('data-theme') || 'dark';
-        var next = current === 'dark' ? 'light' : 'dark';
+        var next = (document.documentElement.getAttribute('data-theme')||'dark') === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
         updateThemeUI();
-        // 同步到服务器 config.json
-        fetch('/api/theme', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ theme: next }),
-        }).catch(function() {});
+        fetch('/api/theme', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:next})}).catch(function(){});
     }
 
-    // 页面加载时同步 UI
+    // Slider value display
+    document.querySelectorAll('.synth-slider').forEach(s => {
+        s.addEventListener('input', function(){ this.parentElement.querySelector('span:last-child').textContent = this.value; });
+    });
+    document.querySelectorAll('.capture-slider').forEach(s => {
+        s.addEventListener('input', function(){ this.nextElementSibling.textContent = this.value; });
+    });
+
+    async function savePlatforms() {
+        var data = { synth_weights: {}, names: {}, colors: {} };
+        document.querySelectorAll('.synth-slider').forEach(s => { data.synth_weights[s.dataset.mid] = parseFloat(s.value); });
+        document.querySelectorAll('.platform-name').forEach(i => { data.names[i.dataset.mid] = i.value; });
+        document.querySelectorAll('.platform-color').forEach(i => { data.colors[i.dataset.mid] = i.value; });
+        var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+        var r = await resp.json();
+        alert(r.success ? '平台设置已保存' : '保存失败');
+    }
+
+    // Save synthesis weights (legacy, kept if used elsewhere)
+    async function saveSynthWeights() { savePlatforms(); }
+        var weights = {};
+        document.querySelectorAll('.synth-slider').forEach(s => { weights[s.dataset.mid] = parseFloat(s.value); });
+        var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({synth_weights:weights})});
+        var r = await resp.json();
+        alert(r.success ? '合成权重已保存' : '保存失败');
+    }
+
+    // Save capture weights
+    async function saveCaptureWeights() {
+        var weights = {};
+        document.querySelectorAll('.capture-slider').forEach(s => { weights[s.dataset.key] = parseFloat(s.value); });
+        var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capture_weights:weights})});
+        var r = await resp.json();
+        alert(r.success ? '捕捉权重已保存' : '保存失败');
+    }
+
     updateThemeUI();
 </script>
 {% endblock %}
