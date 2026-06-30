@@ -6,7 +6,7 @@
 import os
 import sys
 
-from flask import Flask
+from flask import Flask, send_from_directory
 
 # 确保项目根目录在 sys.path 且为工作目录（支持任意 cwd 启动）
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +14,10 @@ _PROJECT_ROOT = os.path.dirname(_MODULE_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 os.chdir(_PROJECT_ROOT)
+
+# 静态资源（优先共享，回退模块）
+_SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static')
+_OWN_STATIC = os.path.join(_MODULE_DIR, 'frontend', 'static')
 
 
 def create_app() -> Flask:
@@ -23,10 +27,16 @@ def create_app() -> Flask:
     app = Flask(
         __name__,
         template_folder=module_pages,
-        static_folder=os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static'),
+        static_folder=None,
     )
-    # 添加共享模板目录到 Jinja2 搜索路径
     app.jinja_loader.searchpath.insert(0, shared_templates)
+
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        shared = os.path.join(_SHARED_STATIC, filename)
+        if os.path.isfile(shared):
+            return send_from_directory(_SHARED_STATIC, filename)
+        return send_from_directory(_OWN_STATIC, filename)
 
     # 延迟导入，避免循环依赖
     from trajectory_reconstruction.core.config.config_manager import ensure_config
