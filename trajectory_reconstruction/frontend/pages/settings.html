@@ -112,14 +112,8 @@
         if (r.success) location.reload(); else alert('保存失败');
     }
 
-    // Save synthesis weights (legacy, kept if used elsewhere)
+    // Save synthesis weights (same as savePlatforms)
     async function saveSynthWeights() { savePlatforms(); }
-        var weights = {};
-        document.querySelectorAll('.synth-slider').forEach(s => { weights[s.dataset.mid] = parseFloat(s.value); });
-        var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({synth_weights:weights})});
-        var r = await resp.json();
-        if (r.success) location.reload(); else alert('保存失败');
-    }
 
     // Save capture weights
     async function saveCaptureWeights() {
