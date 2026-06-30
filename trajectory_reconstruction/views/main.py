@@ -78,6 +78,17 @@ def docs_page():
 def settings_page():
     """设置页面 — 主题切换等"""
     ctx = _page_context('settings')
+    # 设置页始终显示全部平台（含自选和综合）
+    cfg = ensure_config()
+    all_methods = {}
+    for mid in _METHOD_ORDER:
+        if mid in detection_methods:
+            all_methods[mid] = detection_methods[mid]
+    for mid in detection_methods:
+        if mid not in all_methods:
+            all_methods[mid] = detection_methods[mid]
+    ctx['all_methods'] = all_methods
+    ctx['methods_data'] = all_methods  # 覆盖过滤后的 methods_data
     return render_template('settings.html', **ctx)
 
 
