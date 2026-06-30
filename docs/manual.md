@@ -2,7 +2,7 @@
 title: "鹰眼长空 — 使用手册"
 subtitle: "基于多平台协同的低空无人机智能监测系统"
 author: "LanGYou"
-date: "2026-06-28"
+date: "2026-06-30"
 lang: zh-CN
 toc: true
 toc-depth: 3
@@ -15,7 +15,7 @@ geometry: margin=2.5cm
 
 # 系统概述
 
-**鹰眼长空**是一个桌面端无人机轨迹监测与预测系统，融合可见光、红外、雷达三种传感平台的轨迹数据，提供 3D 可视化、轨迹预测、AI 策略生成和多维运动学分析功能。
+**鹰眼长空**是一个桌面端无人机轨迹监测与预测系统，融合可见光、红外、雷达三种传感平台的轨迹数据，提供 3D 可视化、加权合成、轨迹预测、捕捉时机分析和 AI 策略生成功能。
 
 **技术栈：** Python Flask + pywebview + Three.js + ECharts + 硅基流动 AI
 
@@ -31,283 +31,172 @@ geometry: margin=2.5cm
 ## 安装与运行
 
 ```bash
-# 安装依赖
 pip install -r requirements.txt
-
-# 桌面窗口模式
-python main.py
-
-# 纯 HTTP 服务模式
-python main.py --headless
-# → 浏览器访问 http://127.0.0.1:5000
-```
-
-### 启动方式
-
-```bash
-python main.py               # 默认同时启动两个模块（桌面窗口）
-python main.py --headless    # 纯 HTTP 模式
+python main.py               # 桌面窗口模式
+python main.py --headless    # 纯 HTTP → http://127.0.0.1:5000
 python main.py recon         # 仅重建分析 → :5000
-python main.py recog         # 仅轨迹识别 → :5001
-```
-
-### 独立模块入口
-
-```bash
-python -m trajectory_reconstruction --headless   # → :5000
-python -m trajectory_recognition --headless       # → :5001
 ```
 
 ## 配置文件
 
-编辑 `config.json` 填入硅基流动 API Key：
+编辑 `config.json` 填入 API Key 后可使用 AI 策略功能。主要字段：
 
 ```json
 {
-    "ai": {
-        "provider": "siliconflow",
-        "api_key": "your-api-key-here",
-        "url": "https://api.siliconflow.cn/v1/chat/completions",
-        "model": "Qwen/Qwen2.5-7B-Instruct"
-    }
+  "ai": { "api_key": "你的密钥", "url": "...", "model": "..." },
+  "detection_methods": {
+    "visible": { "color": "#ff6b6b", "weight": 1.0 },
+    "infrared": { "color": "#4ecdc4", "weight": 1.0 },
+    "radar": { "color": "#ffe66d", "weight": 1.0 },
+    "self": { "color": "#FF9500", "weight": 1.0 }
+  },
+  "capture_weights": { "height": 0.3, "speed": 0.3, "acceleration": 0.2, "curvature": 0.2 },
+  "camera_speed": 0.12,
+  "theme": "dark"
 }
 ```
 
+- `detection_methods[].weight` — 综合轨迹合成权重，越大越重要
+- `capture_weights` — 最佳捕捉时机评分权重
+- `camera_speed` — WASD 移动速度
+- `theme` — 默认主题（dark / light）
+
 ---
 
-# 页面功能
+# 界面总览
 
-系统共有 5 个功能页面，通过顶部导航栏切换。
+系统采用 GitHub 风格双主题 UI，顶部导航栏切换 5 个功能页面。
 
-## 总览（Dashboard）
+## 总览
 
 路由：`/`
 
-全屏 3D 轨迹视图，是所有检测手段的综合展示页面。
+全屏 3D 轨迹视图，综合展示所有检测平台。
 
-**功能：**
+**3D 操作：**
 
 | 操作 | 说明 |
 |------|------|
 | 鼠标左键拖拽 | 旋转视角 |
 | 鼠标滚轮 | 缩放 |
-| 鼠标右键拖拽 | 平移 |
-| 鼠标悬停轨迹点 | 点球放大 2.5 倍，显示坐标 |
-| 空格键 | 播放/暂停动画 |
-| ▶ 播放 | 从暂停点恢复播放 |
-| ⏹ 停止 | 暂停并保持球体位置 |
-| 拖动进度条 | 跳转到指定时间点 |
+| 鼠标右键拖拽 | 平移视角 |
+| W/A/S/D | 摄像头前后左右平移 |
+| Q/E | 摄像头升降 |
+| 鼠标悬停轨迹点 | 球体放大，显示坐标 (X/Y/Z) 和时间 (T) |
+| Space | 播放 / 暂停轨迹动画 |
 
 **覆盖层：**
 
-- **左上角 — 检测平台**：点击切换各平台显示/隐藏
-- **右上角 — 平台状态**：实时显示各平台的速度、高度、航向角
-- **底部 — 播放控制条**：播放/停止、倍速、进度条、预测入口
+- **左上角 — 检测平台**：点击切换平台显隐，影响后续所有页面
+- **右上角 — 平台状态**：实时速度/高度/航向角，点击标题折叠
+- **底部 — 播放控制条**：播放/暂停、倍速、进度条、预测入口
 
-**3D 渲染特性：**
+**3D 渲染：** 自定义坐标轴 + CatmullRom 发光轨迹线 + 拖尾粒子系统 + ACES 色调映射
 
-- 渐变深色背景 + 线性雾
-- 自定义坐标轴（带刻度标记、数字标签、方向箭头）
-- CatmullRom 发光轨迹线
-- GPU 拖尾粒子系统（2000 粒子/平台）
-- ACES 色调映射 + PCF 软阴影
-
-## 预测（Predict）
+## 预测
 
 路由：`/predict`
 
-基于历史轨迹的线性外推预测。
+基于最后两点速度向量线性外推。各平台独立预测，综合轨迹由其他平台预测加权合成。
 
-**使用步骤：**
-
-1. 选择目标平台（单个或"所有平台"）
-2. 调整预测点数和时间步长
+1. 选择目标平台（单个或所有）
+2. 调整预测点数（10-50）和时间步长（0.1-5s）
 3. 点击"开始预测"
 4. 预测结果以虚线和半透明球体显示
-5. 点击"播放"查看完整轨迹动画
+5. 播放动画查看历史+预测全程
 
-**预测算法：**
-
-取轨迹最后两点计算速度向量，沿该方向以固定时间步长生成预测点。
-
-```
-v = (P_last - P_prev) / Δt
-P_pred[i] = P_last + v × i × time_step
-```
-
-## 分析（Analysis）
+## 分析
 
 路由：`/analysis`
 
-提供四个多维运动学分析图表：
+多维运动学分析：
 
-| 图表 | 数据 | 计算方式 |
-|------|------|---------|
-| 高度变化曲线 | Y 坐标序列 | 直接提取 |
-| 速度变化曲线 | 水平速度 (m/s) | 水平位移 / 时间差 |
-| 加速度变化曲线 | 加速度 (m/s²) | 相邻速度差 |
-| 曲率变化曲线 | 轨迹曲率 (1/m) | 三点法平面曲率 |
+| 图表 | 计算方式 |
+|------|---------|
+| 高度变化 | 原始 Y 坐标 |
+| 速度变化 | 水平位移 / 时间差 |
+| 加速度变化 | 相邻速度差 |
+| 曲率变化 | 三点法平面曲率 |
 
-所有图表使用 ECharts 深色主题，支持交互缩放和数据悬浮查看。
+原始数据与预测数据拼接为连续曲线。图例固定排序：可见光 → 红外 → 雷达 → 自选 → 综合。
 
-## AI 策略（AI）
+**最佳捕捉时机：** 需先执行预测，基于高度/速度/加速度/曲率加权评分，给出前三名捕捉时间点与坐标。
+
+## AI 策略
 
 路由：`/ai`
 
-接入硅基流动大模型，生成无人机反制捕捉策略。
+接入大模型生成无人机反制捕捉建议。勾选平台 → 生成策略 → 保存报告至 `reports/`。
 
-**使用步骤：**
-
-1. 勾选参与分析的检测平台
-2. 点击"生成捕捉策略"
-3. AI 分析轨迹数据后输出：
-   - 运动模式识别
-   - 推荐捕捉设备
-   - 最佳拦截点坐标
-   - 时间窗口建议
-4. 可保存报告到 `reports/` 目录
-
-## 数据管理（Data）
+## 数据管理
 
 路由：`/data`
 
-轨迹数据的上传、备份、恢复与清理。
-
-**功能：**
-
-| 操作 | 说明 |
+| 区域 | 功能 |
 |------|------|
-| 上传数据 | 选择 .dat 文件（每行 `x y z t` 格式），创建"自选"平台 |
-| 查看备份 | 列出所有备份文件，支持选择恢复 |
-| 一键恢复 | 自动恢复各平台的最新备份 |
-| 重置数据 | 重新加载默认测试轨迹 |
-| 清理数据 | 清空所有轨迹（自动备份到 backup/） |
+| 上传 | `.dat` 文件创建自选平台 |
+| 数据更新 | 重置出厂轨迹，清空自选和预测 |
+| 备份管理 | 创建快照 / 一键恢复 / 查看列表 |
+| 数据概览 | 各平台点数/时间范围/起止坐标 |
 
-**数据概览表格：** 实时显示各平台的颜色、状态、轨迹点数、时间范围、起止坐标。
+---
+
+# 综合轨迹
+
+系统启动或数据更新后，自动将可见光、红外、雷达（及自选）加权合成为白色综合轨迹。权重在各平台 `weight` 字段配置。合成使用时间对齐插值 + 两次平滑处理。
 
 ---
 
 # API 接口
 
-系统提供 11 个 RESTful API 端点，所有响应均为 JSON 格式。
+统一响应格式：`{"success": true, ...}` 或 `{"success": false, "error": "..."}`
 
-## 统一响应格式
+## 数据管理
 
-```json
-{
-    "success": true,
-    "message": "描述信息",
-    "error": "错误描述（仅失败时）"
-}
-```
+| 端点 | 说明 |
+|------|------|
+| `POST /api/refresh_data` | 重载出厂轨迹，清空自选和预测 |
+| `POST /api/load_data` | 上传自选数据（multipart: file + method_id=self） |
+| `POST /api/clear_all_data` | 备份后清空全部数据 |
 
-## 接口列表
+## 预测
 
-### 刷新轨迹数据
+| 端点 | 说明 |
+|------|------|
+| `POST /api/predict` | 单平台预测 |
+| `POST /api/predict_all` | 全平台预测（综合由加权合成） |
 
-```
-POST /api/refresh_data
-```
+## AI
 
-重新加载 `data/fact/` 下的默认轨迹文件。
+| 端点 | 说明 |
+|------|------|
+| `POST /api/ai_suggestion` | 生成捕捉策略 |
+| `POST /api/save_report` | 保存报告至 reports/ |
 
-### 加载外部数据
+## 备份
 
-```
-POST /api/load_data
-Content-Type: multipart/form-data
-```
+| 端点 | 说明 |
+|------|------|
+| `GET /api/list_backups` | 列出备份列表 |
+| `POST /api/restore_backup` | 恢复指定备份 |
+| `POST /api/restore_all_backups` | 一键恢复最新 |
+| `POST /api/backup/create` | 手动创建备份 |
+| `POST /api/backup/delete` | 删除指定备份 |
 
-**参数：**
+## 分析
 
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| file | File | .dat 格式文件 |
-| method_id | String | 固定值 "self" |
+| 端点 | 说明 |
+|------|------|
+| `GET /analysis/data` | 运动学数据（速度/加速度/曲率/高度） |
+| `GET /analysis/capture` | 最佳捕捉时机（预测后可用，前三名） |
 
-### 清理数据并备份
+## 其他
 
-```
-POST /api/clear_all_data
-```
-
-清空所有轨迹数据前自动备份到 `data/backup/`。
-
-### 单平台预测
-
-```
-POST /api/predict
-Content-Type: application/json
-```
-
-**请求体：**
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| method_id | String | - | 平台 ID |
-| points | Array | - | 历史轨迹点 |
-| timestamps | Array | [] | 时间戳 |
-| num_points | Integer | 6 | 预测点数 |
-| time_step | Float | 0.5 | 时间步长（秒） |
-
-**响应：**
-
-```json
-{
-    "success": true,
-    "prediction": [[x,y,z], ...],
-    "pred_times": [t, ...]
-}
-```
-
-### 全平台预测
-
-```
-POST /api/predict_all
-```
-
-对所有可见平台同时进行预测。
-
-### AI 建议
-
-```
-POST /api/ai_suggestion
-```
-
-**请求体：**
-
-```json
-{
-    "methods_data": {
-        "visible": { "name": "可见光", "points": [...], "timestamps": [...] },
-        "infrared": { ... }
-    }
-}
-```
-
-### 保存报告
-
-```
-POST /api/save_report
-```
-
-将 AI 策略保存为报告文件到 `reports/` 目录。
-
-### 备份管理
-
-```
-GET  /api/list_backups              列出所有备份
-POST /api/restore_backup             恢复指定备份
-POST /api/restore_all_backups        一键恢复最新
-```
-
-### 分析数据
-
-```
-GET /analysis/data
-```
-
-返回各平台的速度、加速度、曲率、高度序列数据。
+| 端点 | 说明 |
+|------|------|
+| `GET/POST /api/theme` | 读写主题设置 |
+| `POST /api/toggle_method` | 切换平台可见性 |
+| `POST /api/synthesize` | 手动触发综合轨迹合成 |
 
 ---
 
@@ -315,7 +204,7 @@ GET /analysis/data
 
 ## .dat 轨迹文件
 
-每行 4 个空格分隔的数值：
+每行 4 个空格分隔数值：
 
 ```
 x y z t
@@ -323,106 +212,27 @@ x y z t
 
 | 字段 | 含义 | 单位 |
 |------|------|------|
-| x | 东西方向位置 | 米 |
+| x | 东西方向 | 米 |
 | y | 高度 | 米 |
-| z | 南北方向位置 | 米 |
+| z | 南北方向 | 米 |
 | t | 时间戳 | 秒 |
 
 ## 测试数据
 
-系统内置 3 组虚构测试轨迹（各 60 点），存放于 `data/fact/`：
-
-| 文件 | 平台 | 轨迹特征 |
-|------|------|---------|
-| fact1.dat | 可见光 | Z 字形起伏飞行 |
-| fact2.dat | 红外 | 盘旋上升飞行 |
-| fact3.dat | 雷达 | S 形曲线加速飞行 |
-
-可替换为真实采集数据，保持相同格式即可。
-
----
-
-# 系统架构
-
-## 双模块设计
-
-```
-trajectory_reconstruction/     trajectory_recognition/
-(轨迹重建与分析)               (轨迹识别 — 框架)
-
-         ↘    data/    ↙
-         共享运行时数据
-```
-
-两个模块通过根目录 `data/` 和 `reports/` 共享数据。
-
-## 分层架构（reconstruction 模块）
-
-```
-views/（HTTP 薄层） → services/（业务编排） → core/（领域逻辑）
-```
-
-- **core/**：纯函数模块（config / io / prediction / ai / state）
-- **services/**：业务逻辑编排，不依赖 Flask
-- **views/**：Flask 蓝图，仅负责 HTTP 解析和 JSON 响应
-- **frontend/**：前端 HTML/CSS/JS
-
-## 完整目录
-
-```
-drone/
-├── main.py                          # 统一入口
-├── config.json                      # 运行配置
-│
-├── trajectory_reconstruction/       # 轨迹重建与分析
-│   ├── app.py                       #   Flask 应用工厂
-│   ├── __main__.py                  #   独立启动入口
-│   ├── core/                        #   核心领域逻辑
-│   │   ├── config/                  #     配置管理
-│   │   ├── io/                      #     数据文件读写
-│   │   ├── prediction/              #     轨迹预测算法
-│   │   ├── ai/                      #     AI 建议服务
-│   │   └── state.py                 #     共享运行时状态
-│   ├── services/                    #   业务逻辑层
-│   ├── views/                       #   HTTP 视图层
-│   └── frontend/                    #   前端资源
-│
-├── trajectory_recognition/          # 轨迹识别（框架）
-│   ├── app.py                       #   Flask 应用工厂
-│   ├── __main__.py                  #   独立启动入口
-│   ├── features/                    #   特征提取
-│   ├── models/                      #   识别模型定义
-│   └── classifier/                  #   分类器
-│
-├── data/                            # 共享数据
-│   ├── fact/                        #   实际轨迹
-│   ├── predict/                     #   预测结果
-│   └── backup/                      #   备份
-├── reports/                         # 捕捉策略报告
-├── templates/                       # 配置模板
-└── docs/                            # 文档
-```
+`data/fact/` 下有 3 组测试轨迹（各 60 点）：fact1（可见光，Z 字起伏）、fact2（红外，盘旋上升）、fact3（雷达，S 形加速）。
 
 ---
 
 # 常见问题
 
+**Q: 预测后分析页综合轨迹没数据？**
+A: 综合轨迹的预测由各平台预测加权合成，确保至少有两个平台有预测数据。
+
+**Q: 如何切换明暗主题？**
+A: 设置页面点击主题切换，自动保存到 config.json 和浏览器。
+
+**Q: 自选平台不显示？**
+A: 上传 .dat 数据后自动创建，启动时临时数据清除。
+
 **Q: 预测动画球体消失了？**
-
-A: 点击 ⏹ 按钮是"暂停"，球体会保持在当前位置。如需彻底清除球体并恢复轨迹显示，刷新页面即可。
-
-**Q: 如何更换测试数据？**
-
-A: 将真实 .dat 文件替换 `data/fact/fact1.dat` ~ `fact3.dat`，保持文件名和格式不变，重启程序。
-
-**Q: AI 功能不可用？**
-
-A: 检查 `config.json` 中的 `siliconflow.api_key` 是否为有效的硅基流动 API Key，以及网络连接。
-
-**Q: 如何分别启动两个模块？**
-
-A: 使用 `python main.py recon` 启动重建分析，`python main.py recog` 启动识别。两者可同时运行在不同端口（5000 / 5001）。
-
-**Q: 窗口大小如何调整？**
-
-A: 桌面窗口可自由拖拽缩放。浏览器模式下直接调整浏览器窗口。3D 视图和图表会自动响应。
+A: 暂停后球体保持在当前位置。如需清除，刷新页面。
