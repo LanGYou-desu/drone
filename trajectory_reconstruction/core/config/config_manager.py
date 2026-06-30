@@ -36,30 +36,35 @@ DEFAULT_CONFIG: dict[str, Any] = {
             'color': '#FF3B30',
             'visible': True,
             'weight': 1.0,
+            'enabled': True,
         },
         'infrared': {
             'name': '红外',
             'color': '#34C759',
             'visible': True,
             'weight': 1.0,
+            'enabled': True,
         },
         'radar': {
             'name': '雷达',
             'color': '#FFCC00',
             'visible': True,
             'weight': 1.0,
+            'enabled': True,
         },
         'self': {
             'name': '自选',
             'color': '#FF9500',
             'visible': True,
             'weight': 1.0,
+            'enabled': True,
         },
         'synthetic': {
             'name': '综合',
             'color': '#ffffff',
             'visible': True,
             'weight': 1.0,
+            'enabled': True,
         },
     },
     'prediction_settings': {
@@ -96,7 +101,7 @@ def _validate_config(cfg: dict) -> dict:
         if mid not in cfg['detection_methods']:
             cfg['detection_methods'][mid] = DEFAULT_CONFIG['detection_methods'][mid]
         else:
-            for field in ['name', 'color', 'visible', 'weight']:
+            for field in ['name', 'color', 'visible', 'weight', 'enabled']:
                 if field not in cfg['detection_methods'][mid]:
                     cfg['detection_methods'][mid][field] = DEFAULT_CONFIG['detection_methods'][mid][field]
 

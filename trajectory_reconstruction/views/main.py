@@ -121,6 +121,13 @@ def api_weights():
                 if mid in detection_methods:
                     detection_methods[mid]['color'] = color.strip()
                 updated = True
+    if 'enabled' in data:
+        for mid, val in data['enabled'].items():
+            if mid in cfg.get('detection_methods', {}):
+                cfg['detection_methods'][mid]['enabled'] = bool(val)
+                if mid in detection_methods:
+                    detection_methods[mid]['enabled'] = bool(val)
+                updated = True
 
     # 更新捕捉权重
     if 'capture_weights' in data:

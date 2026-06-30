@@ -19,6 +19,7 @@ def _get_metadata(methods: dict) -> dict:
             'color': data.get('color', '#999999'),
             'visible': data.get('visible', True),
             'weight': data.get('weight', 1.0),
+            'enabled': data.get('enabled', True),
         }
         for mid, data in methods.items()
     }
@@ -162,7 +163,7 @@ def synthesize_trajectory() -> dict:
     active = {}
     for mid in ['visible', 'infrared', 'radar', 'self']:
         m = detection_methods.get(mid)
-        if m and m.get('points') and len(m['points']) >= 2:
+        if m and m.get('enabled', True) and m.get('points') and len(m['points']) >= 2:
             w = m.get('weight', 1.0)
             if w > 0:
                 active[mid] = w

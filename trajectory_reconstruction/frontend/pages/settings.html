@@ -30,6 +30,9 @@
         <div id="platformSettings">
             {% for id, m in all_methods.items() %}
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <input type="checkbox" data-mid="{{ id }}" class="platform-enabled"
+                       {% if m.enabled|default(True) %}checked{% endif %}
+                       style="width:auto;flex-shrink:0;" title="启用">
                 <input type="color" value="{{ m.color }}" data-mid="{{ id }}" class="platform-color" style="width:32px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;">
                 <input type="text" value="{{ m.name }}" data-mid="{{ id }}" data-field="name" class="platform-name" style="width:80px;padding:4px 8px;font-size:0.85rem;">
                 {% if id != 'synthetic' %}
@@ -103,10 +106,11 @@
     });
 
     async function savePlatforms() {
-        var data = { synth_weights: {}, names: {}, colors: {} };
+        var data = { synth_weights: {}, names: {}, colors: {}, enabled: {} };
         document.querySelectorAll('.synth-slider').forEach(s => { data.synth_weights[s.dataset.mid] = parseFloat(s.value); });
         document.querySelectorAll('.platform-name').forEach(i => { data.names[i.dataset.mid] = i.value; });
         document.querySelectorAll('.platform-color').forEach(i => { data.colors[i.dataset.mid] = i.value; });
+        document.querySelectorAll('.platform-enabled').forEach(cb => { data.enabled[cb.dataset.mid] = cb.checked; });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         var r = await resp.json();
         if (r.success) location.reload(); else alert('保存失败');

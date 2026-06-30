@@ -10,31 +10,36 @@
             "name": "可见光",
             "color": "#ff6b6b",
             "visible": true,
-            "weight": 1.0
+            "weight": 1.0,
+            "enabled": true
         },
         "infrared": {
             "name": "红外",
             "color": "#4ecdc4",
             "visible": true,
-            "weight": 1.0
+            "weight": 1.0,
+            "enabled": true
         },
         "radar": {
             "name": "雷达",
             "color": "#ffe66d",
             "visible": true,
-            "weight": 1.0
+            "weight": 1.0,
+            "enabled": true
         },
         "self": {
             "name": "自选",
             "color": "#FF9500",
             "visible": true,
-            "weight": 1.0
+            "weight": 1.0,
+            "enabled": true
         },
         "synthetic": {
             "name": "综合",
             "color": "#ffffff",
             "visible": true,
-            "weight": 1.0
+            "weight": 1.0,
+            "enabled": true
         }
     },
     "prediction_settings": {

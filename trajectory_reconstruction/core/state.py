@@ -40,6 +40,7 @@ def _make_method(data: dict) -> dict:
         'color': data.get('color', '#999999'),
         'visible': data.get('visible', True),
         'weight': data.get('weight', 1.0),
+        'enabled': data.get('enabled', True),
         'points': [],
         'timestamps': [],
     }
