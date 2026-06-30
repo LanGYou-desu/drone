@@ -15,6 +15,7 @@ import os
 from flask import Blueprint, jsonify, request
 
 from trajectory_reconstruction.services import data_service, backup_service
+from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.io.data_loader import load_dat_file
 
 api_bp = Blueprint('api', __name__)
@@ -95,3 +96,24 @@ def delete_backup():
         return jsonify({'success': False, 'error': '缺少 backup_name'}), 400
     ok, msg = backup_service.delete_backup(name)
     return jsonify({'success': ok, 'message' if ok else 'error': msg}), (200 if ok else 400)
+
+
+@api_bp.route('/api/toggle_method', methods=['POST'])
+def toggle_method():
+    """切换检测平台可见性"""
+    data = request.get_json(silent=True) or {}
+    method_id = data.get('method_id', '')
+    if not method_id or method_id not in detection_methods:
+        return jsonify({'success': False, 'error': '未知平台'}), 400
+    detection_methods[method_id]['visible'] = not detection_methods[method_id].get('visible', True)
+    from trajectory_reconstruction.services.data_service import save_metadata
+    save_metadata()
+    return jsonify({'success': True, 'visible': detection_methods[method_id]['visible']})
+
+
+@api_bp.route('/api/synthesize', methods=['POST'])
+def synthesize():
+    """加权合成综合轨迹"""
+    result = data_service.synthesize_trajectory()
+    code = 200 if result.get('success') else 400
+    return jsonify(result), code

@@ -56,8 +56,8 @@ def save_predict_data(method_id: str, points: list[list[float]],
         points:     预测点坐标
         timestamps: 对应时间戳（若为 None 则用 index * 0.5）
     """
-    mapping = {'visible': '1', 'infrared': '2', 'radar': '3'}
-    num = mapping.get(method_id, 'self')
+    mapping = {'visible': '1', 'infrared': '2', 'radar': '3', 'self': 'self', 'synthetic': 'syn'}
+    num = mapping.get(method_id, method_id)
     filename = f'pre{num}.dat'
     file_path = os.path.join('data', 'predict', filename)
 

@@ -82,48 +82,100 @@
         renderAll();
     }
 
+    const LEGEND_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic'];
     function renderLegend() {
         const el = document.getElementById('legend');
-        el.innerHTML = Object.entries(allData).map(([id, info]) =>
+        const items = [];
+        // 按固定顺序
+        for (const mid of LEGEND_ORDER) {
+            if (allData[mid]) items.push([mid, allData[mid]]);
+        }
+        for (const [mid, info] of Object.entries(allData)) {
+            if (!LEGEND_ORDER.includes(mid)) items.push([mid, info]);
+        }
+        el.innerHTML = items.map(([id, info]) =>
             `<div class="legend-item">
                 <span class="legend-dot" style="background:${info.color};color:${info.color};"></span>
                 ${info.name}
             </div>`).join('');
     }
 
-    function darkOption(series, yName, xData) {
-        return {
-            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
-                       textStyle: { color: '#e6edf3', fontSize: 12 } },
-            legend: { show: false },
-            xAxis: { type: 'category', data: xData || [], axisLabel: { color: '#8b949e', fontSize: 10 },
-                     axisLine: { lineStyle: { color: '#30363d' } } },
-            yAxis: { type: 'value', name: yName, nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                     axisLabel: { color: '#8b949e', fontSize: 10 },
-                     splitLine: { lineStyle: { color: '#21262d' } } },
-            series,
-            grid: { top: 12, bottom: 24, left: 8, right: 20, containLabel: true },
-        };
-    }
-
     function renderAll() {
         const ids = Object.keys(allData);
         if (!ids.length) return;
-        const times = allData[ids[0]]?.time_steps || [];
 
-        const makeSeries = field => ids.map(id => ({
-            name: allData[id].name, type: 'line', data: allData[id][field],
-            lineStyle: { color: allData[id].color, width: 2 },
-            itemStyle: { color: allData[id].color },
-            symbol: 'circle', symbolSize: 4, smooth: true,
-        }));
+        function makeSeries(field) {
+            return ids.map(id => ({
+                name: allData[id].name, type: 'line', data: allData[id][field],
+                lineStyle: { color: allData[id].color, width: 2 },
+                itemStyle: { color: allData[id].color },
+                symbol: 'none', smooth: true,
+            }));
+        }
 
         const init = id => echarts.init(document.getElementById(id));
+        const xData = allData[ids[0]]?.time_steps || [];
 
-        init('heightChart').setOption(darkOption(makeSeries('heights'), '高度 (m)', times));
-        init('speedChart').setOption(darkOption(makeSeries('speeds'), '速度 (m/s)', times.slice(1)));
-        init('accelChart').setOption(darkOption(makeSeries('accelerations'), '加速度 (m/s²)', times.slice(2)));
-        init('curvatureChart').setOption(darkOption(makeSeries('curvatures'), '曲率 (1/m)', times.slice(1, -1)));
+        init('heightChart').setOption({
+            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
+                       textStyle: { color: '#e6edf3', fontSize: 12 },
+                       valueFormatter: v => v != null ? v.toFixed(2) : '-' },
+            legend: { show: false },
+            xAxis: { type: 'category', data: xData.map(t => t.toFixed(2)),
+                     axisLabel: { color: '#8b949e', fontSize: 9, rotate: 30 },
+                     axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: '高度 (m)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
+                     axisLabel: { color: '#8b949e', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#21262d' } } },
+            series: makeSeries('heights'),
+            grid: { top: 12, bottom: 30, left: 8, right: 20, containLabel: true },
+        });
+        init('speedChart').setOption({
+            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
+                       textStyle: { color: '#e6edf3', fontSize: 12 },
+                       valueFormatter: v => v != null ? v.toFixed(2) : '-' },
+            legend: { show: false },
+            xAxis: { type: 'category', data: xData.slice(1).map(t => t.toFixed(2)),
+                     axisLabel: { color: '#8b949e', fontSize: 9, rotate: 30 },
+                     axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: '速度 (m/s)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
+                     axisLabel: { color: '#8b949e', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#21262d' } } },
+            series: makeSeries('speeds'),
+            grid: { top: 12, bottom: 30, left: 8, right: 20, containLabel: true },
+        });
+        // accel: 2 fewer points than original
+        const aIdx = xData.length > 2 ? xData.slice(2) : xData;
+        init('accelChart').setOption({
+            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
+                       textStyle: { color: '#e6edf3', fontSize: 12 },
+                       valueFormatter: v => v != null ? v.toFixed(2) : '-' },
+            legend: { show: false },
+            xAxis: { type: 'category', data: aIdx.map(t => t.toFixed(2)),
+                     axisLabel: { color: '#8b949e', fontSize: 9, rotate: 30 },
+                     axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: '加速度 (m/s²)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
+                     axisLabel: { color: '#8b949e', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#21262d' } } },
+            series: makeSeries('accelerations'),
+            grid: { top: 12, bottom: 30, left: 8, right: 20, containLabel: true },
+        });
+        // curvature: 2 fewer points
+        const cIdx = xData.length > 1 ? xData.slice(1, -1) : xData;
+        init('curvatureChart').setOption({
+            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
+                       textStyle: { color: '#e6edf3', fontSize: 12 },
+                       valueFormatter: v => v != null ? v.toFixed(2) : '-' },
+            legend: { show: false },
+            xAxis: { type: 'category', data: cIdx.map(t => t.toFixed(2)),
+                     axisLabel: { color: '#8b949e', fontSize: 9, rotate: 30 },
+                     axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: '曲率 (1/m)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
+                     axisLabel: { color: '#8b949e', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#21262d' } } },
+            series: makeSeries('curvatures'),
+            grid: { top: 12, bottom: 30, left: 8, right: 20, containLabel: true },
+        });
     }
 
     window.addEventListener('resize', () => {

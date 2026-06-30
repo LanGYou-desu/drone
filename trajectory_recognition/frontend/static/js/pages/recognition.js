@@ -46,7 +46,7 @@ async function init() {
             dataPanel.innerHTML = '<p style="color:var(--text-tertiary);">暂无共享数据</p>';
         }
     } catch {
-        dataPanel.innerHTML = '<p style="color:var(--orange);">⚠ 重建分析模块未运行（需端口 5000）</p>';
+        dataPanel.innerHTML = '<p style="color:var(--orange);"><svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><polygon points="8,2 15,14 1,14"/><line x1="8" y1="7" x2="8" y2="10"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg> 重建分析模块未运行（需端口 5000）</p>';
     }
 }
 

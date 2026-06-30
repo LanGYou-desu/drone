@@ -5,7 +5,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
-import { buildAxes, getSceneBackground, getFogColor, getGridColor } from '../common/three-utils.js';
+import { buildAxes, getSceneBackground, getFogColor, getGridColor, buildLights, buildStarfield } from '../common/three-utils.js';
 
 // ═══════════════════════════════════════════
 // 数据加载（从 HTML 模板注入的 window._PAGE_DATA_）
@@ -30,7 +30,6 @@ let trailSystems = {};
 let animActive = false, animId = null, animSpeed = 1.0;
 let animElapsed = 0;   // 已播放的时间（秒），暂停时保留
 let timeRange = { start: 0, end: 0 };
-let lastAnimTimestamp = 0;  // 当前动画时间戳
 
 // ═══════════════════════════════════════════
 // 场景初始化
@@ -43,10 +42,10 @@ async function init() {
         CSS2DObject = css.CSS2DObject;
 
         buildScene(THREE, orb, css);
-        buildLights();
+        buildLights(scene);
         buildGround();
         buildGrid();
-        buildStarfield();
+        buildStarfield(scene);
 
         startLoop(orb, css);
         refreshAll();
@@ -95,22 +94,6 @@ function buildScene(THREE, orb, css) {
     controls.autoRotate = false;
 }
 
-function buildLights() {
-    scene.add(new THREE.AmbientLight(0x334466, 0.8));
-    scene.add(new THREE.HemisphereLight(0x8899cc, 0x223344, 0.5));
-    const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
-    sun.position.set(12, 20, 8);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100;
-    sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
-    sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
-    sun.shadow.bias = -0.0001;
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
-    fill.position.set(-5, 3, -5);
-    scene.add(fill);
-}
 
 function buildGround() {
     const geo = new THREE.PlaneGeometry(200, 200);
@@ -132,21 +115,6 @@ function buildGrid() {
     buildAxes(scene, CSS2DObject);
 }
 
-function buildStarfield() {
-    const count = 4000;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-        pos[i*3] = (Math.random() - 0.5) * 160;
-        pos[i*3+1] = Math.random() * 50 + 1;
-        pos[i*3+2] = (Math.random() - 0.5) * 160;
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
-        color: 0x6688cc, size: 0.05, transparent: true, opacity: 0.3,
-        blending: THREE.AdditiveBlending, depthWrite: false,
-    })));
-}
 
 function startLoop(orb, css) {
     function loop() {
@@ -185,7 +153,7 @@ function buildTrailMesh(points, color) {
 
 function buildSpheres(points, color, size = 0.06, opacity = 1) {
     const group = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4, roughness: 0.25, transparent: opacity < 1, opacity });
+    const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.15, roughness: 0.3, transparent: opacity < 1, opacity });
     points.forEach(p => {
         const s = new THREE.Mesh(new THREE.SphereGeometry(size, 10, 10), mat);
         s.position.set(p[0], p[1], p[2]);
@@ -393,13 +361,11 @@ function startAnim(fromStart = false) {
 
         if (ts >= timeRange.end) {
             animStep(timeRange.end);
-            lastAnimTimestamp = timeRange.end;
             pauseAnim();
             return;
         }
 
         animStep(ts);
-        lastAnimTimestamp = ts;
         const slider = document.getElementById('timelineSlider');
         if (slider) slider.value = ((ts - timeRange.start) / (timeRange.end - timeRange.start)) * 100;
         const cur = document.getElementById('timeCurrent');
@@ -422,7 +388,6 @@ function stopAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
     animElapsed = 0;
-    lastAnimTimestamp = 0;
     setPredVisible(true);
     // 清除动画球体
     for (const id in movingSpheres) { scene.remove(movingSpheres[id]); delete movingSpheres[id]; }
@@ -478,6 +443,12 @@ window.toggleMethod = function(id) {
     const statPanel = document.getElementById('stat-' + id);
     if (statPanel) statPanel.style.display = detectionMethods[id].visible ? '' : 'none';
     refreshAll(); updateStats();
+    // 同步到服务端
+    fetch('/api/toggle_method', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method_id: id }),
+    }).catch(function(e){ console.warn('toggleMethod sync failed:', e); });
 };
 
 // ═══════════════════════════════════════════
@@ -494,8 +465,7 @@ function bindEvents() {
         if (timeRange.end > timeRange.start) {
             const ts = timeRange.start + parseFloat(e.target.value)/100*(timeRange.end-timeRange.start);
             animStep(ts);
-            lastAnimTimestamp = ts;
-            animElapsed = ts - timeRange.start;
+                animElapsed = ts - timeRange.start;
             updateStats(ts);
             const cur = document.getElementById('timeCurrent');
             if (cur) cur.textContent = ts.toFixed(1) + 's';

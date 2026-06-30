@@ -18,15 +18,28 @@ AI_URL: str = _ai_cfg.get('url', '')
 AI_MODEL: str = _ai_cfg.get('model', '')
 
 
+_METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
+
 def init_from_config():
-    """从配置文件初始化 detection_methods 元信息"""
+    """从配置文件初始化 detection_methods 元信息（固定顺序）"""
     cfg = ensure_config()
     detection_methods.clear()
+    for mid in _METHOD_ORDER:
+        if mid in cfg['detection_methods']:
+            data = cfg['detection_methods'][mid]
+            detection_methods[mid] = _make_method(data)
+    # 配置中有但不在固定列表中的
     for mid, data in cfg['detection_methods'].items():
-        detection_methods[mid] = {
-            'name': data.get('name', ''),
-            'color': data.get('color', '#999999'),
-            'visible': data.get('visible', True),
-            'points': [],
-            'timestamps': [],
-        }
+        if mid not in detection_methods:
+            detection_methods[mid] = _make_method(data)
+
+
+def _make_method(data: dict) -> dict:
+    return {
+        'name': data.get('name', ''),
+        'color': data.get('color', '#999999'),
+        'visible': data.get('visible', True),
+        'weight': data.get('weight', 1.0),
+        'points': [],
+        'timestamps': [],
+    }

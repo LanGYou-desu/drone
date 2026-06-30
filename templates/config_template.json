@@ -9,17 +9,26 @@
         "visible": {
             "name": "可见光",
             "color": "#ff6b6b",
-            "visible": true
+            "visible": true,
+            "weight": 1.0
         },
         "infrared": {
             "name": "红外",
             "color": "#4ecdc4",
-            "visible": true
+            "visible": true,
+            "weight": 1.0
         },
         "radar": {
             "name": "雷达",
             "color": "#ffe66d",
-            "visible": true
+            "visible": true,
+            "weight": 1.0
+        },
+        "self": {
+            "name": "自选",
+            "color": "#FF9500",
+            "visible": true,
+            "weight": 1.0
         }
     },
     "prediction_settings": {

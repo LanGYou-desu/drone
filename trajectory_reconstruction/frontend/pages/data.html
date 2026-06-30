@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}数据管理 — 鹰眼长空{% endblock %}
-{% from "icons.html" import icon_database, icon_folder, icon_upload, icon_disc, icon_camera, icon_list, icon_refresh, icon_warning, icon_trash, icon_table %}
+{% from "icons.html" import icon_database, icon_folder, icon_upload, icon_disc, icon_camera, icon_list, icon_refresh, icon_trash, icon_table %}
 {% block content %}
 
 <div class="page">
@@ -25,20 +25,20 @@
             <div class="card-header"><h3>{{ icon_disc() }} 备份管理</h3></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary" id="createBackupBtn" style="width:60%;">{{ icon_camera() }} 立即备份</button>
-                <button class="btn btn-primary" id="listBackupsBtn" style="width:60%;">{{ icon_list() }} 查看备份列表</button>
                 <button class="btn btn-primary" id="restoreAllBtn" style="width:60%;">{{ icon_refresh() }} 一键恢复最新</button>
+                <button class="btn btn-primary" id="listBackupsBtn" style="width:60%;">{{ icon_list() }} 查看备份列表</button>
             </div>
         </div>
 
-        <!-- 危险操作 -->
-        <div class="card" style="border-color:rgba(248,81,73,0.3);">
-            <div class="card-header"><h3 style="color:var(--red);">{{ icon_warning() }} 危险操作</h3></div>
+        <!-- 数据更新 -->
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_refresh() }} 数据更新</h3></div>
             <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
-                清空所有轨迹数据（自动备份到 backup/）
+                更新最新数据
             </p>
             <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-primary-green" id="refreshBtn" style="width:60%;">{{ icon_refresh() }} 更新全部数据</button>
                 <button class="btn btn-danger" id="clearAllBtn" style="width:60%;">{{ icon_trash() }} 清理全部数据</button>
-                <button class="btn btn-secondary" id="refreshBtn" style="width:60%;">{{ icon_refresh() }} 重置为默认数据</button>
             </div>
         </div>
     </div>

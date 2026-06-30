@@ -10,11 +10,26 @@ from trajectory_reconstruction.core.config.config_manager import ensure_config, 
 main_bp = Blueprint('main', __name__)
 
 
+_METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
+
 def _page_context(active: str) -> dict:
     """构建页面公共上下文"""
+    import os
     cfg = ensure_config()
+    self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
+    ordered = {}
+    for mid in _METHOD_ORDER:
+        if mid in detection_methods:
+            if mid == 'self' and not self_exists:
+                continue
+            ordered[mid] = detection_methods[mid]
+    for mid in detection_methods:
+        if mid not in ordered:
+            if mid == 'self' and not self_exists:
+                continue
+            ordered[mid] = detection_methods[mid]
     return {
-        'methods_data': detection_methods,
+        'methods_data': ordered,
         'pred_settings': cfg.get('prediction_settings', {}),
         'active_page': active,
         'theme': cfg.get('theme', 'dark'),

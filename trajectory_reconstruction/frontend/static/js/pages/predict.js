@@ -3,7 +3,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
-import { buildAxes, getSceneBackground, getFogColor, getGridColor } from '../common/three-utils.js';
+import { buildAxes, getSceneBackground, getFogColor, getGridColor, buildLights } from '../common/three-utils.js';
 
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
@@ -83,14 +83,7 @@ async function initViewer() {
     scene.add(grid);
 
     buildAxes(scene, CSS2DObject);
-    scene.add(new THREE.AmbientLight(0x334466, 0.8));
-    scene.add(new THREE.HemisphereLight(0x8899cc, 0x223344, 0.5));
-    const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
-    sun.position.set(12, 20, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100; sun.shadow.camera.left = -30; sun.shadow.camera.right = 30; sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30; sun.shadow.bias = -0.0001;
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
-    fill.position.set(-4, 2, -4);
-    scene.add(fill);
+    buildLights(scene);
 
     function loop() {
         requestAnimationFrame(loop);
@@ -151,6 +144,8 @@ async function initViewer() {
 function renderCachedPredictions() {
     if (!Object.keys(predictedData).length) return;
     for (const [mid, pred] of Object.entries(predictedData)) {
+        const m = detectionMethods[mid];
+        if (!m || !m.visible) continue;
         if (!pred.prediction?.length) continue;
         const color = detectionMethods[mid]?.color || '#ffffff';
         const pts = pred.prediction.map(p => new THREE.Vector3(p[0], p[1], p[2]));
@@ -190,7 +185,7 @@ function drawTrails() {
     lines = {}; predLines = {};
 
     for (const [id, data] of Object.entries(detectionMethods)) {
-        if (!data.points || data.points.length < 2) continue;
+        if (!data.visible || !data.points || data.points.length < 2) continue;
         const curve = new THREE.CatmullRomCurve3(data.points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
         const pts = curve.getPoints(100);
         const line = new THREE.Line(
@@ -200,7 +195,7 @@ function drawTrails() {
         scene.add(line);
 
         const grp = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.3, roughness: 0.3 });
+        const mat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.15, roughness: 0.3 });
         data.points.forEach(p => {
             const s = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat);
             s.position.set(p[0], p[1], p[2]);

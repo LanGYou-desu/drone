@@ -45,7 +45,7 @@ document.getElementById('clearAllBtn').addEventListener('click', async () => {
         r.success ? toast.success('已清理并备份') : toast.error('清理失败');
         if (r.success) setTimeout(() => location.reload(), 800);
     } catch (e) { toast.error(e.message); }
-    finally { btn.disabled = false; btn.textContent = '🗑️ 清理全部数据'; }
+    finally { btn.disabled = false; btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><line x1="2" y1="3.5" x2="14" y2="3.5"/><line x1="5.5" y1="3.5" x2="5.5" y2="2"/><line x1="10.5" y1="3.5" x2="10.5" y2="2"/><rect x="3.5" y="4" width="9" height="10" rx="0.8"/><line x1="6.5" y1="6" x2="6.5" y2="12"/><line x1="9.5" y1="6" x2="9.5" y2="12"/></svg> 清理全部数据'; }
 });
 
 // ---- 手动备份 ----
@@ -56,7 +56,7 @@ document.getElementById('createBackupBtn').addEventListener('click', async () =>
         const r = await (await fetch('/api/backup/create', { method: 'POST' })).json();
         r.success ? toast.success(r.message) : toast.error(r.error);
     } catch (e) { toast.error(e.message); }
-    finally { btn.disabled = false; btn.textContent = '📸 立即备份'; }
+    finally { btn.disabled = false; btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><rect x="1.5" y="4" width="13" height="10" rx="2"/><circle cx="8" cy="9" r="2.5"/><path d="M5 4L6 2h4l1 2"/></svg> 立即备份'; }
 });
 
 // ---- 备份列表 ----
@@ -180,3 +180,4 @@ document.getElementById('restoreAllBtn').addEventListener('click', async () => {
         if (r.success) setTimeout(() => location.reload(), 800);
     } catch (e) { toast.error(e.message); }
 });
+

@@ -17,6 +17,58 @@ export function getGridColor() {
     return isLightTheme() ? { main: 0x555a61, sub: 0x7a7f86 } : { main: 0x334466, sub: 0x1a1a2e };
 }
 
+export function buildLights(scene) {
+    const light = isLightTheme();
+    if (light) {
+        scene.add(new THREE.AmbientLight(0x667788, 1.0));
+        scene.add(new THREE.HemisphereLight(0xaabbcc, 0x556677, 0.6));
+        const sun = new THREE.DirectionalLight(0xffeedd, 1.0);
+        sun.position.set(12, 20, 8); sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100;
+        sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+        sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+        sun.shadow.bias = -0.0001;
+        scene.add(sun);
+        const fill = new THREE.DirectionalLight(0x8899bb, 0.35);
+        fill.position.set(-5, 3, -5);
+        scene.add(fill);
+    } else {
+        scene.add(new THREE.AmbientLight(0x334466, 0.8));
+        scene.add(new THREE.HemisphereLight(0x8899cc, 0x223344, 0.5));
+        const sun = new THREE.DirectionalLight(0xffeedd, 1.2);
+        sun.position.set(12, 20, 8); sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 100;
+        sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+        sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+        sun.shadow.bias = -0.0001;
+        scene.add(sun);
+        const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
+        fill.position.set(-5, 3, -5);
+        scene.add(fill);
+    }
+}
+
+export function buildStarfield(scene) {
+    const light = isLightTheme();
+    const count = 4000;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+        pos[i*3] = (Math.random() - 0.5) * 160;
+        pos[i*3+1] = Math.random() * 50 + 1;
+        pos[i*3+2] = (Math.random() - 0.5) * 160;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+        color: light ? 0x8899aa : 0x6688cc,
+        size: 0.05, transparent: true,
+        opacity: light ? 0.2 : 0.3,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+    })));
+}
+
 export function buildAxes(scene, CSS2DObject) {
     const light = isLightTheme();
     const origin = new THREE.Vector3(0, -0.48, 0);

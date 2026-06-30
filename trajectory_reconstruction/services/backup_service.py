@@ -153,9 +153,11 @@ def _clear_all():
     for mid in detection_methods:
         detection_methods[mid]['points'] = []
         detection_methods[mid]['timestamps'] = []
-    # 删除自选平台
+    # 删除自选和综合平台（恢复后会重新合成）
     if 'self' in detection_methods:
         del detection_methods['self']
+    if 'synthetic' in detection_methods:
+        del detection_methods['synthetic']
     # 清空磁盘文件
     for subdir in ('fact', 'predict'):
         d = os.path.join('data', subdir)
@@ -190,11 +192,8 @@ def restore_backup(name: str) -> tuple[bool, str]:
         _copy_dir(fact_src, 'data/fact')
         restored_count += 1
 
-    # 恢复 predict/ 文件
-    predict_src = os.path.join(snap_path, 'predict')
-    if os.path.isdir(predict_src):
-        _copy_dir(predict_src, 'data/predict')
-        restored_count += 1
+    # 恢复 predict/ 文件（跳过——预测不备份恢复）
+    restored_count += 0
 
     # 恢复内存数据（重新注册自选平台）
     from trajectory_reconstruction.core.io.data_loader import load_dat_file
@@ -222,6 +221,9 @@ def restore_backup(name: str) -> tuple[bool, str]:
                 restored_count += 1
 
     save_metadata()
+    # 重新合成综合轨迹
+    from trajectory_reconstruction.services.data_service import synthesize_trajectory
+    synthesize_trajectory()
     return True, f'已从 {name} 恢复 {restored_count} 个平台'
 
 
