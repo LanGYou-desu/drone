@@ -4,7 +4,11 @@
 维护检测手段数据（轨迹、元信息）的全局内存缓存。
 路由蓝图通过此模块共享状态，避免循环导入。
 """
+import time
 from trajectory_reconstruction.core.config.config_manager import ensure_config
+
+# 启动版本号，用于前端缓存刷新
+APP_VERSION = str(int(time.time()))
 
 _config = ensure_config()
 
@@ -18,13 +22,13 @@ AI_URL: str = _ai_cfg.get('url', '')
 AI_MODEL: str = _ai_cfg.get('model', '')
 
 
-_METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
+METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
 
 def init_from_config():
     """从配置文件初始化 detection_methods 元信息（固定顺序）"""
     cfg = ensure_config()
     detection_methods.clear()
-    for mid in _METHOD_ORDER:
+    for mid in METHOD_ORDER:
         if mid in cfg['detection_methods']:
             data = cfg['detection_methods'][mid]
             detection_methods[mid] = _make_method(data)
@@ -35,12 +39,14 @@ def init_from_config():
 
 
 def _make_method(data: dict) -> dict:
-    return {
+    result = {
         'name': data.get('name', ''),
         'color': data.get('color', '#999999'),
         'visible': data.get('visible', True),
-        'weight': data.get('weight', 1.0),
         'enabled': data.get('enabled', True),
         'points': [],
         'timestamps': [],
     }
+    if 'weight' in data:
+        result['weight'] = data['weight']
+    return result

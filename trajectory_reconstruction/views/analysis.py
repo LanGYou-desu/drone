@@ -4,11 +4,11 @@
 import os
 from flask import Blueprint, render_template, jsonify
 
-from trajectory_reconstruction.core.state import detection_methods
+from trajectory_reconstruction.core.state import detection_methods, METHOD_ORDER
 from trajectory_reconstruction.core.io.data_loader import load_dat_file
+from trajectory_reconstruction.core.config.config_manager import ensure_config
 
 analysis_bp = Blueprint('analysis', __name__)
-_METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
 
 # 预测文件映射
 _PREDICT_FILE_MAP = {'visible': 'pre1.dat', 'infrared': 'pre2.dat', 'radar': 'pre3.dat',
@@ -76,7 +76,7 @@ def get_analysis_data():
     """返回各检测手段的运动学分析数据（fact + predict 拼接后统一计算）"""
     self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
     result = {}
-    for mid in _METHOD_ORDER:
+    for mid in METHOD_ORDER:
         if mid not in detection_methods:
             continue
         if mid == 'self' and not self_exists:
@@ -98,6 +98,11 @@ def get_analysis_data():
 
         speeds, accelerations, curvatures, heights = _compute_metrics(points, timestamps)
 
+        # 对齐数组长度：speed 少 1 个点，accel/curv 各少 2 个点，补前导零
+        speeds = [0] + speeds
+        accelerations = [0, 0] + accelerations
+        curvatures = [0] + curvatures + [0]
+
         result[mid] = {
             'name': data['name'],
             'color': data['color'],
@@ -108,14 +113,9 @@ def get_analysis_data():
             'time_steps': timestamps,
         }
 
-    # 强制固定顺序输出
-    sorted_result = {}
-    for mid in _METHOD_ORDER:
-        if mid in result:
-            sorted_result[mid] = result[mid]
-    for mid in result:
-        if mid not in sorted_result:
-            sorted_result[mid] = result[mid]
+    # METHOD_ORDER 优先，其余追加
+    sorted_result = {mid: result[mid] for mid in METHOD_ORDER if mid in result}
+    sorted_result.update({mid: result[mid] for mid in result if mid not in sorted_result})
     return jsonify(sorted_result)
 
 
@@ -133,10 +133,13 @@ def get_capture_analysis():
     if not pred_pts or len(pred_pts) < 3:
         return jsonify([])
 
-    from trajectory_reconstruction.core.config.config_manager import ensure_config
     cfg = ensure_config()
     w = cfg.get('capture_weights', {'height': 0.3, 'speed': 0.3, 'acceleration': 0.2, 'curvature': 0.2})
     w_h, w_s, w_a, w_c = w['height'], w['speed'], w['acceleration'], w['curvature']
+    # 归一化权重使总和为 1，保证最高分 ≤ 100
+    w_sum = w_h + w_s + w_a + w_c
+    if w_sum > 0:
+        w_h, w_s, w_a, w_c = w_h / w_sum, w_s / w_sum, w_a / w_sum, w_c / w_sum
 
     heights = [p[1] for p in pred_pts]
     speeds, accels, curvs, _ = _compute_metrics(pred_pts, pred_ts)
@@ -157,7 +160,11 @@ def get_capture_analysis():
               w_s * (1 - _safe(speeds, i) / s_max) +
               w_a * (1 - abs(_safe(accels, i)) / a_max) +
               w_c * (1 - _safe(curvs, i) / c_max))
-        scored.append((round(sc * 100), i))
+        scored.append((sc, i))
+    # 以最高分为 100，其余按比例缩放
+    max_sc = max(s for s, _ in scored) if scored else 1
+    if max_sc > 0:
+        scored = [(round(s / max_sc * 100), i) for s, i in scored]
     scored.sort(reverse=True)
     top3 = scored[:3]
 

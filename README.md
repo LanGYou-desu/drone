@@ -2,7 +2,7 @@
 
 基于多平台协同的低空无人机智能监测系统。融合可见光、红外、雷达三种传感平台的轨迹数据，提供 3D 可视化、加权合成、轨迹预测、捕捉时机分析和 AI 策略生成。
 
-**技术栈：** Python Flask · pywebview · Three.js · ECharts · 硅基流动 AI
+**技术栈：** Python Flask · pywebview · Three.js · ECharts · OpenAI 兼容 AI 接口
 
 ## 快速开始
 
@@ -25,7 +25,7 @@ drone/
 ├── config.json                          # 运行时配置（API Key、权重、主题等）
 │
 ├── trajectory_reconstruction/           # 轨迹重建与分析
-│   ├── core/                            #   领域逻辑（config/io/prediction/ai）
+│   ├── core/                            #   领域逻辑（config/io/prediction/ai/math_utils）
 │   ├── services/                        #   业务编排（数据/预测/备份）
 │   ├── views/                           #   HTTP 接口
 │   └── frontend/pages/                  #   模块专属页面

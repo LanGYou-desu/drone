@@ -119,6 +119,7 @@ drone/
 │   │   │   └── data_loader.py           # .dat 文件 I/O（读写、默认加载）
 │   │   ├── prediction/
 │   │   │   └── prediction.py            # 线性外推预测算法
+│   │   │   └── math_utils.py             # 三维轨迹插值/平滑工具
 │   │   └── ai/
 │   │       └── ai_service.py            # 大模型 API 调用
 │   │
@@ -240,7 +241,7 @@ core/         (领域逻辑)          ← 纯函数，不依赖 Flask、不依�
 | `ai.api_key` | str | `""` | API 密钥 |
 | `ai.url` | str | siliconflow URL | OpenAI 兼容端点 |
 | `ai.model` | str | `Qwen/Qwen2.5-7B-Instruct` | 模型名称 |
-| `detection_methods.<id>.weight` | float | 1.0 | 综合轨迹合成权重 |
+| `detection_methods.<id>.weight` | float | 1.0 | 综合轨迹合成权重（仅 visible/infrared/radar/self 有效，synthetic 无需此字段） |
 | `prediction_settings.time_step` | float | 0.3 | 预测时间步长（秒） |
 | `capture_weights.height` | float | 0.3 | 捕捉评分高度权重 |
 | `capture_weights.speed` | float | 0.3 | 捕捉评分速度权重 |
@@ -319,20 +320,19 @@ AI_API_KEY, AI_URL, AI_MODEL  # 从 config.json ai 字段读取
            weighted_sum += p * weight
        if weight_sum > 0: syn_points.append(weighted_sum / weight_sum)
 
-4. 平滑处理（两次三点移动平均）
-   for _ in range(2):
-       smoothed[i] = (points[i-1] + points[i] + points[i+1]) / 3
+4. 平滑处理（仅多平台融合时执行，单平台跳过）
+   调用 smooth_points_3d(syn_points, passes=2)
 
 5. 更新 detection_methods['synthetic']
 ```
 
-**插值函数 `_interpolate(mid, t)`：**
+**插值函数 `lerp_3d(pts, ts, t)`（`core/math_utils.py`）：**
 - 二分查找时间戳区间
 - 线性插值：`ratio = (t - t0) / (t1 - t0)`，`result = p0 + (p1-p0) * ratio`
 - 边界：t 在范围外返回最近端点
 
-**兜底函数 `_nearest_avg(mid, t)`：**
-- 当 `_interpolate` 返回 None 时触发
+**兜底函数 `nearest_avg_3d(pts, ts, t)`：**
+- 当 `lerp_3d` 返回 None 时触发
 - 找到 t 前后的最近数据点，取坐标平均值
 
 **触发时机：**

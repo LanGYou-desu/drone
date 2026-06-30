@@ -114,7 +114,7 @@
         document.querySelectorAll('.platform-enabled').forEach(cb => { data.enabled[cb.dataset.mid] = cb.checked; });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         var r = await resp.json();
-        if (r.success) location.reload(); else alert('保存失败');
+        if (r.success) { sessionStorage.clear(); location.reload(); } else alert('保存失败');
     }
 
     // Save synthesis weights (same as savePlatforms)
@@ -126,7 +126,7 @@
         document.querySelectorAll('.capture-slider').forEach(s => { weights[s.dataset.key] = parseFloat(s.value); });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capture_weights:weights})});
         var r = await resp.json();
-        if (r.success) location.reload(); else alert('保存失败');
+        if (r.success) { sessionStorage.clear(); location.reload(); } else alert('保存失败');
     }
 
     updateThemeUI();

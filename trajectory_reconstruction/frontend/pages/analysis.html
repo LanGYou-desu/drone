@@ -76,7 +76,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/lib/echarts.min.js"></script>
+<script src="/static/js/lib/echarts.min.js?v={{ app_version }}"></script>
 <script>
     const methodsMeta = {{ methods_data | tojson }};
     let allData = {};

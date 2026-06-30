@@ -208,6 +208,8 @@ def restore_backup(name: str) -> tuple[bool, str]:
                     'name': manifest.get('methods', {}).get(method_id, {}).get('name', method_id),
                     'color': manifest.get('methods', {}).get(method_id, {}).get('color', '#FF9500'),
                     'visible': True,
+                    'enabled': True,
+                    'weight': 1.0,
                     'points': [],
                     'timestamps': [],
                 }

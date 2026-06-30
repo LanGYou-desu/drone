@@ -12,9 +12,51 @@
   python -m trajectory_recognition --headless       # → :5001
   python -m trajectory_recognition                  # 桌面窗口
 """
+import os
+import subprocess
 import sys
 import threading
 import time
+
+
+def _cleanup():
+    """启动前清理残留进程和 Python 缓存"""
+    # 清除 __pycache__ 防止旧字节码
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    for root, dirs, _ in os.walk(project_root):
+        for d in dirs:
+            if d == '__pycache__':
+                cache = os.path.join(root, d)
+                for f in os.listdir(cache):
+                    os.remove(os.path.join(cache, f))
+                os.rmdir(cache)
+
+    # 终止占用目标端口的残留进程
+    for port in (5000, 5001):
+        try:
+            if sys.platform == 'win32':
+                result = subprocess.run(
+                    ['netstat', '-ano'], capture_output=True, text=True
+                )
+                for line in result.stdout.splitlines():
+                    if f':{port}' in line and 'LISTENING' in line:
+                        parts = line.strip().split()
+                        pid = parts[-1]
+                        subprocess.run(
+                            ['taskkill', '//F', '//PID', pid],
+                            capture_output=True,
+                        )
+                        print(f'[cleanup] 终止残留进程 PID={pid} (端口 {port})')
+            else:
+                result = subprocess.run(
+                    ['lsof', '-ti', f':{port}'], capture_output=True, text=True
+                )
+                for pid in result.stdout.strip().splitlines():
+                    if pid:
+                        os.kill(int(pid), 9)
+                        print(f'[cleanup] 终止残留进程 PID={pid} (端口 {port})')
+        except Exception:
+            pass
 
 
 def start_recon(headless=False):
@@ -55,6 +97,8 @@ def start_recog():
 if __name__ == '__main__':
     args = set(sys.argv[1:])
     headless = '--headless' in args
+
+    _cleanup()
 
     if 'recog' in args and 'recon' not in args:
         start_recog()

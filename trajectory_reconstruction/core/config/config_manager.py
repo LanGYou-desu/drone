@@ -63,7 +63,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
             'name': '综合',
             'color': '#ffffff',
             'visible': True,
-            'weight': 1.0,
             'enabled': True,
         },
     },
@@ -99,11 +98,13 @@ def _validate_config(cfg: dict) -> dict:
     # 确保 detection_methods 子字段
     for mid in DEFAULT_CONFIG['detection_methods']:
         if mid not in cfg['detection_methods']:
-            cfg['detection_methods'][mid] = DEFAULT_CONFIG['detection_methods'][mid]
+            cfg['detection_methods'][mid] = dict(DEFAULT_CONFIG['detection_methods'][mid])
         else:
             for field in ['name', 'color', 'visible', 'weight', 'enabled']:
                 if field not in cfg['detection_methods'][mid]:
-                    cfg['detection_methods'][mid][field] = DEFAULT_CONFIG['detection_methods'][mid][field]
+                    default_val = DEFAULT_CONFIG['detection_methods'][mid].get(field)
+                    if default_val is not None:
+                        cfg['detection_methods'][mid][field] = default_val
 
     # 确保 prediction_settings 子字段
     for key in DEFAULT_CONFIG['prediction_settings']:

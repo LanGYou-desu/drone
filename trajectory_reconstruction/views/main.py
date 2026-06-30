@@ -6,29 +6,26 @@ import os
 
 from flask import Blueprint, render_template, request, jsonify
 
-from trajectory_reconstruction.core.state import detection_methods
+from trajectory_reconstruction.core.state import detection_methods, APP_VERSION, METHOD_ORDER
 from trajectory_reconstruction.core.config.config_manager import ensure_config, save_config
 
 main_bp = Blueprint('main', __name__)
-
-
-_METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
 
 def _page_context(active: str) -> dict:
     """构建页面公共上下文"""
     cfg = ensure_config()
     self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
+    # 按 METHOD_ORDER 固定顺序，再追加未曾枚举的平台
+    ordered_ids = [mid for mid in METHOD_ORDER if mid in detection_methods]
+    ordered_ids += [mid for mid in detection_methods if mid not in ordered_ids]
     ordered = {}
-    for mid in _METHOD_ORDER:
-        if mid in detection_methods:
-            if mid == 'self' and not self_exists:
-                continue
-            ordered[mid] = detection_methods[mid]
-    for mid in detection_methods:
-        if mid not in ordered:
-            if mid == 'self' and not self_exists:
-                continue
-            ordered[mid] = detection_methods[mid]
+    for mid in ordered_ids:
+        m = detection_methods[mid]
+        if mid == 'self' and not self_exists:
+            continue
+        if not m.get('enabled', True):
+            continue
+        ordered[mid] = m
     return {
         'methods_data': ordered,
         'pred_settings': cfg.get('prediction_settings', {}),
@@ -36,6 +33,7 @@ def _page_context(active: str) -> dict:
         'theme': cfg.get('theme', 'dark'),
         'camera_speed': cfg.get('camera_speed', 0.12),
         'capture_weights': cfg.get('capture_weights', {}),
+        'app_version': APP_VERSION,
     }
 
 
@@ -78,17 +76,11 @@ def docs_page():
 def settings_page():
     """设置页面 — 主题切换等"""
     ctx = _page_context('settings')
-    # 设置页始终显示全部平台（含自选和综合）
-    cfg = ensure_config()
-    all_methods = {}
-    for mid in _METHOD_ORDER:
-        if mid in detection_methods:
-            all_methods[mid] = detection_methods[mid]
-    for mid in detection_methods:
-        if mid not in all_methods:
-            all_methods[mid] = detection_methods[mid]
+    # 设置页始终显示全部平台（METHOD_ORDER 优先）
+    all_methods = {mid: detection_methods[mid] for mid in METHOD_ORDER if mid in detection_methods}
+    all_methods.update({mid: detection_methods[mid] for mid in detection_methods if mid not in all_methods})
     ctx['all_methods'] = all_methods
-    ctx['methods_data'] = all_methods  # 覆盖过滤后的 methods_data
+    ctx['methods_data'] = all_methods
     return render_template('settings.html', **ctx)
 
 

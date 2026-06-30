@@ -38,6 +38,14 @@ def create_app() -> Flask:
             return send_from_directory(_OWN_STATIC, filename)
         return send_from_directory(shared_static, filename)
 
+    @app.after_request
+    def _no_cache(response):
+        """禁止浏览器缓存"""
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+
     # ---- 页面 ----
     @app.route('/')
     def index():

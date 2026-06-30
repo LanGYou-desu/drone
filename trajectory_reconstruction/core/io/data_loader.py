@@ -7,6 +7,8 @@
 """
 import os
 
+from trajectory_reconstruction.core.config.config_manager import ensure_config
+
 
 def load_dat_file(file_path: str) -> tuple[list[list[float]], list[float]]:
     """
@@ -58,12 +60,8 @@ def save_predict_data(method_id: str, points: list[list[float]],
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    if timestamps is None or len(timestamps) < len(points):
-        from trajectory_reconstruction.core.config.config_manager import ensure_config
-        cfg = ensure_config()
-        default_step = cfg.get('prediction_settings', {}).get('time_step', 0.5)
-    else:
-        default_step = 0.5
+    cfg = ensure_config()
+    default_step = cfg.get('prediction_settings', {}).get('time_step', 0.5)
 
     with open(file_path, 'w', encoding='utf-8') as f:
         for i, p in enumerate(points):

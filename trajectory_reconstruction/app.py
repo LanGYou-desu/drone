@@ -38,6 +38,14 @@ def create_app() -> Flask:
             return send_from_directory(_SHARED_STATIC, filename)
         return send_from_directory(_OWN_STATIC, filename)
 
+    @app.after_request
+    def _no_cache(response):
+        """禁止浏览器缓存，确保每次刷新拿到最新文件"""
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+
     # 延迟导入，避免循环依赖
     from trajectory_reconstruction.core.config.config_manager import ensure_config
     from trajectory_reconstruction.core.state import init_from_config

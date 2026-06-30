@@ -15,6 +15,7 @@ import os
 from flask import Blueprint, jsonify, request
 
 from trajectory_reconstruction.services import data_service, backup_service
+from trajectory_reconstruction.services.data_service import save_metadata
 from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.io.data_loader import load_dat_file
 
@@ -100,13 +101,14 @@ def delete_backup():
 
 @api_bp.route('/api/toggle_method', methods=['POST'])
 def toggle_method():
-    """切换检测平台可见性"""
+    """切换检测平台可见性（禁用平台不可切换）"""
     data = request.get_json(silent=True) or {}
     method_id = data.get('method_id', '')
     if not method_id or method_id not in detection_methods:
         return jsonify({'success': False, 'error': '未知平台'}), 400
+    if not detection_methods[method_id].get('enabled', True):
+        return jsonify({'success': False, 'error': '平台已禁用'}), 400
     detection_methods[method_id]['visible'] = not detection_methods[method_id].get('visible', True)
-    from trajectory_reconstruction.services.data_service import save_metadata
     save_metadata()
     return jsonify({'success': True, 'visible': detection_methods[method_id]['visible']})
 

@@ -18,7 +18,7 @@ document.getElementById('uploadBtn').addEventListener('click', async () => {
         const resp = await fetch('/api/load_data', { method: 'POST', body: fd });
         const r = await resp.json();
         r.success ? toast.success(`已加载 ${r.name}`) : toast.error(r.error);
-        if (r.success) setTimeout(() => location.reload(), 800);
+        if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
     } catch (e) { toast.error(e.message); }
     finally { btn.disabled = false; btn.textContent = '上传为自选平台'; }
 });
@@ -30,7 +30,7 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
     try {
         const r = await (await fetch('/api/refresh_data', { method: 'POST' })).json();
         r.success ? toast.success('已重置') : toast.error('重置失败');
-        if (r.success) setTimeout(() => location.reload(), 800);
+        if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
     } catch (e) { toast.error(e.message); }
     finally { btn.disabled = false; }
 });
@@ -43,7 +43,7 @@ document.getElementById('clearAllBtn').addEventListener('click', async () => {
     try {
         const r = await (await fetch('/api/clear_all_data', { method: 'POST' })).json();
         r.success ? toast.success('已清理并备份') : toast.error('清理失败');
-        if (r.success) setTimeout(() => location.reload(), 800);
+        if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
     } catch (e) { toast.error(e.message); }
     finally { btn.disabled = false; btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><line x1="2" y1="3.5" x2="14" y2="3.5"/><line x1="5.5" y1="3.5" x2="5.5" y2="2"/><line x1="10.5" y1="3.5" x2="10.5" y2="2"/><rect x="3.5" y="4" width="9" height="10" rx="0.8"/><line x1="6.5" y1="6" x2="6.5" y2="12"/><line x1="9.5" y1="6" x2="9.5" y2="12"/></svg> 清理全部数据'; }
 });
@@ -145,7 +145,7 @@ document.getElementById('restoreSelectedBtn').addEventListener('click', async ()
             body: JSON.stringify({ backup_file: name }),
         })).json();
         r.success ? toast.success(r.message) : toast.error(r.error);
-        if (r.success) setTimeout(() => location.reload(), 800);
+        if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
     } catch (e) { toast.error(e.message); }
 });
 
@@ -177,7 +177,7 @@ document.getElementById('restoreAllBtn').addEventListener('click', async () => {
     try {
         const r = await (await fetch('/api/restore_all_backups', { method: 'POST' })).json();
         r.success ? toast.success(r.message) : toast.error(r.error);
-        if (r.success) setTimeout(() => location.reload(), 800);
+        if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
     } catch (e) { toast.error(e.message); }
 });
 

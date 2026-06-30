@@ -1,6 +1,8 @@
 """
 AI 建议服务 — 调用硅基流动 API 生成无人机捕捉策略
 """
+import json
+
 import requests
 from requests.exceptions import RequestException, Timeout
 
@@ -85,7 +87,10 @@ def get_ai_suggestion(
     except RequestException as e:
         raise RequestException(f'AI 服务请求失败: {e}')
 
-    result = response.json()
+    try:
+        result = response.json()
+    except json.JSONDecodeError:
+        raise ValueError('AI 返回数据格式异常（非 JSON 响应）')
 
     # 校验响应结构
     if 'choices' not in result or not result['choices']:
