@@ -133,6 +133,8 @@ def api_weights():
 
     if updated:
         save_config(cfg)
+        from trajectory_reconstruction.services.data_service import synthesize_trajectory
+        synthesize_trajectory()
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': '无有效更新'}), 400
 
