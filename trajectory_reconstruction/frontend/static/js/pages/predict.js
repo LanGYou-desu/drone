@@ -4,6 +4,7 @@
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
 import { buildAxes, getSceneBackground, getFogColor, getGridColor, buildLights } from '../common/three-utils.js';
+import { bindWASD, bindCoordTooltip, bindResize } from '../common/three-input.js';
 
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
@@ -95,82 +96,9 @@ async function initViewer() {
     }
     loop();
 
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // WASD 键盘平移
-    const keys = {};
-    document.addEventListener('keydown', e => { keys[e.code] = true; });
-    document.addEventListener('keyup', e => { keys[e.code] = false; });
-    function wasdLoop() {
-        requestAnimationFrame(wasdLoop);
-        const speed = (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12;
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        dir.normalize();
-        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-        if (keys['KeyW']) { camera.position.addScaledVector(dir, speed); controls.target.addScaledVector(dir, speed); }
-        if (keys['KeyS']) { camera.position.addScaledVector(dir, -speed); controls.target.addScaledVector(dir, -speed); }
-        if (keys['KeyA']) { camera.position.addScaledVector(right, -speed); controls.target.addScaledVector(right, -speed); }
-        if (keys['KeyD']) { camera.position.addScaledVector(right, speed); controls.target.addScaledVector(right, speed); }
-        if (keys['KeyQ']) { camera.position.y -= speed; controls.target.y -= speed; }
-        if (keys['KeyE']) { camera.position.y += speed; controls.target.y += speed; }
-    }
-    wasdLoop();
-
-    // 鼠标悬停坐标拾取
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    raycaster.params.Points.threshold = 0.3;
-    raycaster.params.Line = { threshold: 0.3 };
-    let hoveredSphere = null;
-    renderer.domElement.addEventListener('mousemove', e => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-        const targets = [];
-        for (const id in lines) {
-            if (lines[id]?.points) {
-                lines[id].points.children.forEach(s => {
-                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
-                        targets.push(s);
-                    }
-                });
-            }
-        }
-        for (const id in predLines) {
-            if (predLines[id]?.points) {
-                predLines[id].points.children.forEach(s => {
-                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
-                        targets.push(s);
-                    }
-                });
-            }
-        }
-        const hits = raycaster.intersectObjects(targets);
-        const tip = document.getElementById('coordTooltip');
-        if (hoveredSphere && (!hits.length || hits[0].object !== hoveredSphere)) {
-            hoveredSphere.scale.set(1, 1, 1); hoveredSphere = null;
-        }
-        if (hits.length) {
-            const obj = hits[0].object, p = hits[0].object.position;
-            if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
-            if (tip) {
-                let timeStr = '';
-                const ud = obj.userData;
-                if (ud?.ts && ud.idx != null && ud.idx < ud.ts.length) {
-                    timeStr = ` <span style="color:#d29922">T</span>${ud.ts[ud.idx].toFixed(2)}`;
-                }
-                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}${timeStr}`;
-                tip.style.display = 'block'; tip.style.left = (e.clientX + 16) + 'px'; tip.style.top = (e.clientY - 28) + 'px';
-            }
-        } else { if (tip) tip.style.display = 'none'; }
-    });
+    bindResize(camera, renderer, labelRenderer);
+    bindWASD(camera, controls, () => (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12);
+    bindCoordTooltip(renderer, camera, lines, predLines, 'coordTooltip');
 
     drawTrails();
     renderCachedPredictions();

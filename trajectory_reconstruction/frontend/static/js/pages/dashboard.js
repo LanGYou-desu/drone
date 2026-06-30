@@ -6,6 +6,7 @@
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
 import { buildAxes, getSceneBackground, getFogColor, getGridColor, buildLights, buildStarfield } from '../common/three-utils.js';
+import { bindWASD, bindCoordTooltip, bindResize } from '../common/three-input.js';
 
 // ═══════════════════════════════════════════
 // 数据加载（从 HTML 模板注入的 window._PAGE_DATA_）
@@ -51,7 +52,7 @@ async function init() {
         refreshAll();
         calcRange();
         bindEvents();
-        bindKeyboard();
+        bindWASD(camera, controls, () => (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12);
 
         toast.success('就绪 — 左键旋转 | 滚轮缩放 | 右键平移 | 空格播放');
     } catch (e) {
@@ -472,118 +473,18 @@ function bindEvents() {
         }
     });
 
-    // 鼠标悬停 — 坐标点放大高亮
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    raycaster.params.Points.threshold = 0.3;
-    raycaster.params.Line = { threshold: 0.3 };
-    let hoveredSphere = null;
-
-    renderer.domElement.addEventListener('mousemove', e => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouse, camera);
-
-        // 收集所有轨迹点球体（含预测）
-        const targets = [];
-        for (const id in lines) {
-            if (lines[id]?.spheres) {
-                lines[id].spheres.children.forEach(s => {
-                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
-                        targets.push(s);
-                    }
-                });
-            }
-        }
-        for (const id in predLines) {
-            if (predLines[id]?.points) {
-                predLines[id].points.children.forEach(s => {
-                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
-                        targets.push(s);
-                    }
-                });
-            }
-        }
-
-        const hits = raycaster.intersectObjects(targets);
-        const tip = document.getElementById('coordTooltip');
-
-        // 还原上一个高亮球体
-        if (hoveredSphere && (!hits.length || hits[0].object !== hoveredSphere)) {
-            hoveredSphere.scale.set(1, 1, 1);
-            if (hoveredSphere.material.emissiveIntensity !== undefined) {
-                hoveredSphere.material.emissiveIntensity = 0.4;
-            }
-            hoveredSphere = null;
-        }
-
-        if (hits.length > 0) {
-            const obj = hits[0].object;
-            const p = hits[0].object.position;
-
-            // 高亮当前球体（放大 2.5 倍 + 增强发光）
-            if (obj !== hoveredSphere) {
-                hoveredSphere = obj;
-                hoveredSphere.scale.set(2.5, 2.5, 2.5);
-                if (hoveredSphere.material.emissiveIntensity !== undefined) {
-                    hoveredSphere.material.emissiveIntensity = 1.5;
-                }
-            }
-
-            if (tip) {
-                let timeStr = '';
-                const pts = obj.userData?.pts;
-                const ts = obj.userData?.ts;
-                const idx = obj.userData?.idx;
-                if (pts && ts && idx != null && idx < ts.length) {
-                    timeStr = ` <span style="color:#d29922">T</span>${ts[idx].toFixed(2)}`;
-                }
-                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}${timeStr}`;
-                tip.style.display = 'block';
-                tip.style.left = (e.clientX + 16) + 'px';
-                tip.style.top = (e.clientY - 28) + 'px';
-            }
-        } else {
-            if (tip) tip.style.display = 'none';
-        }
-    });
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    bindCoordTooltip(renderer, camera, lines, predLines, 'coordTooltip');
+    bindResize(camera, renderer, labelRenderer);
 }
 
+
 function bindKeyboard() {
-    const keys = {};
     document.addEventListener('keydown', e => {
-        keys[e.code] = true;
         if (e.code === 'Space' && e.target === document.body) {
             e.preventDefault();
             animActive ? pauseAnim() : startAnim(false);
         }
     });
-    document.addEventListener('keyup', e => { keys[e.code] = false; });
-
-    function wasdLoop() {
-        requestAnimationFrame(wasdLoop);
-        const speed = (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12;
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        dir.normalize();
-        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-
-        if (keys['KeyW']) { camera.position.addScaledVector(dir, speed); controls.target.addScaledVector(dir, speed); }
-        if (keys['KeyS']) { camera.position.addScaledVector(dir, -speed); controls.target.addScaledVector(dir, -speed); }
-        if (keys['KeyA']) { camera.position.addScaledVector(right, -speed); controls.target.addScaledVector(right, -speed); }
-        if (keys['KeyD']) { camera.position.addScaledVector(right, speed); controls.target.addScaledVector(right, speed); }
-        if (keys['KeyQ']) { camera.position.y -= speed; controls.target.y -= speed; }
-        if (keys['KeyE']) { camera.position.y += speed; controls.target.y += speed; }
-    }
-    wasdLoop();
 }
 
 // ═══════════════════════════════════════════
