@@ -18,12 +18,15 @@ os.chdir(_PROJECT_ROOT)
 
 def create_app() -> Flask:
     """创建轨迹重建与分析 Flask 应用"""
-    # 路径均相对于项目根目录
+    shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
+    module_pages = os.path.join(_MODULE_DIR, 'frontend', 'pages')
     app = Flask(
         __name__,
-        template_folder=os.path.join(_MODULE_DIR, 'frontend', 'pages'),
-        static_folder=os.path.join(_MODULE_DIR, 'frontend', 'static'),
+        template_folder=module_pages,
+        static_folder=os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static'),
     )
+    # 添加共享模板目录到 Jinja2 搜索路径
+    app.jinja_loader.searchpath.insert(0, shared_templates)
 
     # 延迟导入，避免循环依赖
     from trajectory_reconstruction.core.config.config_manager import ensure_config

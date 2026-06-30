@@ -21,18 +21,22 @@ _SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'trajectory_reconstruction', 'front
 
 def create_app() -> Flask:
     """创建轨迹识别 Flask 应用"""
+    shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
+    module_pages = os.path.join(_MODULE_DIR, 'frontend', 'pages')
+    shared_static = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static')
     app = Flask(
         __name__,
-        template_folder=os.path.join(_MODULE_DIR, 'frontend', 'pages'),
+        template_folder=module_pages,
         static_folder=None,
     )
+    app.jinja_loader.searchpath.insert(0, shared_templates)
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
         own = os.path.join(_OWN_STATIC, filename)
         if os.path.isfile(own):
             return send_from_directory(_OWN_STATIC, filename)
-        return send_from_directory(_SHARED_STATIC, filename)
+        return send_from_directory(shared_static, filename)
 
     # ---- 页面 ----
     @app.route('/')
