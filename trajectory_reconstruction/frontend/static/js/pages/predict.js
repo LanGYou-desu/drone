@@ -99,6 +99,12 @@ async function initViewer() {
     bindResize(camera, renderer, labelRenderer);
     bindWASD(camera, controls, () => (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12);
     bindCoordTooltip(renderer, camera, lines, predLines, 'coordTooltip');
+    document.addEventListener('keydown', e => {
+        if (e.code === 'Space' && e.target === document.body) {
+            e.preventDefault();
+            togglePlay();
+        }
+    });
 
     drawTrails();
     renderCachedPredictions();
