@@ -144,10 +144,9 @@ function renderCachedPredictions() {
 let startMarkers = {};
 
 function drawTrails() {
-    for (const id in lines) { removeObj(lines[id]); }
-    for (const id in predLines) { removeObj(predLines[id]); }
+    for (const id in lines) { removeObj(lines[id]); delete lines[id]; }
+    for (const id in predLines) { removeObj(predLines[id]); delete predLines[id]; }
     for (const id in startMarkers) { scene.remove(startMarkers[id]); delete startMarkers[id]; }
-    lines = {}; predLines = {};
 
     for (const [id, data] of Object.entries(detectionMethods)) {
         if (!data.visible || !data.points || data.points.length < 2) continue;
@@ -212,8 +211,7 @@ async function runPrediction() {
         const result = await resp.json();
 
         // 清除旧预测线
-        for (const id in predLines) { removeObj(predLines[id]); }
-        predLines = {};
+        for (const id in predLines) { removeObj(predLines[id]); delete predLines[id]; }
         predictedData = {};
 
         if (result.success) {
