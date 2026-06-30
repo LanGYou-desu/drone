@@ -27,5 +27,6 @@
         "max_points": 50,
         "default_points": 20,
         "time_step": 0.3
-    }
+    },
+    "theme": "dark"
 }

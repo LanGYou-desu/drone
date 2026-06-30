@@ -1,16 +1,18 @@
 {% extends "base.html" %}
 {% block title %}数据分析 — 鹰眼长空{% endblock %}
-
+{% from "icons.html" import icon_chart %}
 {% block extra_css %}
 <style>
     .chart-card {
         background: var(--bg-card);
-        border-radius: var(--radius-xl);
-        padding: 18px;
-        border: 1px solid var(--separator-opaque);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        border: 1px solid var(--border-default);
+        transition: border-color var(--normal);
     }
+    .chart-card:hover { border-color: var(--border-emphasis); }
     .chart-card h3 {
-        font-size: 0.85rem; font-weight: 600;
+        font-size: 0.82rem; font-weight: 600;
         color: var(--text-secondary); margin-bottom: 8px;
     }
     .chart { height: 360px; width: 100%; }
@@ -20,16 +22,16 @@
         gap: 16px;
     }
     .legend-row {
-        display: flex; gap: 16px; flex-wrap: wrap;
+        display: flex; gap: 12px; flex-wrap: wrap;
         margin-bottom: 20px;
     }
     .legend-item {
         display: flex; align-items: center; gap: 8px;
-        padding: 6px 14px;
+        padding: 5px 12px;
         background: var(--bg-card);
         border-radius: var(--radius-pill);
-        font-size: 0.85rem; font-weight: 500;
-        border: 1px solid var(--separator-opaque);
+        font-size: 0.82rem; font-weight: 500;
+        border: 1px solid var(--border-default);
     }
     @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 </style>
@@ -39,7 +41,7 @@
 
 <div class="page">
     <div class="page-header">
-        <h1>📊 轨迹详细分析</h1>
+        <h1>{{ icon_chart() }} 轨迹详细分析</h1>
         <p>速度、加速度、曲率、高度 — 多维运动学指标</p>
     </div>
 
@@ -91,14 +93,14 @@
 
     function darkOption(series, yName, xData) {
         return {
-            tooltip: { trigger: 'axis', backgroundColor: '#2C2C2E', borderColor: '#48484A',
-                       textStyle: { color: '#F5F5F7', fontSize: 12 } },
+            tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
+                       textStyle: { color: '#e6edf3', fontSize: 12 } },
             legend: { show: false },
-            xAxis: { type: 'category', data: xData || [], axisLabel: { color: '#8E8E93', fontSize: 10 },
-                     axisLine: { lineStyle: { color: '#48484A' } } },
-            yAxis: { type: 'value', name: yName, nameTextStyle: { color: '#8E8E93', fontSize: 10 },
-                     axisLabel: { color: '#8E8E93', fontSize: 10 },
-                     splitLine: { lineStyle: { color: '#363639' } } },
+            xAxis: { type: 'category', data: xData || [], axisLabel: { color: '#8b949e', fontSize: 10 },
+                     axisLine: { lineStyle: { color: '#30363d' } } },
+            yAxis: { type: 'value', name: yName, nameTextStyle: { color: '#8b949e', fontSize: 10 },
+                     axisLabel: { color: '#8b949e', fontSize: 10 },
+                     splitLine: { lineStyle: { color: '#21262d' } } },
             series,
             grid: { top: 12, bottom: 24, left: 8, right: 20, containLabel: true },
         };

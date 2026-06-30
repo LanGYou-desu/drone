@@ -3,7 +3,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
-import { buildAxes } from '../common/three-utils.js';
+import { buildAxes, getSceneBackground, getFogColor, getGridColor } from '../common/three-utils.js';
 
 const { methodsData, predSettings } = window._PAGE_DATA_ || {};
 const detectionMethods = methodsData || {};
@@ -40,8 +40,8 @@ async function initViewer() {
     const W = window.innerWidth, H = window.innerHeight;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0d18);
-    scene.fog = new THREE.Fog(0x0d0d18, 30, 120);
+    scene.background = new THREE.Color(getSceneBackground());
+    scene.fog = new THREE.Fog(getFogColor(), 30, 120);
 
     camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
     camera.position.set(12, 7, 14);
@@ -69,7 +69,7 @@ async function initViewer() {
 
     // 地面（与总览一致）
     const gGeo = new THREE.PlaneGeometry(200, 200);
-    const gMat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
+    const gMat = new THREE.MeshStandardMaterial({ color: getSceneBackground(), roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
     const plane = new THREE.Mesh(gGeo, gMat);
     plane.rotation.x = -Math.PI / 2;
     plane.position.y = -0.55;
@@ -77,7 +77,8 @@ async function initViewer() {
     scene.add(plane);
 
     // 网格
-    const grid = new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e);
+    const gc = getGridColor();
+    const grid = new THREE.GridHelper(100, 20, gc.main, gc.sub);
     grid.position.y = -0.5;
     scene.add(grid);
 
@@ -136,7 +137,7 @@ async function initViewer() {
             const obj = hits[0].object, p = hits[0].object.position;
             if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
             if (tip) {
-                tip.innerHTML = `📍 <span style="color:#FF453A">X</span>${p.x.toFixed(2)} <span style="color:#30D158">Y</span>${p.y.toFixed(2)} <span style="color:#0A84FF">Z</span>${p.z.toFixed(2)}`;
+                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}`;
                 tip.style.display = 'block'; tip.style.left = (e.clientX + 16) + 'px'; tip.style.top = (e.clientY - 28) + 'px';
             }
         } else { if (tip) tip.style.display = 'none'; }
@@ -210,7 +211,7 @@ function drawTrails() {
 
         // 起点标签
         const div = document.createElement('div');
-        div.textContent = '🚀 起点';
+        div.textContent = '◉ 起点';
         div.style.cssText = 'color:#fff;font-size:10px;font-weight:600;background:rgba(0,0,0,0.7);padding:2px 8px;border-radius:10px;';
         const label = new CSS2DObject(div);
         label.position.set(data.points[0][0], data.points[0][1], data.points[0][2]);
@@ -293,7 +294,7 @@ async function runPrediction() {
     } catch (e) {
         toast.error('请求失败: ' + e.message);
     } finally {
-        btn.disabled = false; btn.textContent = '⚡ 开始预测';
+        btn.disabled = false; btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="9,1 3,9 7,9 6,15 13,7 9,7"/></svg> 开始预测';
     }
 }
 
@@ -342,7 +343,7 @@ function startAnim(fromStart = false) {
     if (animElapsed >= animRange.end - animRange.start) animElapsed = 0;
 
     animActive = true;
-    document.getElementById('playBtn').innerHTML = '⏸ 暂停';
+    document.getElementById('playBtn').innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><rect x="3" y="2" width="3.5" height="12" rx="0.5"/><rect x="9.5" y="2" width="3.5" height="12" rx="0.5"/></svg> 暂停';
 
     // 收集参与播放的平台
     const playIds = new Set();
@@ -425,7 +426,7 @@ function startAnim(fromStart = false) {
 function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
-    document.getElementById('playBtn').innerHTML = '▶ 播放';
+    document.getElementById('playBtn').innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="4,2 13,8 4,14"/></svg> 播放';
 }
 
 function stopAnim() {
@@ -434,7 +435,7 @@ function stopAnim() {
     animElapsed = 0;
     const bar = document.getElementById('animProgress');
     if (bar) bar.value = 0;
-    document.getElementById('playBtn').innerHTML = '▶ 播放';
+    document.getElementById('playBtn').innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="4,2 13,8 4,14"/></svg> 播放';
     for (const id in movingSpheres) {
         scene.remove(movingSpheres[id]);
         delete movingSpheres[id];

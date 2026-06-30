@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}设置 — 鹰眼长空{% endblock %}
+{% from "icons.html" import icon_settings, icon_moon, icon_sun %}
+{% block content %}
+
+<div class="page" style="max-width:640px;margin:0 auto;">
+    <div class="page-header">
+        <h1>{{ icon_settings() }} 设置</h1>
+        <p>应用偏好与主题配置</p>
+    </div>
+
+    <!-- 外观 -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>外观</h3></div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+            <!-- 主题切换 -->
+            <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
+                <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                    <span id="themeIcon" style="display:flex;align-items:center;color:var(--text-secondary);">
+                        {{ icon_moon('1.2em') }}
+                    </span>
+                    <div>
+                        <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">主题模式</div>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);" id="themeLabel">深色模式</div>
+                    </div>
+                </div>
+                <div class="toggle-switch" id="themeSwitch"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 关于 -->
+    <div class="card">
+        <div class="card-header"><h3>关于</h3></div>
+        <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;">
+            <p><strong>鹰眼长空</strong></p>
+            <p>基于多平台协同的低空无人机智能监测系统</p>
+            <p style="margin-top:4px;">版本 1.0 · 2026</p>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 初始化主题 UI 状态
+    function updateThemeUI() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        var isDark = theme === 'dark';
+        var sw = document.getElementById('themeSwitch');
+        var label = document.getElementById('themeLabel');
+        var icon = document.getElementById('themeIcon');
+
+        if (isDark) {
+            sw.classList.add('active');
+            label.textContent = '深色模式';
+            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:middle;"><path d="M13.5 10.5A6 6 0 0 1 5.5 2.5 6 6 0 1 0 13.5 10.5z"/></svg>';
+        } else {
+            sw.classList.remove('active');
+            label.textContent = '浅色模式';
+            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" style="vertical-align:middle;"><circle cx="8" cy="8" r="3.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="13" y1="3" x2="11.5" y2="4.5"/><line x1="4.5" y1="11.5" x2="3" y2="13"/></svg>';
+        }
+    }
+
+    function toggleTheme() {
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        updateThemeUI();
+        // 同步到服务器 config.json
+        fetch('/api/theme', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme: next }),
+        }).catch(function() {});
+    }
+
+    // 页面加载时同步 UI
+    updateThemeUI();
+</script>
+{% endblock %}

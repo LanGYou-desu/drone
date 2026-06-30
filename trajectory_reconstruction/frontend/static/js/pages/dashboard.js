@@ -5,7 +5,7 @@
  */
 import { toast } from '../common/toast.js';
 import { lerp } from '../common/utils.js';
-import { buildAxes } from '../common/three-utils.js';
+import { buildAxes, getSceneBackground, getFogColor, getGridColor } from '../common/three-utils.js';
 
 // ═══════════════════════════════════════════
 // 数据加载（从 HTML 模板注入的 window._PAGE_DATA_）
@@ -63,8 +63,9 @@ async function init() {
 
 function buildScene(THREE, orb, css) {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d0d18);
-    scene.fog = new THREE.Fog(0x0d0d18, 30, 120);
+    const bg = getSceneBackground();
+    scene.background = new THREE.Color(bg);
+    scene.fog = new THREE.Fog(getFogColor(), 30, 120);
 
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500);
     camera.position.set(12, 7, 14);
@@ -113,7 +114,7 @@ function buildLights() {
 
 function buildGround() {
     const geo = new THREE.PlaneGeometry(200, 200);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a28, roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
+    const mat = new THREE.MeshStandardMaterial({ color: getSceneBackground(), roughness: 0.95, metalness: 0.2, transparent: true, opacity: 0.6 });
     const plane = new THREE.Mesh(geo, mat);
     plane.rotation.x = -Math.PI / 2;
     plane.position.y = -0.55;
@@ -123,7 +124,8 @@ function buildGround() {
 
 function buildGrid() {
     // 主网格 — 清晰 5m 间距
-    const grid = new THREE.GridHelper(100, 20, 0x334466, 0x1a1a2e);
+    const gc = getGridColor();
+    const grid = new THREE.GridHelper(100, 20, gc.main, gc.sub);
     grid.position.y = -0.5;
     scene.add(grid);
 
@@ -217,8 +219,8 @@ function refreshAll() {
         const trail = buildTrailMesh(data.points, data.color);
         const spheres = buildSpheres(data.points, data.color, 0.06);
         const pts = data.points;
-        const startLab = addLabel('🚀 起点', pts[0], LABEL_CSS);
-        const endLab = addLabel('🏁 终点', pts[pts.length-1], LABEL_CSS);
+        const startLab = addLabel('◉ 起点', pts[0], LABEL_CSS);
+        const endLab = addLabel('⚑ 终点', pts[pts.length-1], LABEL_CSS);
 
         lines[id] = { trail, spheres, startLab, endLab };
         if (trail) scene.add(trail);
@@ -376,7 +378,7 @@ function startAnim(fromStart = false) {
 
     animActive = true;
     const btn = document.getElementById('playBtn');
-    if (btn) btn.innerHTML = '⏸ 暂停';
+    if (btn) btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><rect x="3" y="2" width="3.5" height="12" rx="0.5"/><rect x="9.5" y="2" width="3.5" height="12" rx="0.5"/></svg> 暂停';
     setPredVisible(false);
     const startWall = performance.now();
     const startElapsed = animElapsed;  // 从暂停点开始
@@ -411,7 +413,7 @@ function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
     const btn = document.getElementById('playBtn');
-    if (btn) btn.innerHTML = '▶ 播放';
+    if (btn) btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="4,2 13,8 4,14"/></svg> 播放';
     setPredVisible(false);
     updateStats();
 }
@@ -552,7 +554,7 @@ function bindEvents() {
             }
 
             if (tip) {
-                tip.innerHTML = `📍 <span style="color:#FF453A">X</span>${p.x.toFixed(2)} <span style="color:#30D158">Y</span>${p.y.toFixed(2)} <span style="color:#0A84FF">Z</span>${p.z.toFixed(2)}`;
+                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}`;
                 tip.style.display = 'block';
                 tip.style.left = (e.clientX + 16) + 'px';
                 tip.style.top = (e.clientY - 28) + 'px';

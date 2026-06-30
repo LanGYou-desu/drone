@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}帮助文档 — 鹰眼长空{% endblock %}
+{% from "icons.html" import icon_book, icon_target, icon_predict, icon_chart, icon_ai, icon_database, icon_play, icon_help, icon_lightning, icon_drone %}
+{% block content %}
+
+<div class="page" style="max-width:860px;margin:0 auto;">
+    <div class="page-header">
+        <h1>{{ icon_book() }} 帮助文档</h1>
+        <p>鹰眼长空 — 基于多平台协同的低空无人机智能监测系统</p>
+    </div>
+
+    <!-- 快速入门 -->
+    <div class="doc-section">
+        <h2>快速入门</h2>
+        <p>鹰眼长空是一个多平台协同的无人机轨迹监测与分析系统。系统集成了<strong>可见光</strong>、<strong>红外</strong>、<strong>雷达</strong>三种检测平台，提供轨迹重建、预测、分析与 AI 策略生成功能。</p>
+
+        <h3>启动方式</h3>
+        <ul>
+            <li>桌面应用模式：<code>python main.py</code></li>
+            <li>仅轨迹重建：<code>python main.py recon</code></li>
+            <li>纯 HTTP 模式（无窗口）：<code>python main.py --headless</code></li>
+            <li>重建模块将运行在 <code>http://127.0.0.1:5000</code></li>
+            <li>识别模块将运行在 <code>http://127.0.0.1:5001</code></li>
+        </ul>
+
+        <h3>键盘快捷键</h3>
+        <ul>
+            <li><kbd>Space</kbd> — 播放 / 暂停轨迹动画</li>
+            <li><kbd>鼠标左键拖拽</kbd> — 旋转 3D 视图</li>
+            <li><kbd>鼠标滚轮</kbd> — 缩放视图</li>
+            <li><kbd>鼠标右键拖拽</kbd> — 平移视图</li>
+        </ul>
+    </div>
+
+    <!-- 功能模块 -->
+    <div class="doc-section">
+        <h2>功能模块</h2>
+
+        <h3>{{ icon_target() }} 总览（Dashboard）</h3>
+        <p>全屏 3D 视图展示所有平台的轨迹数据。左侧面板可切换各平台可见性，右侧面板显示实时平台状态（速度、高度、航向角）。底部控制栏支持轨迹动画播放，可调节播放速度，拖动进度条跳转到任意时刻。鼠标悬停在轨迹数据点上可查看精确三维坐标。</p>
+
+        <h3>{{ icon_predict() }} 轨迹预测</h3>
+        <p>基于历史轨迹数据，使用多项式拟合算法预测未来飞行路径。可选择预测目标平台（全部或单一平台），调节预测点数和时间步长。预测结果以虚线+半透明球体显示在 3D 视图中，支持动画播放历史和预测全程。</p>
+
+        <h3>{{ icon_chart() }} 数据分析</h3>
+        <p>多维度运动学指标分析，包括：</p>
+        <ul>
+            <li><strong>高度变化曲线</strong> — 展示飞行高度随时间变化</li>
+            <li><strong>速度变化曲线</strong> — 瞬时速率变化趋势</li>
+            <li><strong>加速度变化曲线</strong> — 加速/减速时段识别</li>
+            <li><strong>曲率变化曲线</strong> — 转弯剧烈程度评估</li>
+        </ul>
+
+        <h3>{{ icon_ai() }} AI 策略</h3>
+        <p>利用大语言模型分析多平台轨迹数据，自动生成无人机反制捕捉策略建议。可选择参与分析的检测平台，生成结果可保存为报告文件（存储在 <code>reports/</code> 目录）。生成的文本在页面切换时会自动保留。</p>
+
+        <h3>{{ icon_database() }} 数据管理</h3>
+        <p>提供完整的轨迹数据生命周期管理：</p>
+        <ul>
+            <li><strong>上传</strong> — 支持 <code>.dat</code> 格式（每行: x y z t），可指定目标平台</li>
+            <li><strong>备份</strong> — 一键创建数据快照，支持多版本备份文件</li>
+            <li><strong>恢复</strong> — 从备份列表中选择恢复，或一键恢复最新备份</li>
+            <li><strong>清理</strong> — 清空全部数据前自动备份到 <code>backup/</code> 目录</li>
+        </ul>
+    </div>
+
+    <!-- 常见问题 -->
+    <div class="doc-section">
+        <h2>常见问题</h2>
+
+        <h3>如何添加自定义轨迹数据？</h3>
+        <p>在「数据管理」页面使用上传功能，选择 <code>.dat</code> 格式文件。每行应为：<code>x y z t</code>（空格分隔，t 为时间戳）。上传后可选择分配到的检测平台。</p>
+
+        <h3>预测不准确怎么办？</h3>
+        <p>预测质量依赖于历史数据点的数量和质量。可尝试：增大预测点数滑块、减小时间步长、确保选择的数据有足够的历史点。算法使用三阶多项式拟合，适合平滑轨迹。</p>
+
+        <h3>AI 策略不生成？</h3>
+        <p>请确认：已正确配置 <code>config.json</code> 中的 AI 提供商信息、网络连接正常、至少选择一个平台的分析数据。如果持续失败，请检查终端日志中的 API 错误信息。</p>
+
+        <h3>如何切换明暗主题？</h3>
+        <p>前往「设置」页面，点击主题切换开关即可在深色/浅色模式间切换。选择会自动保存，下次打开自动应用。</p>
+    </div>
+
+    <!-- 技术参考 -->
+    <div class="doc-section">
+        <h2>技术参考</h2>
+        <ul>
+            <li>3D 渲染：Three.js (WebGL)</li>
+            <li>图表库：Apache ECharts</li>
+            <li>后端框架：Flask</li>
+            <li>桌面窗口：pywebview</li>
+            <li>数据存储：JSON 文件（<code>data/</code> 目录）</li>
+            <li>AI 接口：兼容 OpenAI API 格式</li>
+        </ul>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}{% endblock %}

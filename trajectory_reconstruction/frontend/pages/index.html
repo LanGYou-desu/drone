@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}总览 — 鹰眼长空{% endblock %}
+{% from "icons.html" import icon_play, icon_pause, icon_predict, icon_start, icon_end, icon_pin %}
 {% block content %}
 
 <!-- 全屏 3D 视图 -->
 <div class="viewer-full" id="viewer"></div>
 
 <!-- 左上角：平台图例 -->
-<div class="overlay-panel" style="top:72px;left:20px;min-width:200px;">
+<div class="overlay-panel" style="top:68px;left:20px;min-width:200px;">
     <h3>检测平台</h3>
     <div id="legendList">
         {% for id, m in methods_data.items() %}
@@ -22,7 +23,7 @@
 </div>
 
 <!-- 右上角：各平台实时参数 -->
-<div class="overlay-panel" style="top:72px;right:20px;min-width:240px;">
+<div class="overlay-panel" style="top:68px;right:20px;min-width:240px;">
     <h3>平台状态</h3>
     <div id="platformStats">
         {% for id, m in methods_data.items() %}
@@ -43,9 +44,11 @@
 </div>
 
 <!-- 底部中央：播放控制条 -->
-<div class="overlay-panel" style="bottom:28px;left:50%;transform:translateX(-50%);padding:12px 20px;">
+<div class="overlay-panel" style="bottom:28px;left:50%;transform:translateX(-50%);padding:10px 18px;">
     <div style="display:flex;align-items:center;gap:10px;">
-        <button class="btn btn-primary btn-sm" id="playBtn" style="margin:0;width:auto;">▶ 播放</button>
+        <button class="btn btn-primary btn-sm" id="playBtn" style="margin:0;width:auto;">
+            {{ icon_play() }} 播放
+        </button>
         <select id="speedSelect" style="width:72px;margin:0;">
             <option value="0.5">0.5×</option>
             <option value="1" selected>1×</option>
@@ -56,7 +59,9 @@
         <input type="range" id="timelineSlider" min="0" max="100" value="0"
                style="width:180px;margin:0;" title="拖动调整播放进度">
         <span id="timeEnd" style="font-size:0.72rem;color:var(--text-tertiary);font-family:var(--mono);">0.0s</span>
-        <a href="/predict" class="btn btn-sm" style="margin:0;width:auto;text-decoration:none;white-space:nowrap;">🔮 预测</a>
+        <a href="/predict" class="btn btn-sm" style="margin:0;width:auto;text-decoration:none;white-space:nowrap;">
+            {{ icon_predict() }} 预测
+        </a>
     </div>
 </div>
 
@@ -76,11 +81,11 @@
 }
 </script>
 <script>
-    // 后端数据注入（静态 JS 无法使用 Jinja2 模板语法）
+    // 后端数据注入
     window._PAGE_DATA_ = {
         methodsData: {{ methods_data | tojson }},
         predSettings: {{ pred_settings | tojson }}
     };
 </script>
-<script type="module" src="/static/js/pages/dashboard.js?v=3"></script>
+<script type="module" src="/static/js/pages/dashboard.js?v=10"></script>
 {% endblock %}

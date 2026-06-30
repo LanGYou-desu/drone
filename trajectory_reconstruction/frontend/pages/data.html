@@ -1,47 +1,52 @@
 {% extends "base.html" %}
 {% block title %}数据管理 — 鹰眼长空{% endblock %}
+{% from "icons.html" import icon_database, icon_folder, icon_upload, icon_disc, icon_camera, icon_list, icon_refresh, icon_warning, icon_trash, icon_table %}
 {% block content %}
 
 <div class="page">
     <div class="page-header">
-        <h1>💾 数据管理</h1>
+        <h1>{{ icon_database() }} 数据管理</h1>
         <p>轨迹数据的上传、备份、恢复与清理</p>
     </div>
 
     <div class="grid grid-3" style="margin-bottom:20px;">
         <!-- 上传 -->
         <div class="card">
-            <div class="card-header"><h3>📂 上传数据</h3></div>
+            <div class="card-header"><h3>{{ icon_upload() }} 上传数据</h3></div>
             <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
                 支持 .dat 格式（每行: x y z t）
             </p>
             <input type="file" id="dataFile" accept=".dat,.txt" style="margin-bottom:8px;">
-            <button class="btn btn-primary" id="uploadBtn">上传为自选平台</button>
+            <button class="btn btn-primary-green" id="uploadBtn">上传为自选平台</button>
         </div>
 
         <!-- 备份管理 -->
         <div class="card">
-            <div class="card-header"><h3>💿 备份管理</h3></div>
-            <button class="btn btn-primary" id="createBackupBtn">📸 立即备份</button>
-            <button class="btn btn-secondary" id="listBackupsBtn" style="margin-top:6px;">📋 查看备份列表</button>
-            <button class="btn btn-primary" id="restoreAllBtn" style="margin-top:6px;">🔄 一键恢复最新</button>
+            <div class="card-header"><h3>{{ icon_disc() }} 备份管理</h3></div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-primary" id="createBackupBtn" style="width:60%;">{{ icon_camera() }} 立即备份</button>
+                <button class="btn btn-primary" id="listBackupsBtn" style="width:60%;">{{ icon_list() }} 查看备份列表</button>
+                <button class="btn btn-primary" id="restoreAllBtn" style="width:60%;">{{ icon_refresh() }} 一键恢复最新</button>
+            </div>
         </div>
 
         <!-- 危险操作 -->
-        <div class="card" style="border-color:var(--red);">
-            <div class="card-header"><h3 style="color:var(--red);">⚠️ 危险操作</h3></div>
+        <div class="card" style="border-color:rgba(248,81,73,0.3);">
+            <div class="card-header"><h3 style="color:var(--red);">{{ icon_warning() }} 危险操作</h3></div>
             <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
                 清空所有轨迹数据（自动备份到 backup/）
             </p>
-            <button class="btn btn-danger" id="clearAllBtn">🗑️ 清理全部数据</button>
-            <button class="btn btn-secondary" id="refreshBtn" style="margin-top:6px;">🔄 重置为默认数据</button>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-danger" id="clearAllBtn" style="width:60%;">{{ icon_trash() }} 清理全部数据</button>
+                <button class="btn btn-secondary" id="refreshBtn" style="width:60%;">{{ icon_refresh() }} 重置为默认数据</button>
+            </div>
         </div>
     </div>
 
     <!-- 数据概览表格 -->
     <div class="card">
         <div class="card-header">
-            <h3>📊 当前数据概览</h3>
+            <h3>{{ icon_table() }} 当前数据概览</h3>
             <span id="dataTimestamp" style="font-size:0.75rem;color:var(--text-secondary);">更新于 --:--:--</span>
         </div>
         <div class="table-wrap">

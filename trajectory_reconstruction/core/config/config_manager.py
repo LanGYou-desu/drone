@@ -53,6 +53,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         'default_points': 6,
         'time_step': 0.5,
     },
+    'theme': 'dark',
 }
 
 
@@ -83,6 +84,10 @@ def _validate_config(cfg: dict) -> dict:
             if 'prediction_settings' not in cfg:
                 cfg['prediction_settings'] = {}
             cfg['prediction_settings'][key] = DEFAULT_CONFIG['prediction_settings'][key]
+
+    # 确保 theme 字段存在
+    if 'theme' not in cfg:
+        cfg['theme'] = DEFAULT_CONFIG['theme']
 
     return cfg
 

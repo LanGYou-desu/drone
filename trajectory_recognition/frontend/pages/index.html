@@ -4,42 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>轨迹识别 — 鹰眼长空</title>
+
+    {# 防闪烁 #}
+    <script>
+    (function() {
+        var theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+    })();
+    </script>
+
     <link rel="stylesheet" href="/static/css/main.css">
+    {% from "icons.html" import icon_drone, icon_dna, icon_search, icon_brain, icon_tag, icon_activity, icon_folder, icon_antenna, icon_settings, icon_help %}
 </head>
 <body>
     <nav class="navbar">
-        <span class="navbar-brand">🛸 鹰眼长空</span>
+        <span class="navbar-brand">
+            {{ icon_drone() }}
+            鹰眼长空
+        </span>
         <div class="navbar-links">
-            <a href="/" class="active">🧬 轨迹识别</a>
+            <a href="/" class="active">{{ icon_dna() }} 轨迹识别</a>
         </div>
-        <a href="http://127.0.0.1:5000" style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 16px;border-radius:var(--radius-md);color:var(--text-secondary);font-size:0.85rem;font-weight:500;text-decoration:none;transition:all var(--fast);">
-            📡 重建分析
-        </a>
+        <div class="navbar-actions">
+            <a href="http://127.0.0.1:5000" title="重建分析">
+                {{ icon_antenna() }} <span class="nav-label">分析</span>
+            </a>
+            <a href="http://127.0.0.1:5000/docs" title="帮助文档">
+                {{ icon_help() }} <span class="nav-label">帮助</span>
+            </a>
+            <a href="http://127.0.0.1:5000/settings" title="设置">
+                {{ icon_settings() }} <span class="nav-label">设置</span>
+            </a>
+        </div>
     </nav>
 
     <div class="page">
         <div class="page-header">
-            <h1>🧬 轨迹识别</h1>
+            <h1>{{ icon_dna() }} 轨迹识别</h1>
             <p>读取共享轨迹数据，进行模式识别与分类</p>
         </div>
 
         <div class="grid grid-3">
             <div class="card">
-                <div class="card-header"><h3>🔍 特征提取</h3></div>
+                <div class="card-header"><h3>{{ icon_search() }} 特征提取</h3></div>
                 <p style="color:var(--text-secondary);font-size:0.85rem;">从轨迹数据中提取速度、加速度、曲率等运动学特征。</p>
                 <div class="stat" style="margin-top:12px;">
                     <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
                 </div>
             </div>
             <div class="card">
-                <div class="card-header"><h3>🧠 识别模型</h3></div>
+                <div class="card-header"><h3>{{ icon_brain() }} 识别模型</h3></div>
                 <p style="color:var(--text-secondary);font-size:0.85rem;">基于规则的分类器与机器学习模型。</p>
                 <div class="stat" style="margin-top:12px;">
                     <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
                 </div>
             </div>
             <div class="card">
-                <div class="card-header"><h3>🏷️ 分类器</h3></div>
+                <div class="card-header"><h3>{{ icon_tag() }} 分类器</h3></div>
                 <p style="color:var(--text-secondary);font-size:0.85rem;">输出轨迹类型、飞行模式识别结果与异常检测。</p>
                 <div class="stat" style="margin-top:12px;">
                     <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
@@ -49,11 +70,11 @@
 
         <div class="grid grid-2" style="margin-top:20px;">
             <div class="card">
-                <div class="card-header"><h3>📊 系统状态</h3></div>
+                <div class="card-header"><h3>{{ icon_activity() }} 系统状态</h3></div>
                 <div id="statusPanel" style="font-size:0.85rem;color:var(--text-secondary);">加载中...</div>
             </div>
             <div class="card">
-                <div class="card-header"><h3>📁 共享数据</h3></div>
+                <div class="card-header"><h3>{{ icon_folder() }} 共享数据</h3></div>
                 <div id="dataPanel" style="font-size:0.85rem;color:var(--text-secondary);">加载中...</div>
             </div>
         </div>

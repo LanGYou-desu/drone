@@ -101,7 +101,7 @@ async function saveReport() {
     } catch (e) {
         toast.error('网络错误: ' + e.message);
     } finally {
-        btn.disabled = false; btn.textContent = '💾 保存报告';
+        btn.disabled = false; btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><path d="M8 2.5V11" fill="none"/><polyline points="5,8.5 8,11.5 11,8.5" fill="none"/><path d="M2.5 13.5h11" fill="none"/></svg> 保存报告';
     }
 }
 

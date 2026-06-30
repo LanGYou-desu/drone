@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}AI 策略 — 鹰眼长空{% endblock %}
-
+{% from "icons.html" import icon_ai, icon_idea, icon_download %}
 {% block extra_css %}
 <style>
     .ai-output-box {
@@ -8,6 +8,7 @@
         max-height: 520px;
         overflow-y: auto;
         background: var(--bg-input);
+        border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
         padding: 16px;
         font-size: 0.85rem;
@@ -22,7 +23,7 @@
     .save-bar {
         display: flex; align-items: center; gap: 10px;
         margin-top: 10px; padding-top: 10px;
-        border-top: 1px solid var(--separator);
+        border-top: 1px solid var(--border-default);
     }
     .save-bar .saved-path {
         font-size: 0.75rem; color: var(--green);
@@ -35,7 +36,7 @@
 
 <div class="page">
     <div class="page-header">
-        <h1>🤖 AI 捕捉策略</h1>
+        <h1>{{ icon_ai() }} AI 捕捉策略</h1>
         <p>大模型分析多平台轨迹数据，生成无人机反制捕捉建议。</p>
     </div>
 
@@ -60,7 +61,7 @@
                 {% endfor %}
             </div>
             <button class="btn btn-primary btn-lg" id="aiBtn" style="margin-top:12px;">
-                💡 生成捕捉策略
+                {{ icon_idea() }} 生成捕捉策略
             </button>
         </div>
 
@@ -69,7 +70,9 @@
             <div class="card-header"><h3>策略建议</h3></div>
             <div class="ai-output-box" id="aiOutput"></div>
             <div class="save-bar" id="saveBar" style="display:none;">
-                <button class="btn btn-success btn-sm" id="saveReportBtn" style="width:auto;margin:0;">💾 保存报告</button>
+                <button class="btn btn-primary-green btn-sm" id="saveReportBtn" style="width:auto;margin:0;">
+                    {{ icon_download() }} 保存报告
+                </button>
                 <span class="saved-path" id="savedPath"></span>
             </div>
         </div>
