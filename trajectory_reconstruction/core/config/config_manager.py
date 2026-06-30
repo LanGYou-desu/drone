@@ -55,6 +55,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
             'visible': True,
             'weight': 1.0,
         },
+        'synthetic': {
+            'name': '综合',
+            'color': '#ffffff',
+            'visible': True,
+            'weight': 1.0,
+        },
     },
     'prediction_settings': {
         'min_points': 1,

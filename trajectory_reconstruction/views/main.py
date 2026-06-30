@@ -2,6 +2,8 @@
 页面路由 — 多页面渲染入口
 每个页面独立渲染，通过模板注入后端数据
 """
+import os
+
 from flask import Blueprint, render_template, request, jsonify
 
 from trajectory_reconstruction.core.state import detection_methods
@@ -14,7 +16,6 @@ _METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']
 
 def _page_context(active: str) -> dict:
     """构建页面公共上下文"""
-    import os
     cfg = ensure_config()
     self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
     ordered = {}

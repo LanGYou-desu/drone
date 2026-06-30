@@ -189,7 +189,7 @@ def synthesize_trajectory() -> dict:
         wx_sum, wy_sum, wz_sum = 0.0, 0.0, 0.0
         w_sum = 0.0
         for mid, weight in active.items():
-            p = _interpolate(mid, t)
+            p = _interpolate(mid, t) or _nearest_avg(mid, t)
             if p is not None:
                 wx_sum += p[0] * weight
                 wy_sum += p[1] * weight

@@ -29,6 +29,12 @@
             "color": "#FF9500",
             "visible": true,
             "weight": 1.0
+        },
+        "synthetic": {
+            "name": "综合",
+            "color": "#ffffff",
+            "visible": true,
+            "weight": 1.0
         }
     },
     "prediction_settings": {

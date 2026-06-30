@@ -192,10 +192,7 @@ def restore_backup(name: str) -> tuple[bool, str]:
         _copy_dir(fact_src, 'data/fact')
         restored_count += 1
 
-    # 恢复 predict/ 文件（跳过——预测不备份恢复）
-    restored_count += 0
-
-    # 恢复内存数据（重新注册自选平台）
+    # 恢复内存数据（预测不恢复，需重新生成）
     from trajectory_reconstruction.core.io.data_loader import load_dat_file
     from trajectory_reconstruction.services.data_service import save_metadata
 
