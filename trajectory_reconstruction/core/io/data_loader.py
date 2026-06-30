@@ -50,11 +50,6 @@ def save_predict_data(method_id: str, points: list[list[float]],
                       timestamps: list[float] | None = None):
     """
     将预测结果保存到 data/predict/pre{id}.dat
-
-    Args:
-        method_id:  平台 ID（visible→1, infrared→2, radar→3, self→self）
-        points:     预测点坐标
-        timestamps: 对应时间戳（若为 None 则用 index * 0.5）
     """
     mapping = {'visible': '1', 'infrared': '2', 'radar': '3', 'self': 'self', 'synthetic': 'syn'}
     num = mapping.get(method_id, method_id)
@@ -63,9 +58,16 @@ def save_predict_data(method_id: str, points: list[list[float]],
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
+    if timestamps is None or len(timestamps) < len(points):
+        from trajectory_reconstruction.core.config.config_manager import ensure_config
+        cfg = ensure_config()
+        default_step = cfg.get('prediction_settings', {}).get('time_step', 0.5)
+    else:
+        default_step = 0.5
+
     with open(file_path, 'w', encoding='utf-8') as f:
         for i, p in enumerate(points):
-            t = timestamps[i] if timestamps and i < len(timestamps) else i * 0.5
+            t = timestamps[i] if timestamps and i < len(timestamps) else i * default_step
             f.write(f'{p[0]} {p[1]} {p[2]} {t}\n')
 
     print(f'[OK] 预测数据已保存至 {file_path}')
