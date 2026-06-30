@@ -124,9 +124,12 @@ def api_weights():
     if 'enabled' in data:
         for mid, val in data['enabled'].items():
             if mid in cfg.get('detection_methods', {}):
-                cfg['detection_methods'][mid]['enabled'] = bool(val)
+                enabled = bool(val)
+                cfg['detection_methods'][mid]['enabled'] = enabled
+                cfg['detection_methods'][mid]['visible'] = enabled
                 if mid in detection_methods:
-                    detection_methods[mid]['enabled'] = bool(val)
+                    detection_methods[mid]['enabled'] = enabled
+                    detection_methods[mid]['visible'] = enabled
                 updated = True
 
     # 更新捕捉权重
@@ -139,9 +142,10 @@ def api_weights():
         updated = True
 
     if updated:
-        save_config(cfg)
-        from trajectory_reconstruction.services.data_service import synthesize_trajectory
+        from trajectory_reconstruction.services.data_service import synthesize_trajectory, save_metadata
         synthesize_trajectory()
+        save_metadata()
+        save_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': '无有效更新'}), 400
 

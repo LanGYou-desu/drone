@@ -52,8 +52,9 @@
         <div class="card-header"><h3>{{ icon_predict() }} 捕捉时机评分权重</h3></div>
         <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;">各项指标在最佳捕捉时机评分中的占比</p>
         <div id="captureWeights">
-            {% for key, label in [('height','高度'), ('speed','速度'), ('acceleration','加速度'), ('curvature','曲率')] %}
+            {% for key, label, dotcolor in [('height','高度','#f85149'), ('speed','速度','#3fb950'), ('acceleration','加速度','#58a6ff'), ('curvature','曲率','#d29922')] %}
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                <span class="legend-dot" style="background:{{ dotcolor }};color:{{ dotcolor }};flex-shrink:0;"></span>
                 <span style="width:50px;font-size:0.85rem;">{{ label }}</span>
                 <input type="range" min="0" max="3" step="0.1" value="{{ capture_weights[key] }}"
                        data-key="{{ key }}" class="capture-slider" style="flex:1;margin:0;">
