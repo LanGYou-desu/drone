@@ -393,6 +393,8 @@ function pauseAnim() {
     if (animId) cancelAnimationFrame(animId);
     animActive = false; animId = null;
     document.getElementById('playBtn').innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="4,2 13,8 4,14"/></svg> 播放';
+    const ts = animRange.start + animElapsed;
+    updateStats(ts < animRange.end ? ts : undefined);
 }
 
 function stopAnim() {

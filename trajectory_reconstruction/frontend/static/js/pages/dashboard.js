@@ -383,7 +383,8 @@ function pauseAnim() {
     const btn = document.getElementById('playBtn');
     if (btn) btn.innerHTML = '<svg width="1em" height="1em" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;"><polygon points="4,2 13,8 4,14"/></svg> 播放';
     setPredVisible(false);
-    updateStats();
+    const ts = timeRange.start + animElapsed;
+    updateStats(ts < timeRange.end ? ts : undefined);
 }
 
 function stopAnim() {
