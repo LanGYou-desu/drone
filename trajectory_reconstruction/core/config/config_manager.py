@@ -71,10 +71,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'theme': 'dark',
     'camera_speed': 0.12,
     'capture_weights': {
-        'height': 0.3,
-        'speed': 0.3,
-        'acceleration': 0.2,
-        'curvature': 0.2,
+        'height': 1.0,
+        'speed': 1.0,
+        'acceleration': 1.0,
+        'curvature': 1.0,
     },
 }
 
