@@ -96,7 +96,7 @@
 
     // Slider value display
     document.querySelectorAll('.synth-slider').forEach(s => {
-        s.addEventListener('input', function(){ this.parentElement.querySelector('span:last-child').textContent = this.value; });
+        s.addEventListener('input', function(){ this.nextElementSibling.textContent = this.value; });
     });
     document.querySelectorAll('.capture-slider').forEach(s => {
         s.addEventListener('input', function(){ this.nextElementSibling.textContent = this.value; });
