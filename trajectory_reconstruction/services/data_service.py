@@ -169,6 +169,11 @@ def synthesize_trajectory() -> dict:
                 active[mid] = w
 
     if len(active) < 2:
+        # 不足两个平台时清空综合轨迹
+        if 'synthetic' in detection_methods:
+            detection_methods['synthetic']['points'] = []
+            detection_methods['synthetic']['timestamps'] = []
+        save_metadata()
         return {'success': False, 'error': '至少需要两个有数据的平台才能合成'}
 
     # 收集所有时间点并排序去重
