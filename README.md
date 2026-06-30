@@ -44,5 +44,3 @@ drone/
 |------|------|
 | [使用手册](docs/manual.md) | 用户操作指南 |
 | [开发文档](docs/DEVELOPER.md) | 架构、API、开发指南（新人必读） |
-| [使用手册 PDF](docs/鹰眼长空使用手册.pdf) | PDF 版本 |
-| [开发文档 PDF](docs/鹰眼长空开发文档.pdf) | PDF 版本 |
