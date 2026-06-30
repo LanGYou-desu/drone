@@ -135,37 +135,42 @@ drone/
 │   │   ├── api_report.py                # 报告保存 API
 │   │   └── analysis.py                  # 分析数据 + 捕捉时机 API
 │   │
-│   └── frontend/                        # ---- 前端资源 ----
-│       ├── pages/                       # Jinja2 模板
-│       │   ├── base.html                # 基础布局（导航栏 + toast + 主题脚本）
-│       │   ├── icons.html               # 25 个 SVG 图标宏
-│       │   ├── index.html               # 总览（全屏 3D）
-│       │   ├── predict.html             # 预测
-│       │   ├── analysis.html            # 分析（ECharts + 捕捉时机卡片）
-│       │   ├── ai.html                  # AI 策略
-│       │   ├── data.html                # 数据管理
-│       │   ├── docs.html                # 帮助文档
-│       │   └── settings.html            # 设置（主题切换）
-│       └── static/
-│           ├── css/main.css             # GitHub 双主题样式
-│           └── js/
-│               ├── lib/                 # Three.js + ECharts（离线可用）
-│               ├── common/
-│               │   ├── three-utils.js   # 3D 场景工具（坐标轴/光照/星空/主题感知）
-│               │   ├── three-input.js   # 输入工具（WASD/悬停拾取/resize）
-│               │   ├── toast.js         # Toast 通知
-│               │   └── utils.js         # lerp 等工具函数
-│               └── pages/               # 每页独立 JS 模块
-│                   ├── dashboard.js     # 3D 场景/轨迹/动画/平台切换
-│                   ├── predict.js       # 预测 + 3D 预览/动画
-│                   ├── ai.js            # AI 策略交互
-│                   └── data.js          # 备份管理
+│   └── frontend/                        # ---- 前端资源（模块专属）----
+│       └── pages/                       # 7 个页面模板
+│           ├── index.html               # 总览（全屏 3D）
+│           ├── predict.html             # 预测
+│           ├── analysis.html            # 分析（ECharts + 捕捉时机卡片）
+│           ├── ai.html                  # AI 策略
+│           ├── data.html                # 数据管理
+│           ├── docs.html                # 帮助文档
+│           └── settings.html            # 设置（主题切换）
+│       └── static/js/pages/             # 页面 JS 模块
+│           ├── dashboard.js             # 3D 场景/轨迹/动画
+│           ├── predict.js               # 预测 + 预览/动画
+│           ├── ai.js                    # AI 策略交互
+│           └── data.js                  # 备份管理
+│
+├── templates/                           # ---- 共享前端 + 配置 ----
+│   ├── frontend/
+│   │   ├── shared/
+│   │   │   ├── base.html                # 基础布局（导航栏 + toast + 主题）
+│   │   │   └── icons.html               # 25 个 SVG 图标宏
+│   │   └── static/
+│   │       ├── css/main.css             # GitHub 双主题样式
+│   │       └── js/
+│   │           ├── lib/                 # Three.js + ECharts（离线）
+│   │           └── common/
+│   │               ├── three-utils.js   # 坐标轴/光照/星空/主题感知
+│   │               ├── three-input.js   # WASD/悬停/resize
+│   │               ├── toast.js         # Toast 通知
+│   │               └── utils.js         # lerp 工具
 │
 ├── trajectory_recognition/              # ===== 识别模块（框架）=====
 │   ├── app.py                           # Flask 应用工厂 (:5001)
 │   ├── __main__.py                      # 独立入口
-│   ├── frontend/pages/index.html        # 主页面
-│   ├── frontend/static/js/pages/recognition.js
+│   ├── frontend/
+│   │   ├── pages/index.html             # 主页面
+│   │   └── static/js/pages/recognition.js
 │   ├── features/__init__.py             # 特征提取（待实现）
 │   ├── models/__init__.py               # 模型定义（待实现）
 │   └── classifier/__init__.py           # 分类器（待实现）
@@ -424,16 +429,17 @@ data/backup/20260630_143052_manual/
 
 ### 12.1 模板系统
 
-采用 Jinja2 模板继承：
-- `base.html` — 导航栏 + toast 容器 + 主题防闪烁脚本 + 公共 CSS
-- 各页面 `{% extends "base.html" %}` + `{% block content %}` + `{% block scripts %}`
-- 页面间通过 `window._PAGE_DATA_` 注入后端数据
+模板分为两层：
+- **共享层** `templates/frontend/shared/` — base.html + icons.html，两模块共用
+- **模块层** `trajectory_reconstruction/frontend/pages/` — 7 个页面模板
 
-**icons.html：** 25 个纯几何 SVG 图标，通过 `{% from "icons.html" import icon_xxx %}` 引用，`currentColor` 继承文本色。
+通过 `app.jinja_loader.searchpath` 将共享目录加入搜索路径，各页面 `{% extends "base.html" %}` 和 `{% from "icons.html" import icon_xxx %}` 无需修改路径。
+
+**icons.html：** 25 个纯几何 SVG 图标宏，`currentColor` 继承文本色。
 
 ### 12.2 CSS 架构
 
-**文件：** `main.css`（GitHub 风格双主题）
+**文件：** `templates/frontend/static/css/main.css`（GitHub 风格双主题）
 
 - `:root` 定义深色主题变量（--bg-root: #0d1117, --blue: #58a6ff, --green: #3fb950 等）
 - `[data-theme="light"]` 覆盖浅色主题变量

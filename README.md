@@ -28,13 +28,17 @@ drone/
 │   ├── core/                            #   领域逻辑（config/io/prediction/ai）
 │   ├── services/                        #   业务编排（数据/预测/备份）
 │   ├── views/                           #   HTTP 接口
-│   └── frontend/                        #   前端资源（HTML/CSS/JS）
+│   └── frontend/pages/                  #   模块专属页面
 │
 ├── trajectory_recognition/              # 轨迹识别（框架）
+│   └── frontend/pages/                  #   模块专属页面
 │
+├── templates/                           # 共享前端 + 配置模板
+│   ├── frontend/shared/                 #   base.html + icons.html
+│   ├── frontend/static/                 #   CSS + JS 公用模块 + 第三方库
+│   └── config_template.json
 ├── data/                                # 共享运行时数据（fact/predict/backup）
 ├── reports/                             # AI 策略报告
-├── templates/                           # 配置模板
 └── docs/                                # 文档
 ```
 
