@@ -109,7 +109,7 @@
         document.querySelectorAll('.platform-color').forEach(i => { data.colors[i.dataset.mid] = i.value; });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         var r = await resp.json();
-        alert(r.success ? '平台设置已保存' : '保存失败');
+        if (r.success) location.reload(); else alert('保存失败');
     }
 
     // Save synthesis weights (legacy, kept if used elsewhere)
@@ -118,7 +118,7 @@
         document.querySelectorAll('.synth-slider').forEach(s => { weights[s.dataset.mid] = parseFloat(s.value); });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({synth_weights:weights})});
         var r = await resp.json();
-        alert(r.success ? '合成权重已保存' : '保存失败');
+        if (r.success) location.reload(); else alert('保存失败');
     }
 
     // Save capture weights
@@ -127,7 +127,7 @@
         document.querySelectorAll('.capture-slider').forEach(s => { weights[s.dataset.key] = parseFloat(s.value); });
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capture_weights:weights})});
         var r = await resp.json();
-        alert(r.success ? '捕捉权重已保存' : '保存失败');
+        if (r.success) location.reload(); else alert('保存失败');
     }
 
     updateThemeUI();
