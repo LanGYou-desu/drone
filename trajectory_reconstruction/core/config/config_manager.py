@@ -63,6 +63,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         'time_step': 0.5,
     },
     'theme': 'dark',
+    'camera_speed': 0.12,
     'capture_weights': {
         'height': 0.3,
         'speed': 0.3,
@@ -100,9 +101,11 @@ def _validate_config(cfg: dict) -> dict:
                 cfg['prediction_settings'] = {}
             cfg['prediction_settings'][key] = DEFAULT_CONFIG['prediction_settings'][key]
 
-    # 确保 theme 字段存在
+    # 确保 theme 和 camera_speed 字段存在
     if 'theme' not in cfg:
         cfg['theme'] = DEFAULT_CONFIG['theme']
+    if 'camera_speed' not in cfg:
+        cfg['camera_speed'] = DEFAULT_CONFIG['camera_speed']
 
     # 确保 capture_weights 存在
     if 'capture_weights' not in cfg:

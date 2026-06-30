@@ -38,6 +38,7 @@
         "time_step": 0.3
     },
     "theme": "dark",
+    "camera_speed": 0.12,
     "capture_weights": {
         "height": 0.3,
         "speed": 0.3,

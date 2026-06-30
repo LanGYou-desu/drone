@@ -65,6 +65,8 @@ async function initViewer() {
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.target.set(4, 2, 4);
+    controls.minDistance = 1;
+    controls.maxDistance = 200;
     controls.autoRotate = false;
 
     // 地面（与总览一致）
@@ -100,6 +102,26 @@ async function initViewer() {
         labelRenderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // WASD 键盘平移
+    const keys = {};
+    document.addEventListener('keydown', e => { keys[e.code] = true; });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+    function wasdLoop() {
+        requestAnimationFrame(wasdLoop);
+        const speed = (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12;
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        dir.normalize();
+        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+        if (keys['KeyW']) { camera.position.addScaledVector(dir, speed); controls.target.addScaledVector(dir, speed); }
+        if (keys['KeyS']) { camera.position.addScaledVector(dir, -speed); controls.target.addScaledVector(dir, -speed); }
+        if (keys['KeyA']) { camera.position.addScaledVector(right, -speed); controls.target.addScaledVector(right, -speed); }
+        if (keys['KeyD']) { camera.position.addScaledVector(right, speed); controls.target.addScaledVector(right, speed); }
+        if (keys['KeyQ']) { camera.position.y -= speed; controls.target.y -= speed; }
+        if (keys['KeyE']) { camera.position.y += speed; controls.target.y += speed; }
+    }
+    wasdLoop();
+
     // 鼠标悬停坐标拾取
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -121,6 +143,15 @@ async function initViewer() {
                 });
             }
         }
+        for (const id in predLines) {
+            if (predLines[id]?.points) {
+                predLines[id].points.children.forEach(s => {
+                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
+                        targets.push(s);
+                    }
+                });
+            }
+        }
         const hits = raycaster.intersectObjects(targets);
         const tip = document.getElementById('coordTooltip');
         if (hoveredSphere && (!hits.length || hits[0].object !== hoveredSphere)) {
@@ -130,7 +161,12 @@ async function initViewer() {
             const obj = hits[0].object, p = hits[0].object.position;
             if (obj !== hoveredSphere) { hoveredSphere = obj; hoveredSphere.scale.set(2.5, 2.5, 2.5); }
             if (tip) {
-                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}`;
+                let timeStr = '';
+                const ud = obj.userData;
+                if (ud?.ts && ud.idx != null && ud.idx < ud.ts.length) {
+                    timeStr = ` <span style="color:#d29922">T</span>${ud.ts[ud.idx].toFixed(2)}`;
+                }
+                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}${timeStr}`;
                 tip.style.display = 'block'; tip.style.left = (e.clientX + 16) + 'px'; tip.style.top = (e.clientY - 28) + 'px';
             }
         } else { if (tip) tip.style.display = 'none'; }
@@ -157,9 +193,10 @@ function renderCachedPredictions() {
         scene.add(line);
         const grp = new THREE.Group();
         const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, transparent: true, opacity: 0.5 });
-        pred.prediction.forEach(p => {
+        pred.prediction.forEach((p, i) => {
             const s = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), mat);
             s.position.set(p[0], p[1], p[2]);
+            s.userData = { pts: pred.prediction, ts: pred.pred_times, idx: i };
             grp.add(s);
         });
         scene.add(grp);
@@ -196,9 +233,10 @@ function drawTrails() {
 
         const grp = new THREE.Group();
         const mat = new THREE.MeshStandardMaterial({ color: data.color, emissive: data.color, emissiveIntensity: 0.15, roughness: 0.3 });
-        data.points.forEach(p => {
+        data.points.forEach((p, i) => {
             const s = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), mat);
             s.position.set(p[0], p[1], p[2]);
+            s.userData = { pts: data.points, ts: data.timestamps, idx: i };
             grp.add(s);
         });
         scene.add(grp);

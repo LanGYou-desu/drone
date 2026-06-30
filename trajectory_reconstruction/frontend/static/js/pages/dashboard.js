@@ -88,9 +88,8 @@ function buildScene(THREE, orb, css) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.target.set(4, 2, 4);
-    controls.minDistance = 2;
-    controls.maxDistance = 60;
-    controls.maxPolarAngle = Math.PI * 0.65;
+    controls.minDistance = 1;
+    controls.maxDistance = 200;
     controls.autoRotate = false;
 }
 
@@ -151,13 +150,14 @@ function buildTrailMesh(points, color) {
     return group;
 }
 
-function buildSpheres(points, color, size = 0.06, opacity = 1) {
+function buildSpheres(points, color, size = 0.06, opacity = 1, timestamps = null) {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.15, roughness: 0.3, transparent: opacity < 1, opacity });
-    points.forEach(p => {
+    points.forEach((p, i) => {
         const s = new THREE.Mesh(new THREE.SphereGeometry(size, 10, 10), mat);
         s.position.set(p[0], p[1], p[2]);
         s.castShadow = true;
+        s.userData = { pts: points, ts: timestamps, idx: i };
         group.add(s);
     });
     return group;
@@ -185,7 +185,7 @@ function refreshAll() {
         if (!data.visible || !data.points || data.points.length < 2) continue;
 
         const trail = buildTrailMesh(data.points, data.color);
-        const spheres = buildSpheres(data.points, data.color, 0.06);
+        const spheres = buildSpheres(data.points, data.color, 0.06, 1, data.timestamps);
         const pts = data.points;
         const startLab = addLabel('◉ 起点', pts[0], LABEL_CSS);
         const endLab = addLabel('⚑ 终点', pts[pts.length-1], LABEL_CSS);
@@ -211,7 +211,7 @@ function addPredLine(id, pred, color, lastHistPt) {
         new THREE.LineDashedMaterial({ color, dashSize: 0.35, gapSize: 0.2, transparent: true, opacity: 0.55 })
     );
     line.computeLineDistances();
-    const grp = buildSpheres(pred.points, color, 0.04, 0.5);
+    const grp = buildSpheres(pred.points, color, 0.04, 0.5, pred.times);
     scene.add(line); scene.add(grp);
     predLines[id] = { line, points: grp };
 }
@@ -485,12 +485,20 @@ function bindEvents() {
         mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
 
-        // 收集所有轨迹点球体（排除光晕子元素）
+        // 收集所有轨迹点球体（含预测）
         const targets = [];
         for (const id in lines) {
             if (lines[id]?.spheres) {
                 lines[id].spheres.children.forEach(s => {
-                    // 只取标准球体（非光晕）
+                    if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
+                        targets.push(s);
+                    }
+                });
+            }
+        }
+        for (const id in predLines) {
+            if (predLines[id]?.points) {
+                predLines[id].points.children.forEach(s => {
                     if (s.geometry && s.geometry.type === 'SphereGeometry' && s.geometry.parameters.radius < 0.4) {
                         targets.push(s);
                     }
@@ -524,7 +532,14 @@ function bindEvents() {
             }
 
             if (tip) {
-                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}`;
+                let timeStr = '';
+                const pts = obj.userData?.pts;
+                const ts = obj.userData?.ts;
+                const idx = obj.userData?.idx;
+                if (pts && ts && idx != null && idx < ts.length) {
+                    timeStr = ` <span style="color:#d29922">T</span>${ts[idx].toFixed(2)}`;
+                }
+                tip.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--blue);margin-right:4px;vertical-align:middle;"></span><span style="color:#f85149">X</span>${p.x.toFixed(2)} <span style="color:#3fb950">Y</span>${p.y.toFixed(2)} <span style="color:#58a6ff">Z</span>${p.z.toFixed(2)}${timeStr}`;
                 tip.style.display = 'block';
                 tip.style.left = (e.clientX + 16) + 'px';
                 tip.style.top = (e.clientY - 28) + 'px';
@@ -543,12 +558,32 @@ function bindEvents() {
 }
 
 function bindKeyboard() {
+    const keys = {};
     document.addEventListener('keydown', e => {
+        keys[e.code] = true;
         if (e.code === 'Space' && e.target === document.body) {
             e.preventDefault();
             animActive ? pauseAnim() : startAnim(false);
         }
     });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    function wasdLoop() {
+        requestAnimationFrame(wasdLoop);
+        const speed = (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12;
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        dir.normalize();
+        const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+
+        if (keys['KeyW']) { camera.position.addScaledVector(dir, speed); controls.target.addScaledVector(dir, speed); }
+        if (keys['KeyS']) { camera.position.addScaledVector(dir, -speed); controls.target.addScaledVector(dir, -speed); }
+        if (keys['KeyA']) { camera.position.addScaledVector(right, -speed); controls.target.addScaledVector(right, -speed); }
+        if (keys['KeyD']) { camera.position.addScaledVector(right, speed); controls.target.addScaledVector(right, speed); }
+        if (keys['KeyQ']) { camera.position.y -= speed; controls.target.y -= speed; }
+        if (keys['KeyE']) { camera.position.y += speed; controls.target.y += speed; }
+    }
+    wasdLoop();
 }
 
 // ═══════════════════════════════════════════

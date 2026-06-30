@@ -91,8 +91,9 @@
 <script>
     window._PAGE_DATA_ = {
         methodsData: {{ methods_data | tojson }},
-        predSettings: {{ pred_settings | tojson }}
+        predSettings: {{ pred_settings | tojson }},
+        cameraSpeed: {{ camera_speed }}
     };
 </script>
-<script type="module" src="/static/js/pages/predict.js?v=20"></script>
+<script type="module" src="/static/js/pages/predict.js?v=29"></script>
 {% endblock %}

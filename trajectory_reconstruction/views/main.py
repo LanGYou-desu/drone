@@ -33,6 +33,7 @@ def _page_context(active: str) -> dict:
         'pred_settings': cfg.get('prediction_settings', {}),
         'active_page': active,
         'theme': cfg.get('theme', 'dark'),
+        'camera_speed': cfg.get('camera_speed', 0.12),
     }
 
 
