@@ -37,5 +37,11 @@
         "default_points": 20,
         "time_step": 0.3
     },
-    "theme": "dark"
+    "theme": "dark",
+    "capture_weights": {
+        "height": 0.3,
+        "speed": 0.3,
+        "acceleration": 0.2,
+        "curvature": 0.2
+    }
 }

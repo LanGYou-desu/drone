@@ -202,6 +202,20 @@ def synthesize_trajectory() -> dict:
     if len(syn_points) < 2:
         return {'success': False, 'error': '合成失败：有效插值点不足'}
 
+    # 平滑处理（3点移动平均，重复2遍）
+    for _ in range(2):
+        smoothed = []
+        for i in range(len(syn_points)):
+            if i == 0 or i == len(syn_points) - 1:
+                smoothed.append(syn_points[i][:])
+            else:
+                smoothed.append([
+                    (syn_points[i-1][0] + syn_points[i][0] + syn_points[i+1][0]) / 3,
+                    (syn_points[i-1][1] + syn_points[i][1] + syn_points[i+1][1]) / 3,
+                    (syn_points[i-1][2] + syn_points[i][2] + syn_points[i+1][2]) / 3,
+                ])
+        syn_points = smoothed
+
     # 更新内存（综合轨迹不落盘，每次重新计算）
     _ensure_synthetic_method()
     detection_methods['synthetic']['points'] = syn_points
@@ -218,7 +232,7 @@ def synthesize_trajectory() -> dict:
 
 
 def _interpolate(mid: str, t: float):
-    """在给定时间点线性插值某平台的坐标"""
+    """在给定时间点线性插值某平台的坐标，无精确值时用前后平均"""
     m = detection_methods.get(mid)
     if not m:
         return None
@@ -227,13 +241,11 @@ def _interpolate(mid: str, t: float):
     if not pts or not ts or len(pts) < 2:
         return None
 
-    # 边界检查
     if t <= ts[0]:
         return pts[0]
     if t >= ts[-1]:
         return pts[-1]
 
-    # 二分查找插值区间
     import bisect
     i = bisect.bisect_left(ts, t)
     if i == 0:
@@ -252,6 +264,27 @@ def _interpolate(mid: str, t: float):
         p0[1] + (p1[1] - p0[1]) * ratio,
         p0[2] + (p1[2] - p0[2]) * ratio,
     ]
+
+
+def _nearest_avg(mid: str, t: float):
+    """前后最近两点的平均值（_interpolate 的兜底）"""
+    m = detection_methods.get(mid)
+    if not m:
+        return None
+    pts = m.get('points', [])
+    ts = m.get('timestamps', [])
+    if not pts or not ts or len(pts) < 2:
+        return None
+    # 找前后最近的点
+    prev_pt, next_pt = None, None
+    for i, ti in enumerate(ts):
+        if ti <= t:
+            prev_pt = pts[i]
+        if ti >= t and next_pt is None:
+            next_pt = pts[i]
+    if prev_pt and next_pt:
+        return [(prev_pt[j] + next_pt[j]) / 2 for j in range(3)]
+    return prev_pt or next_pt
 
 
 def clear_all_data() -> Optional[str]:

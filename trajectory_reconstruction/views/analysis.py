@@ -117,3 +117,55 @@ def get_analysis_data():
         if mid not in sorted_result:
             sorted_result[mid] = result[mid]
     return jsonify(sorted_result)
+
+
+@analysis_bp.route('/capture')
+def get_capture_analysis():
+    """返回综合轨迹最佳捕捉时机（仅预测后可用）"""
+    mid = 'synthetic'
+    if mid not in detection_methods:
+        return jsonify([])
+    data = detection_methods[mid]
+    if not data.get('visible', True) or len(data.get('points', [])) < 2:
+        return jsonify([])
+
+    pred_pts, pred_ts = _load_predict_data(mid)
+    if not pred_pts or len(pred_pts) < 3:
+        return jsonify([])
+
+    from trajectory_reconstruction.core.config.config_manager import ensure_config
+    cfg = ensure_config()
+    w = cfg.get('capture_weights', {'height': 0.3, 'speed': 0.3, 'acceleration': 0.2, 'curvature': 0.2})
+    w_h, w_s, w_a, w_c = w['height'], w['speed'], w['acceleration'], w['curvature']
+
+    heights = [p[1] for p in pred_pts]
+    speeds, accels, curvs, _ = _compute_metrics(pred_pts, pred_ts)
+    speeds = [0] + speeds
+    accels = [0, 0] + accels
+    curvs = [0] + curvs + [0]
+
+    n = len(pred_pts)
+    def _safe(arr, i): return arr[i] if i < len(arr) else 0
+    h_max = max(heights) or 1
+    s_max = max(speeds) or 1
+    a_max = max((abs(v) for v in accels), default=1) or 1
+    c_max = max(curvs) or 1
+
+    scored = []
+    for i in range(n):
+        sc = (w_h * (1 - _safe(heights, i) / h_max) +
+              w_s * (1 - _safe(speeds, i) / s_max) +
+              w_a * (1 - abs(_safe(accels, i)) / a_max) +
+              w_c * (1 - _safe(curvs, i) / c_max))
+        scored.append((round(sc * 100), i))
+    scored.sort(reverse=True)
+    top3 = scored[:3]
+
+    return jsonify([{
+        'rank': j + 1,
+        'time': round(pred_ts[i], 2),
+        'position': [round(pred_pts[i][0], 2), round(pred_pts[i][1], 2), round(pred_pts[i][2], 2)],
+        'score': s,
+        'height': round(heights[i], 2),
+        'speed': round(speeds[i], 2),
+    } for j, (s, i) in enumerate(top3)])

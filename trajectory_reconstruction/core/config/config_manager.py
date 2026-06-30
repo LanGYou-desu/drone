@@ -63,6 +63,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         'time_step': 0.5,
     },
     'theme': 'dark',
+    'capture_weights': {
+        'height': 0.3,
+        'speed': 0.3,
+        'acceleration': 0.2,
+        'curvature': 0.2,
+    },
 }
 
 
@@ -97,6 +103,13 @@ def _validate_config(cfg: dict) -> dict:
     # 确保 theme 字段存在
     if 'theme' not in cfg:
         cfg['theme'] = DEFAULT_CONFIG['theme']
+
+    # 确保 capture_weights 存在
+    if 'capture_weights' not in cfg:
+        cfg['capture_weights'] = dict(DEFAULT_CONFIG['capture_weights'])
+    for k in DEFAULT_CONFIG['capture_weights']:
+        if k not in cfg['capture_weights']:
+            cfg['capture_weights'][k] = DEFAULT_CONFIG['capture_weights'][k]
 
     return cfg
 
