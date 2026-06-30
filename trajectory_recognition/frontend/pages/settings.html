@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 — 鹰眼长空</title>
+    <script>
+    (function() {
+        var theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+    })();
+    </script>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% from "icons.html" import icon_drone, icon_settings, icon_moon, icon_sun, icon_dna, icon_antenna, icon_help %}
+</head>
+<body>
+    <nav class="navbar">
+        <span class="navbar-brand">
+            {{ icon_drone() }}
+            鹰眼长空
+        </span>
+        <div class="navbar-links">
+            <a href="/">{{ icon_dna() }} 轨迹识别</a>
+        </div>
+        <div class="navbar-actions">
+            <a href="http://127.0.0.1:5000" title="重建分析">{{ icon_antenna() }} 分析</a>
+            <a href="http://127.0.0.1:5000/docs" title="帮助文档">{{ icon_help() }} 帮助</a>
+            <a href="/settings" class="active">{{ icon_settings() }} 设置</a>
+        </div>
+    </nav>
+
+    <div class="page" style="max-width:640px;margin:0 auto;">
+        <div class="page-header">
+            <h1>{{ icon_settings() }} 设置</h1>
+            <p>轨迹识别模块偏好</p>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>外观</h3></div>
+            <div class="theme-toggle" onclick="toggleTheme()">
+                <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                    <span id="themeIcon" style="display:flex;align-items:center;color:var(--text-secondary);">
+                        {{ icon_moon('1.2em') }}
+                    </span>
+                    <div>
+                        <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">主题模式</div>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);" id="themeLabel">深色模式</div>
+                    </div>
+                </div>
+                <div class="toggle-switch" id="themeSwitch"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h3>关于</h3></div>
+            <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;">
+                <p><strong>鹰眼长空 — 轨迹识别</strong></p>
+                <p>轨迹模式识别与分类模块</p>
+                <p style="margin-top:4px;">版本 1.0 · 2026</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function updateThemeUI() {
+        var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        var isDark = theme === 'dark';
+        var sw = document.getElementById('themeSwitch');
+        var label = document.getElementById('themeLabel');
+        var icon = document.getElementById('themeIcon');
+        if (isDark) {
+            sw.classList.add('active');
+            label.textContent = '深色模式';
+            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 10.5A6 6 0 0 1 5.5 2.5 6 6 0 1 0 13.5 10.5z"/></svg>';
+        } else {
+            sw.classList.remove('active');
+            label.textContent = '浅色模式';
+            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><circle cx="8" cy="8" r="3.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="13" y1="3" x2="11.5" y2="4.5"/><line x1="4.5" y1="11.5" x2="3" y2="13"/></svg>';
+        }
+    }
+    function toggleTheme() {
+        var current = document.documentElement.getAttribute('data-theme') || 'dark';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        updateThemeUI();
+    }
+    updateThemeUI();
+    </script>
+</body>
+</html>
