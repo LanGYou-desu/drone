@@ -306,9 +306,10 @@ async function runPrediction() {
 
                 const grp = new THREE.Group();
                 const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, transparent: true, opacity: 0.5 });
-                pred.prediction.forEach(p => {
+                pred.prediction.forEach((p, i) => {
                     const s = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), mat);
                     s.position.set(p[0], p[1], p[2]);
+                    s.userData = { pts: pred.prediction, ts: pred.pred_times, idx: i };
                     grp.add(s);
                 });
                 scene.add(grp);
