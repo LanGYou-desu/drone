@@ -29,16 +29,16 @@
         <div class="card-header"><h3>{{ icon_target() }} 平台名称与颜色</h3></div>
         <div id="platformSettings">
             {% for id, m in all_methods.items() %}
-            {% if id != 'synthetic' %}
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                 <input type="color" value="{{ m.color }}" data-mid="{{ id }}" class="platform-color" style="width:32px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;">
                 <input type="text" value="{{ m.name }}" data-mid="{{ id }}" data-field="name" class="platform-name" style="width:80px;padding:4px 8px;font-size:0.85rem;">
+                {% if id != 'synthetic' %}
                 <span style="font-size:0.75rem;color:var(--text-secondary);">权重</span>
-                <input type="range" min="0" max="3" step="0.1" value="{{ m.weight }}"
+                <input type="range" min="0" max="3" step="0.1" value="{{ m.weight|default(1.0) }}"
                        data-mid="{{ id }}" class="synth-slider" style="flex:1;margin:0;">
-                <span style="width:30px;text-align:right;font-size:0.85rem;color:var(--text-primary);">{{ m.weight }}</span>
+                <span style="width:30px;text-align:right;font-size:0.85rem;color:var(--text-primary);">{{ m.weight|default(1.0) }}</span>
+                {% endif %}
             </div>
-            {% endif %}
             {% endfor %}
         </div>
         <button class="btn btn-primary btn-sm" onclick="savePlatforms()" style="margin-top:8px;">保存平台设置</button>
@@ -52,7 +52,7 @@
             {% for key, label in [('height','高度'), ('speed','速度'), ('acceleration','加速度'), ('curvature','曲率')] %}
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                 <span style="width:50px;font-size:0.85rem;">{{ label }}</span>
-                <input type="range" min="0" max="1" step="0.05" value="{{ capture_weights[key] }}"
+                <input type="range" min="0" max="3" step="0.1" value="{{ capture_weights[key] }}"
                        data-key="{{ key }}" class="capture-slider" style="flex:1;margin:0;">
                 <span class="capture-val" style="width:35px;text-align:right;font-size:0.85rem;">{{ capture_weights[key] }}</span>
             </div>
