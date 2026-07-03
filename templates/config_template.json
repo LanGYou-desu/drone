@@ -57,7 +57,7 @@
         "curvature": 1.0
     },
     "detection": {
-        "model": "yolov8n.pt",
+        "model": "models/yolov8n.pt",
         "confidence_threshold": 0.5,
         "nms_threshold": 0.45,
         "frame_interval": 5,

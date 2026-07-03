@@ -167,12 +167,14 @@ const DetectionControl = {
             document.getElementById('det3DPoints').textContent = s.points_3d || 0;
             document.getElementById('detDuration').textContent = s.duration + 's';
 
-            // 刷新预览帧（onload/onerror 自动处理占位符显隐）
-            const ts = Date.now();
-            const imgA = document.getElementById('imgA');
-            const imgB = document.getElementById('imgB');
-            if (imgA && s.status === 'running') imgA.src = DetectionAPI.previewUrl('a') + '&_=' + ts;
-            if (imgB && s.status === 'running') imgB.src = DetectionAPI.previewUrl('b') + '&_=' + ts;
+            // 刷新预览帧（running/paused/completed 都刷新）
+            if (s.status === 'running' || s.status === 'paused' || s.status === 'completed') {
+                const ts = Date.now();
+                const imgA = document.getElementById('imgA');
+                const imgB = document.getElementById('imgB');
+                if (imgA) imgA.src = DetectionAPI.previewUrl('a') + '&_=' + ts;
+                if (imgB) imgB.src = DetectionAPI.previewUrl('b') + '&_=' + ts;
+            }
 
             if (s.track_count > 0) this._updateTrackList();
 
