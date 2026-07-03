@@ -180,9 +180,15 @@ const DetectionControl = {
 
             if (s.status === 'completed' || s.status === 'error') {
                 this._stopPolling(); this._setRunning(false);
-                if (s.status === 'error') window.toast?.error('检测异常: ' + (s.error || ''));
-                else window.toast?.success('检测完成');
-                this._showResults();
+                if (s.status === 'error') {
+                    document.getElementById('detStatus').textContent = '异常';
+                    document.getElementById('resultCard').style.display = 'block';
+                    document.getElementById('resultInfo').innerHTML =
+                        '<span style=\"color:var(--red);\">检测失败: ' + (s.error || '未知错误，请检查终端日志') + '</span>';
+                } else {
+                    window.toast?.success('检测完成');
+                    this._showResults();
+                }
             }
         } catch { /* 静默 */ }
     },
