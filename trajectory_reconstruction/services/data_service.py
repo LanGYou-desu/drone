@@ -6,7 +6,7 @@ from typing import Optional
 
 from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.config.config_manager import save_config, ensure_config
-from trajectory_reconstruction.core.io.data_loader import load_default_data
+from trajectory_reconstruction.core.io.data_loader import load_dat_file, load_default_data
 from trajectory_reconstruction.core.math_utils import lerp_3d, nearest_avg_3d, smooth_points_3d
 
 
