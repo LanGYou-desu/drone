@@ -310,11 +310,19 @@ def save_results():
 
         tracks = tracker.get_all_tracks()
 
-        # 备份
-        backup_path = backup_existing_fact()
+        # 确定目标文件
+        from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
+        target_file = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
+
+        # 备份（只备份目标文件）
+        backup_path = backup_existing_fact(filenames=[target_file])
 
         # 写入
         files = tracks_to_dat(tracks, platform_id=platform_id, auto_backup=False)
+
+        # 通知重建模块刷新
+        from trajectory_recognition.services.data_bridge import notify_reconstruction
+        notify_reconstruction()
 
         # 元信息
         save_detection_metadata(tracks, session.to_dict())

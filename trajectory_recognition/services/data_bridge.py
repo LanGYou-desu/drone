@@ -256,3 +256,12 @@ def list_detect_files(data_dir: str = "data/fact/") -> list[dict]:
         })
 
     return files
+
+
+def notify_reconstruction():
+    """通知重建模块刷新数据（静默失败）"""
+    try:
+        import requests
+        requests.post('http://127.0.0.1:5000/api/refresh_data', timeout=2)
+    except Exception:
+        pass  # 重建模块未运行，忽略

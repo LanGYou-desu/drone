@@ -266,7 +266,7 @@ def _run_detection_pipeline(session: DetectionSession):
         # 自动保存（tracks_to_dat 内部已含 auto_backup）
         if session.config_snapshot.get("detection", {}).get("auto_save", True):
             try:
-                from trajectory_recognition.services.data_bridge import tracks_to_dat
+                from trajectory_recognition.services.data_bridge import tracks_to_dat, notify_reconstruction
                 trk = session._tracker
                 if trk:
                     tracks_to_dat(
@@ -274,6 +274,7 @@ def _run_detection_pipeline(session: DetectionSession):
                         platform_id=session.platform_id,
                         auto_backup=True,
                     )
+                    notify_reconstruction()
             except Exception:
                 pass
 
