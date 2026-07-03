@@ -143,12 +143,31 @@
             return ids.map(id => {
                 const ts = allData[id].time_steps || [];
                 const vals = allData[id][field] || [];
-                const data = ts.map((t, i) => [t, vals[i]]).filter(p => p[1] != null);
+                const raw = ts.map((t, i) => [t, vals[i]]).filter(p => p[1] != null);
+                if (raw.length < 2) return { name: allData[id].name, type: 'line', data: raw,
+                    lineStyle: { color: allData[id].color, width: 2 }, symbol: 'none', smooth: true };
+                // 密集采样，使悬停任意位置都能显示插值坐标
+                const dense = [];
+                const tMin = raw[0][0], tMax = raw[raw.length-1][0];
+                const step = Math.max(0.05, (tMax - tMin) / 500);
+                let ri = 0;
+                for (let t = tMin; t <= tMax + step/2; t += step) {
+                    while (ri < raw.length - 1 && raw[ri+1][0] < t) ri++;
+                    if (ri >= raw.length - 1) {
+                        const r = raw[raw.length-1];
+                        if (r[1] != null) dense.push([+t.toFixed(4), r[1]]);
+                    } else {
+                        const a = raw[ri], b = raw[ri+1];
+                        if (a[1] == null || b[1] == null) continue;
+                        const r = (t - a[0]) / (b[0] - a[0]);
+                        dense.push([+t.toFixed(4), +(a[1] + (b[1] - a[1]) * r).toFixed(4)]);
+                    }
+                }
                 return {
-                    name: allData[id].name, type: 'line', data,
+                    name: allData[id].name, type: 'line', data: dense,
                     lineStyle: { color: allData[id].color, width: 2 },
                     itemStyle: { color: allData[id].color },
-                    symbol: 'circle', symbolSize: 3, smooth: true,
+                    symbol: 'none', smooth: false,
                 };
             });
         }
@@ -158,7 +177,6 @@
                         splitLine: { show: false } };
         const tooltip = { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
                           textStyle: { color: '#e6edf3', fontSize: 12 },
-                          axisPointer: { type: 'cross', crossStyle: { color: '#8b949e' } },
                           valueFormatter: v => v != null ? v.toFixed(2) : '-' };
         const grid = { top: 12, bottom: 30, left: 8, right: 20, containLabel: true };
         const init = id => echarts.init(document.getElementById(id));
