@@ -172,6 +172,7 @@ def _run_detection_pipeline(session: DetectionSession):
         tracker = MultiTracker(
             tracker_type=det_cfg.get("tracker", "bytetrack"),
         )
+        session._tracker = tracker
         stereo = StereoTriangulator(StereoParams(**stereo_cfg)) if stereo_cfg else None
 
         frame_interval = det_cfg.get("frame_interval", 5)
@@ -252,20 +253,19 @@ def _run_detection_pipeline(session: DetectionSession):
     finally:
         session.finished_at = time.time()
         session._thread = None
-        global _active_session_id
-        if _active_session_id == session.session_id:
-            _active_session_id = None
+        # 完成后保持 session 可查询，不清空 _active_session_id
+        # 只有新 session 启动或手动 stop 才切换
 
-        # 自动保存
+        # 自动保存（tracks_to_dat 内部已含 auto_backup）
         if session.config_snapshot.get("detection", {}).get("auto_save", True):
             try:
-                from trajectory_recognition.services.data_bridge import tracks_to_dat, backup_existing_fact
-                tracker = session._tracker
-                if tracker:
-                    backup_existing_fact()
+                from trajectory_recognition.services.data_bridge import tracks_to_dat
+                trk = session._tracker
+                if trk:
                     tracks_to_dat(
-                        tracker.get_all_tracks(),
+                        trk.get_all_tracks(),
                         platform_id=session.platform_id,
+                        auto_backup=True,
                     )
             except Exception:
                 pass
