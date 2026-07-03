@@ -140,16 +140,26 @@
         if (!ids.length) return;
 
         function makeSeries(field) {
-            return ids.map(id => ({
-                name: allData[id].name, type: 'line', data: allData[id][field],
-                lineStyle: { color: allData[id].color, width: 2 },
-                itemStyle: { color: allData[id].color },
-                symbol: 'none', smooth: true,
-            }));
+            return ids.map(id => {
+                const raw = allData[id][field] || [];
+                // 补齐到最长 x 轴长度
+                const data = raw.concat(new Array(Math.max(0, xData.length - raw.length)).fill(null));
+                return {
+                    name: allData[id].name, type: 'line', data,
+                    lineStyle: { color: allData[id].color, width: 2 },
+                    itemStyle: { color: allData[id].color },
+                    symbol: 'none', smooth: true,
+                    connectNulls: false,
+                };
+            });
         }
 
         const init = id => echarts.init(document.getElementById(id));
-        const xData = allData[ids[0]]?.time_steps || [];
+        // 用最长时间轴，避免短平台截断图表
+        let xData = [];
+        for (const d of Object.values(allData)) {
+            if (d.time_steps && d.time_steps.length > xData.length) xData = d.time_steps;
+        }
 
         init('heightChart').setOption({
             tooltip: { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
