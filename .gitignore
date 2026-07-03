@@ -15,6 +15,7 @@ venv/
 data/backup/
 data/predict/
 data/uploads/
+data/fact/*.json
 
 # OS
 .DS_Store
