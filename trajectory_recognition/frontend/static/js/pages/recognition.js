@@ -128,13 +128,25 @@ const DetectionControl = {
     },
 
     async saveResults() {
+        const btn = document.getElementById('btnSave');
         try {
+            btn.disabled = true;
+            btn.textContent = '已保存';
             const result = await DetectionAPI.saveResults();
             if (result.success) {
                 window.toast?.success(`已保存 ${result.track_count} 条轨迹到 ${result.platform} 平台`);
-                document.getElementById('resultCard').style.display = 'none';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            } else {
+                btn.disabled = false;
+                btn.textContent = '保存到 data/';
+                window.toast?.error('保存失败');
             }
-        } catch (err) { window.toast?.error('保存失败: ' + err.message); }
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = '保存到 data/';
+            window.toast?.error('保存失败: ' + err.message);
+        }
     },
 
     _setRunning(running) {
