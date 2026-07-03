@@ -154,7 +154,9 @@
         }
 
         const xAxis = { type: 'value', name: '时间 (s)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                        axisLabel: { color: '#8b949e', fontSize: 9 }, axisLine: { lineStyle: { color: '#30363d' } } };
+                        axisLabel: { color: '#8b949e', fontSize: 9 },
+                        axisLine: { lineStyle: { color: '#30363d' } },
+                        splitLine: { lineStyle: { color: '#21262d' } } };
         const tooltip = { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
                           textStyle: { color: '#e6edf3', fontSize: 12 },
                           valueFormatter: v => v != null ? v.toFixed(2) : '-' };
