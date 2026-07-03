@@ -173,6 +173,7 @@ def _run_detection_pipeline(session: DetectionSession):
                 det_cfg.get("input_width", 640),
                 det_cfg.get("input_height", 640),
             ),
+            target_classes=det_cfg.get("target_classes", None),
         )
         tracker = MultiTracker(
             tracker_type=det_cfg.get("tracker", "bytetrack"),

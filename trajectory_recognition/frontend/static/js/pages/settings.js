@@ -51,6 +51,12 @@ async function saveSection(section) {
         config.frame_interval = parseInt(document.getElementById('detFrameInterval').value);
         config.tracker = document.getElementById('detTracker').value;
         config.auto_save = document.getElementById('autoSaveSwitch').classList.contains('active');
+        var tcRaw = document.getElementById('detTargetClasses').value.trim();
+        if (tcRaw) {
+            config.target_classes = tcRaw.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return !isNaN(n);});
+        } else {
+            config.target_classes = null;
+        }
     }
     if (section === 'stereo') {
         config.stereo = {
@@ -101,6 +107,9 @@ async function loadConfig() {
         setVal('detInputH', d.input_height);
         setVal('detFrameInterval', d.frame_interval);
         setVal('detTracker', d.tracker);
+        if (d.target_classes && d.target_classes.length) {
+            setVal('detTargetClasses', d.target_classes.join(','));
+        }
         if (d.confidence_threshold !== undefined) {
             document.getElementById('detConfidence').value = d.confidence_threshold;
             document.getElementById('confLabel').textContent = d.confidence_threshold.toFixed(2);

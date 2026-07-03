@@ -258,7 +258,7 @@ def save_config():
             current['detection'] = {}
         det_keys = ['model', 'device', 'input_width', 'input_height',
                      'confidence_threshold', 'nms_threshold',
-                     'frame_interval', 'tracker', 'auto_save']
+                     'frame_interval', 'tracker', 'auto_save', 'target_classes']
         for k in det_keys:
             if k in data:
                 current['detection'][k] = data[k]
