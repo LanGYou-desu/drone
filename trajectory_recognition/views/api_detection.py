@@ -314,8 +314,8 @@ def save_results():
         from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
         target_file = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
 
-        # 备份（只备份目标文件）
-        backup_path = backup_existing_fact(filenames=[target_file])
+        # 备份（只备份目标文件，与重建模块命名一致）
+        backup_path = backup_existing_fact(filenames=[target_file], label='manual')
 
         # 写入
         files = tracks_to_dat(tracks, platform_id=platform_id, auto_backup=False)
