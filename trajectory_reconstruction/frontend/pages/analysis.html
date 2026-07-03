@@ -143,31 +143,12 @@
             return ids.map(id => {
                 const ts = allData[id].time_steps || [];
                 const vals = allData[id][field] || [];
-                const raw = ts.map((t, i) => [t, vals[i]]).filter(p => p[1] != null);
-                if (raw.length < 2) return { name: allData[id].name, type: 'line', data: raw,
-                    lineStyle: { color: allData[id].color, width: 2 }, symbol: 'none', smooth: true };
-                // 密集采样，使悬停任意位置都能显示插值坐标
-                const dense = [];
-                const tMin = raw[0][0], tMax = raw[raw.length-1][0];
-                const step = Math.max(0.05, (tMax - tMin) / 500);
-                let ri = 0;
-                for (let t = tMin; t <= tMax + step/2; t += step) {
-                    while (ri < raw.length - 1 && raw[ri+1][0] < t) ri++;
-                    if (ri >= raw.length - 1) {
-                        const r = raw[raw.length-1];
-                        if (r[1] != null) dense.push([+t.toFixed(4), r[1]]);
-                    } else {
-                        const a = raw[ri], b = raw[ri+1];
-                        if (a[1] == null || b[1] == null) continue;
-                        const r = (t - a[0]) / (b[0] - a[0]);
-                        dense.push([+t.toFixed(4), +(a[1] + (b[1] - a[1]) * r).toFixed(4)]);
-                    }
-                }
+                const data = ts.map((t, i) => [t, vals[i]]).filter(p => p[1] != null);
                 return {
-                    name: allData[id].name, type: 'line', data: dense,
+                    name: allData[id].name, type: 'line', data,
                     lineStyle: { color: allData[id].color, width: 2 },
                     itemStyle: { color: allData[id].color },
-                    symbol: 'none', smooth: false,
+                    symbol: 'none', smooth: true,
                 };
             });
         }
