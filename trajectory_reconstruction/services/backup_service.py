@@ -189,9 +189,6 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
     if manifest is None:
         return False, '备份 manifest 丢失或损坏'
 
-    # 先备份当前数据
-    pre_backup_name = create_backup(label='pre_restore')
-
     from trajectory_reconstruction.core.io.data_loader import load_dat_file
     from trajectory_reconstruction.services.data_service import save_metadata, refresh_fact_data
 
@@ -228,8 +225,6 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
     # 从磁盘重新加载 fact 文件到内存，重新合成（保留 self 数据）
     refresh_fact_data(keep_self=True)
 
-    # 删除恢复前自动备份
-    delete_backup(pre_backup_name)
     mode = '完整' if full else '部分'
     return True, f'已从 {name} {mode}恢复 {restored_count} 个文件'
 
