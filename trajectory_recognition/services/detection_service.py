@@ -176,15 +176,19 @@ def _to_world(pt3d, platform_pos):
     pitch = math.radians(platform_pos.get("pitch", 0))
     yaw = math.radians(platform_pos.get("yaw", 0))
     roll = math.radians(platform_pos.get("roll", 0))
-    # 旋转（ZYX 顺序）
-    # Yaw
+    # 旋转（ZYX 顺序：Yaw → Pitch → Roll）
+    # Yaw: 绕 Y 轴旋转（水平朝向）
     x2 = x * math.cos(yaw) - z * math.sin(yaw)
     z2 = x * math.sin(yaw) + z * math.cos(yaw)
     x, z = x2, z2
-    # Pitch
+    # Pitch: 绕 X 轴旋转（俯仰）
     y2 = y * math.cos(pitch) - z * math.sin(pitch)
     z2 = y * math.sin(pitch) + z * math.cos(pitch)
     y, z = y2, z2
+    # Roll: 绕 Z 轴旋转（翻滚）
+    x2 = x * math.cos(roll) - y * math.sin(roll)
+    y2 = x * math.sin(roll) + y * math.cos(roll)
+    x, y = x2, y2
     # 平移
     return [
         x + platform_pos.get("pos_x", 0),
