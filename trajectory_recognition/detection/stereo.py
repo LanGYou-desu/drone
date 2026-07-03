@@ -101,8 +101,8 @@ class StereoTriangulator:
         if Z <= 0 or Z > 5000:
             return None
 
-        # 4. 3D 坐标（以左目光心为原点，朝向旋转在 _to_world 中统一处理）
-        X = (xl - self.cx) * Z / self.fx
+        # 4. 3D 坐标（双目光心中点为原点）
+        X = (xl - self.cx) * Z / self.fx - self.params.baseline / 2
         Y = (yl - self.cy) * Z / self.fy
 
         return [round(X, 3), round(Y, 3), round(Z, 3)]
