@@ -209,17 +209,17 @@
             </div>
         </div>
 
-        {# ── 结果操作 ── #}
-        <div class="card" id="resultCard" style="display:none;">
-            <div class="card-header"><h3>{{ icon_save() }} 检测结果</h3></div>
-            <div id="resultInfo" style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-primary" id="btnSave" onclick="DetectionControl.saveResults()">
-                    {{ icon_save() }} 保存到 data/
-                </button>
-                <a class="btn btn-secondary" href="http://127.0.0.1:5000">
-                    {{ icon_antenna() }} 在 3D 视图中查看
-                </a>
+            {# ── 结果按钮（检测完成后显示在预览卡片底部）── #}
+            <div id="resultActions" style="display:none;margin-top:10px;">
+                <div id="resultInfo" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-primary btn-sm" id="btnSave" onclick="DetectionControl.saveResults()">
+                        {{ icon_save() }} 保存到 data/
+                    </button>
+                    <a class="btn btn-secondary btn-sm" href="http://127.0.0.1:5000">
+                        {{ icon_antenna() }} 在 3D 视图中查看
+                    </a>
+                </div>
             </div>
         </div>
     </div>

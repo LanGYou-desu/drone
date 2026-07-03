@@ -137,6 +137,7 @@ const DetectionControl = {
                 window.toast?.success(`已保存 ${result.track_count} 条轨迹到 ${result.platform} 平台`);
                 btn.classList.remove('btn-primary');
                 btn.classList.add('btn-secondary');
+                btn.textContent = '已保存';
             } else {
                 btn.disabled = false;
                 btn.textContent = '保存到 data/';
@@ -194,9 +195,9 @@ const DetectionControl = {
                 this._stopPolling(); this._setRunning(false);
                 if (s.status === 'error') {
                     document.getElementById('detStatus').textContent = '异常';
-                    document.getElementById('resultCard').style.display = 'block';
+                    document.getElementById('resultActions').style.display = 'block';
                     document.getElementById('resultInfo').innerHTML =
-                        '<span style=\"color:var(--red);\">检测失败: ' + (s.error || '未知错误，请检查终端日志') + '</span>';
+                        '<span style="color:var(--red);">检测失败: ' + (s.error || '未知错误，请检查终端日志') + '</span>';
                 } else {
                     window.toast?.success('检测完成');
                     this._showResults();
@@ -225,8 +226,11 @@ const DetectionControl = {
     },
 
     _showResults() {
-        const card = document.getElementById('resultCard');
-        card.style.display = 'block';
+        document.getElementById('resultActions').style.display = 'block';
+        document.getElementById('btnSave').disabled = false;
+        document.getElementById('btnSave').textContent = '保存到 data/';
+        document.getElementById('btnSave').classList.remove('btn-secondary');
+        document.getElementById('btnSave').classList.add('btn-primary');
         const count = document.getElementById('detTrackCount').textContent;
         const plat = document.getElementById('detPlatform').textContent;
         document.getElementById('resultInfo').textContent =
