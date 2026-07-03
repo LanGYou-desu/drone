@@ -633,87 +633,122 @@ score = w_h*h_norm + w_s*s_norm + w_a*a_norm + w_c*c_norm
 
 ## 16. 识别模块（未开发）
 
-### 16.1 现状
+### 16.1 架构
 
-`trajectory_recognition/` 当前为**纯框架**：
-- `app.py` — Flask 应用工厂，端口 5001，提供 `/` 页面和 `/health` `/api/status` 端点
-- `frontend/pages/index.html` — 展示"待实现"状态卡片
-- `recognition.js` — 尝试跨域请求 `:5000/analysis/data`（已失效）
-- `features/` `models/` `classifier/` — `__init__.py` 仅有 TODO 注释
-
-### 16.2 规划架构
+`trajectory_recognition/` 已升级为**基于 YOLO 的无人机视频检测系统**（框架阶段，接口已定义，功能待实现）。
 
 ```
 trajectory_recognition/
-├── app.py
-├── features/                    # 特征提取
+├── __init__.py                          # 模块说明
+├── __main__.py                          # 独立启动入口（桌面 / --headless）
+├── app.py                               # Flask 应用工厂（:5001）
+│
+├── detection/                           # YOLO 检测引擎
 │   ├── __init__.py
-│   ├── kinematics.py            # 运动学特征：速度/加速度/曲率统计量
-│   ├── geometry.py              # 几何特征：轨迹形状描述符
-│   └── frequency.py             # 频域特征：FFT 频谱分析
-├── models/                      # 识别模型
+│   ├── engine.py                        # YOLO 模型加载 + 推理（YOLODetector）
+│   ├── tracker.py                       # 多目标跟踪（MultiTracker: ByteTrack/DeepSORT）
+│   └── preprocess.py                    # 视频预处理（VideoProcessor: 抽帧/缩放）
+│
+├── services/                            # 业务编排
 │   ├── __init__.py
-│   ├── rule_based.py            # 规则分类器（基线）
-│   ├── ml_classifier.py         # 机器学习（SVM/随机森林）
-│   └── dl_classifier.py         # 深度学习（LSTM/Transformer）
-└── classifier/                  # 分类器
-    ├── __init__.py
-    ├── pipeline.py              # 推理流水线
-    └── labels.py                # 标签定义（悬停/巡航/俯冲/盘旋等）
+│   ├── detection_service.py             # 检测会话生命周期管理（DetectionSession）
+│   └── data_bridge.py                   # 检测结果 → data/fact/*.dat 格式转换与落盘
+│
+├── views/                               # HTTP 视图
+│   ├── __init__.py                      # 蓝图注册（pages_bp + api_detection_bp）
+│   ├── pages.py                         # 页面路由（/ /settings /history）
+│   └── api_detection.py                 # 检测 API（12 个端点）
+│
+└── frontend/
+    ├── pages/
+    │   ├── index.html                   # 检测工作台（视频上传/预览/控制/结果）
+    │   ├── settings.html                # 检测设置（模型/参数/跟踪器/自动保存）
+    │   └── history.html                 # 检测历史（会话列表/已保存轨迹）
+    └── static/js/pages/
+        ├── detection.js                 # API 通信模块（DetectionAPI）
+        ├── recognition.js               # 主页面控制器（DetectionControl）
+        ├── settings.js                  # 设置页面逻辑
+        └── history.js                   # 历史页面逻辑
 ```
 
-### 16.3 开发步骤
+### 16.2 数据流
 
-**Phase 1 — 特征提取（2-3 天）**
+```
+视频输入 (上传/流/文件)
+    ↓
+detection/preprocess.py        ← 抽帧、缩放、归一化
+    ↓
+detection/engine.py            ← YOLO 推理，输出 bbox + class + confidence
+    ↓
+detection/tracker.py           ← 多目标跟踪，分配稳定 track_id
+    ↓
+services/detection_service.py  ← 流程编排、进度追踪、状态管理
+    ↓
+services/data_bridge.py        ← 轨迹点 → .dat 格式 (x y z t)
+    ↓
+data/fact/detect_<id>.dat      ← 落盘，供 trajectory_reconstruction 消费
+```
 
-1. 实现 `kinematics.py`：
-   - 从已有分析 API (`/analysis/data`) 读取数据
-   - 提取统计特征：速度均值/方差/最大值、加速度均值/方差、曲率均值
-   - 提取时序特征：速度单调性、高度变化趋势
+### 16.3 核心接口
 
-2. 实现 `geometry.py`：
-   - 轨迹总长度、直线距离/轨迹长度比（效率比）
-   - 包围盒体积、轨迹平面拟合残差
+| 类/函数 | 文件 | 职责 |
+|---------|------|------|
+| `YOLODetector` | `detection/engine.py` | 模型加载、`detect(frame) → list[Detection]` |
+| `MultiTracker` | `detection/tracker.py` | `update(detections, frame_id) → list[Track]` |
+| `VideoProcessor` | `detection/preprocess.py` | `extract_frames(source) → Generator[Frame]` |
+| `DetectionSession` | `services/detection_service.py` | 会话状态机（idle→running→paused→completed/error） |
+| `tracks_to_dat()` | `services/data_bridge.py` | 跟踪结果写为 data/fact/detect_*.dat |
 
-**Phase 2 — 规则分类器（1-2 天）**
+### 16.4 API 端点
 
-3. 实现 `rule_based.py`：
-   - 定义阈值规则：悬停（速度<0.5m/s）、巡航（匀速直线）、俯冲（高度单调递减+速度>阈值）
-   - 输出标签 + 置信度
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/detection/start` | 启动检测 |
+| POST | `/api/detection/stop` | 停止检测 |
+| POST | `/api/detection/pause` | 暂停检测 |
+| POST | `/api/detection/resume` | 恢复检测 |
+| GET | `/api/detection/status` | 查询进度与状态 |
+| GET | `/api/detection/tracks` | 实时跟踪数据 |
+| GET | `/api/detection/preview` | 检测预览帧（JPEG） |
+| GET | `/api/detection/sessions` | 历史会话列表 |
+| DELETE | `/api/detection/sessions/<id>` | 删除会话 |
+| GET/POST | `/api/detection/config` | 读写配置 |
+| POST | `/api/detection/save` | 手动保存结果到 data/ |
 
-**Phase 3 — 机器学习（3-5 天）**
+### 16.5 配置扩展
 
-4. 实现 `ml_classifier.py`：
-   - 训练数据：从 fact/*.dat 提取特征 + 人工标注
-   - 模型选择：随机森林（特征可解释）+ SVM（小样本）
-   - 保存模型到 `trajectory_recognition/models/saved/`
+`config.json` 新增 `detection` 段：
 
-5. 实现推理流水线 `pipeline.py`：
-   - 加载模型 → 提取特征 → 推理 → 返回标签+概率
+```json
+{
+    "detection": {
+        "model": "yolov8n.pt",
+        "confidence_threshold": 0.5,
+        "nms_threshold": 0.45,
+        "frame_interval": 5,
+        "tracker": "bytetrack",
+        "input_width": 640,
+        "input_height": 640,
+        "device": "cpu",
+        "auto_save": true
+    }
+}
+```
 
-**Phase 4 — 前端集成（1-2 天）**
+### 16.6 与重建模块的数据共享
 
-6. 更新 `recognition.js`：
-   - 通过 `/api/classify` 获取分类结果
-   - 在页面上展示：轨迹类型、飞行模式、异常检测
-   - 使用 ECharts 渲染分类置信度雷达图
+检测结果通过 `data_bridge.py` 写入 `data/fact/detect_*.dat`，格式与现有 fact*.dat 一致（每行 `x y z t`）。`trajectory_reconstruction` 启动时自动加载，无需额外适配。
 
-7. 注册新的 API 端点：
-   - `POST /api/extract_features` — 特征提取
-   - `POST /api/classify` — 轨迹分类
+### 16.7 待实现
 
-### 16.4 数据共享
+所有模块均为 stub（`raise NotImplementedError`），需按以下顺序实现：
 
-识别模块通过共享 `data/` 目录读取重建模块的数据：
-- `data/fact/*.dat` — 原始轨迹
-- `data/predict/*.dat` — 预测轨迹
-- 也可通过 HTTP 调用 `:5000/analysis/data` 获取分析数据
-
-### 16.5 改进方案
-
-当前 `recognition.js` 硬编码 `http://127.0.0.1:5000` CORS 请求。建议改为：
-1. 服务端渲染时注入 `window.ANALYSIS_URL`
-2. 或识别模块直接读取共享 `data/` 文件
+1. **`detection/preprocess.py`** — 视频 I/O + 抽帧
+2. **`detection/engine.py`** — YOLO 模型加载与推理（依赖 ultralytics 或 onnxruntime）
+3. **`detection/tracker.py`** — 跟踪器集成
+4. **`services/detection_service.py`** — 会话管理与流水线编排
+5. **`services/data_bridge.py`** — .dat 格式转换
+6. **`views/api_detection.py`** — 各端点逐步实现
 
 ---
 

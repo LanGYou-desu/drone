@@ -5,6 +5,38 @@
  */
 import { toast } from '../common/toast.js';
 
+// ---- 拖拽上传 ----
+const dropZone = document.getElementById('dropZone');
+const dataFile = document.getElementById('dataFile');
+const fileInfo = document.getElementById('fileInfo');
+
+if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            dataFile.files = dt.files;
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `<span style="color:var(--green);">✓</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            document.getElementById('uploadBtn').disabled = false;
+        }
+    });
+
+    dataFile.addEventListener('change', () => {
+        const file = dataFile.files[0];
+        if (file) {
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `<span style="color:var(--green);">✓</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            document.getElementById('uploadBtn').disabled = false;
+        }
+    });
+}
+
 // ---- 上传 ----
 document.getElementById('uploadBtn').addEventListener('click', async () => {
     const file = document.getElementById('dataFile').files[0];

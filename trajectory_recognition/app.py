@@ -1,12 +1,13 @@
 """
-轨迹识别 — Flask 应用工厂（框架）
+轨迹识别 — Flask 应用工厂
 
-可独立启动，也可被根目录 main.py 统一加载。
+基于 YOLO 模型的无人机视频检测系统。
+可独立启动（端口 5001），也可被根目录 main.py 统一加载。
 """
 import os
 import sys
 
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, send_from_directory
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_MODULE_DIR)
@@ -31,6 +32,8 @@ def create_app() -> Flask:
     )
     app.jinja_loader.searchpath.insert(0, shared_templates)
 
+    # ── 静态文件 ──────────────────────────────────
+
     @app.route('/static/<path:filename>')
     def serve_static(filename):
         own = os.path.join(_OWN_STATIC, filename)
@@ -46,16 +49,14 @@ def create_app() -> Flask:
         response.headers['Expires'] = '0'
         return response
 
-    # ---- 页面 ----
-    @app.route('/')
-    def index():
-        return render_template('index.html')
+    # ── 注册蓝图 ──────────────────────────────────
 
-    @app.route('/settings')
-    def settings():
-        return render_template('settings.html')
+    from trajectory_recognition.views import pages_bp, api_detection_bp
+    app.register_blueprint(pages_bp)
+    app.register_blueprint(api_detection_bp)
 
-    # ---- API ----
+    # ── 健康检查 ──────────────────────────────────
+
     @app.route('/health')
     def health():
         return jsonify({'status': 'ok'})
@@ -64,9 +65,10 @@ def create_app() -> Flask:
     def status():
         return jsonify({
             'module': 'trajectory_recognition',
-            'features': 'pending',
-            'models': 'pending',
-            'classifier': 'pending',
+            'features': 'stub',
+            'models': 'stub',
+            'classifier': 'stub',
+            'detection': 'stub',
         })
 
     return app

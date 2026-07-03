@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>设置 — 鹰眼长空</title>
+    <title>检测设置 — 鹰眼长空</title>
     <script>
     (function() {
         var theme = localStorage.getItem('theme') || 'dark';
@@ -11,7 +11,7 @@
     })();
     </script>
     <link rel="stylesheet" href="/static/css/main.css">
-    {% from "icons.html" import icon_drone, icon_settings, icon_moon, icon_sun, icon_dna, icon_antenna, icon_help %}
+    {% from "icons.html" import icon_drone, icon_settings, icon_moon, icon_sun, icon_dna, icon_antenna, icon_help, icon_camera_detect, icon_target_track, icon_brain %}
 </head>
 <body>
     <nav class="navbar">
@@ -20,7 +20,8 @@
             鹰眼长空
         </span>
         <div class="navbar-links">
-            <a href="/">{{ icon_dna() }} 轨迹识别</a>
+            <a href="/">{{ icon_camera_detect() }} 无人机检测</a>
+            <a href="/history">{{ icon_target_track() }} 检测历史</a>
         </div>
         <div class="navbar-actions">
             <a href="http://127.0.0.1:5000" title="重建分析">{{ icon_antenna() }} 分析</a>
@@ -31,13 +32,128 @@
 
     <div class="page" style="max-width:640px;margin:0 auto;">
         <div class="page-header">
-            <h1>{{ icon_settings() }} 设置</h1>
-            <p>轨迹识别模块偏好</p>
+            <h1>{{ icon_settings() }} 检测设置</h1>
+            <p>配置 YOLO 模型参数与检测行为</p>
         </div>
 
+        {# ── 模型配置 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>{{ icon_brain() }} 模型</h3></div>
+            <div class="form-group">
+                <label class="form-label">模型文件</label>
+                <select id="detModel" class="input">
+                    <option value="yolov8n.pt">yolov8n.pt (轻量)</option>
+                    <option value="yolov8s.pt">yolov8s.pt (均衡)</option>
+                    <option value="yolov8m.pt">yolov8m.pt (中等)</option>
+                    <option value="yolov8l.pt">yolov8l.pt (大型)</option>
+                    <option value="yolov11n.pt">yolov11n.pt (最新轻量)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">推理设备</label>
+                <select id="detDevice" class="input">
+                    <option value="cpu">CPU</option>
+                    <option value="cuda:0">CUDA (GPU)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">输入尺寸</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="number" id="detInputW" class="input" value="640" style="width:90px;" min="320" max="1280" step="32">
+                    <span style="color:var(--text-tertiary);">×</span>
+                    <input type="number" id="detInputH" class="input" value="640" style="width:90px;" min="320" max="1280" step="32">
+                </div>
+            </div>
+        </div>
+
+        {# ── 检测参数 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>{{ icon_target_track() }} 检测参数</h3></div>
+            <div class="form-group">
+                <label class="form-label">置信度阈值: <span id="confLabel">0.50</span></label>
+                <input type="range" id="detConfidence" min="0.1" max="1.0" step="0.05" value="0.5" style="width:100%;">
+            </div>
+            <div class="form-group">
+                <label class="form-label">NMS 阈值: <span id="nmsLabel">0.45</span></label>
+                <input type="range" id="detNms" min="0.1" max="0.9" step="0.05" value="0.45" style="width:100%;">
+            </div>
+            <div class="form-group">
+                <label class="form-label">抽帧间隔</label>
+                <select id="detFrameInterval" class="input">
+                    <option value="1">每帧检测</option>
+                    <option value="3">每 3 帧</option>
+                    <option value="5" selected>每 5 帧</option>
+                    <option value="10">每 10 帧</option>
+                    <option value="30">每 30 帧</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">跟踪器</label>
+                <select id="detTracker" class="input">
+                    <option value="bytetrack">ByteTrack (推荐)</option>
+                    <option value="deepsort">DeepSORT</option>
+                    <option value="sort">SORT (简化)</option>
+                </select>
+            </div>
+        </div>
+
+        {# ── 双目标定 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>{{ icon_camera_detect() }} 双目标定</h3></div>
+            <p style="font-size:0.78rem;color:var(--text-tertiary);margin-bottom:12px;">用于三角测量定位 3D 坐标，修改后需重新检测</p>
+            <div class="form-group">
+                <label class="form-label">基线距离 (m)</label>
+                <input type="number" id="stereoBaseline" class="input" value="1.0" step="0.01" min="0.1" max="50">
+                <span style="font-size:0.72rem;color:var(--text-tertiary);">两摄像头光心之间的水平距离</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">水平视场角 (°)</label>
+                <input type="number" id="stereoFovH" class="input" value="90.0" step="0.5" min="10" max="180">
+            </div>
+            <div class="form-group">
+                <label class="form-label">垂直视场角 (°)</label>
+                <input type="number" id="stereoFovV" class="input" value="60.0" step="0.5" min="10" max="180">
+            </div>
+            <div class="form-row" style="display:flex;gap:12px;">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">图像宽度 (px)</label>
+                    <input type="number" id="stereoResW" class="input" value="1920" step="1" min="320">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">图像高度 (px)</label>
+                    <input type="number" id="stereoResH" class="input" value="1080" step="1" min="240">
+                </div>
+            </div>
+            <div class="form-row" style="display:flex;gap:12px;">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">俯仰角 (°)</label>
+                    <input type="number" id="stereoTilt" class="input" value="0.0" step="0.5" min="-90" max="90">
+                    <span style="font-size:0.72rem;color:var(--text-tertiary);">水平为 0，向上为正</span>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">会聚角 (°)</label>
+                    <input type="number" id="stereoConv" class="input" value="0.0" step="0.5" min="-30" max="30">
+                    <span style="font-size:0.72rem;color:var(--text-tertiary);">平行光轴为 0</span>
+                </div>
+            </div>
+        </div>
+
+        {# ── 保存行为 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>保存</h3></div>
+            <div class="toggle-row" onclick="toggleAutoSave()">
+                <div style="flex:1;">
+                    <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">自动保存</div>
+                    <div style="font-size:0.78rem;color:var(--text-secondary);">检测完成后自动将轨迹写入 data/fact/</div>
+                </div>
+                <div class="toggle-switch active" id="autoSaveSwitch"></div>
+            </div>
+        </div>
+
+        {# ── 外观 ── #}
         <div class="card" style="margin-bottom:16px;">
             <div class="card-header"><h3>外观</h3></div>
-            <div class="theme-toggle" onclick="toggleTheme()">
+            <div class="toggle-row" onclick="toggleTheme()">
                 <div style="display:flex;align-items:center;gap:12px;flex:1;">
                     <span id="themeIcon" style="display:flex;align-items:center;color:var(--text-secondary);">
                         {{ icon_moon('1.2em') }}
@@ -51,41 +167,21 @@
             </div>
         </div>
 
+        {# ── 保存按钮 ── #}
+        <button class="btn btn-primary" onclick="saveAllSettings()" style="width:100%;margin-bottom:16px;">
+            {{ icon_settings() }} 保存设置
+        </button>
+
         <div class="card">
             <div class="card-header"><h3>关于</h3></div>
             <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.7;">
-                <p><strong>鹰眼长空 — 轨迹识别</strong></p>
-                <p>轨迹模式识别与分类模块</p>
-                <p style="margin-top:4px;">版本 1.0 · 2026</p>
+                <p><strong>鹰眼长空 — 无人机检测</strong></p>
+                <p>基于 YOLO 模型的视频无人机检测与轨迹生成</p>
+                <p style="margin-top:4px;">版本 2.0 · 2026</p>
             </div>
         </div>
     </div>
 
-    <script>
-    function updateThemeUI() {
-        var theme = document.documentElement.getAttribute('data-theme') || 'dark';
-        var isDark = theme === 'dark';
-        var sw = document.getElementById('themeSwitch');
-        var label = document.getElementById('themeLabel');
-        var icon = document.getElementById('themeIcon');
-        if (isDark) {
-            sw.classList.add('active');
-            label.textContent = '深色模式';
-            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 10.5A6 6 0 0 1 5.5 2.5 6 6 0 1 0 13.5 10.5z"/></svg>';
-        } else {
-            sw.classList.remove('active');
-            label.textContent = '浅色模式';
-            icon.innerHTML = '<svg width="1.2em" height="1.2em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><circle cx="8" cy="8" r="3.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3" y1="3" x2="4.5" y2="4.5"/><line x1="11.5" y1="11.5" x2="13" y2="13"/><line x1="13" y1="3" x2="11.5" y2="4.5"/><line x1="4.5" y1="11.5" x2="3" y2="13"/></svg>';
-        }
-    }
-    function toggleTheme() {
-        var current = document.documentElement.getAttribute('data-theme') || 'dark';
-        var next = current === 'dark' ? 'light' : 'dark';
-        document.documentElement.setAttribute('data-theme', next);
-        localStorage.setItem('theme', next);
-        updateThemeUI();
-    }
-    updateThemeUI();
-    </script>
+    <script src="/static/js/pages/settings.js"></script>
 </body>
 </html>

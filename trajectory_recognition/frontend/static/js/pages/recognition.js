@@ -1,53 +1,216 @@
-// 轨迹识别 — 主页面逻辑
+/**
+ * 无人机检测 — 主页面控制器
+ *
+ * 管理双目视频源选择、平台切换、检测生命周期、UI 状态同步。
+ * 依赖 detection.js 中的 DetectionAPI 模块。
+ */
 
-async function init() {
-    const statusPanel = document.getElementById('statusPanel');
-    const dataPanel = document.getElementById('dataPanel');
+import { DetectionAPI } from './detection.js';
 
-    // 加载本模块状态
-    try {
-        const r = await (await fetch('/api/status')).json();
-        statusPanel.innerHTML = `
-            <div class="list-item">
-                <span class="list-item-dot" style="background:var(--green);color:var(--green);"></span>
-                <div class="list-item-text">
-                    <div class="list-item-title">服务运行中</div>
-                    <div class="list-item-sub">端口 5001 · v0.1.0</div>
-                </div>
-            </div>
-            <div style="margin-top:8px;display:flex;gap:12px;">
-                <span class="badge badge-blue">特征提取: ${r.features}</span>
-                <span class="badge badge-blue">识别模型: ${r.models}</span>
-                <span class="badge badge-blue">分类器: ${r.classifier}</span>
-            </div>`;
-    } catch {
-        statusPanel.innerHTML = '<p style="color:var(--red);">状态加载失败</p>';
+// ── 平台名称映射 ────────────────────────────────────
+
+const PLATFORM_NAMES = {
+    visible: '可见光', infrared: '红外', radar: '雷达', self: '自选',
+};
+
+// ── 双目视频源 ──────────────────────────────────────
+
+const sources = {
+    A: { dropZone: 'dropZoneA', fileInput: 'fileInputA', streamUrl: 'streamUrlA', fileInfo: 'fileInfoA', source: null },
+    B: { dropZone: 'dropZoneB', fileInput: 'fileInputB', streamUrl: 'streamUrlB', fileInfo: 'fileInfoB', source: null },
+};
+
+Object.entries(sources).forEach(([ch, cfg]) => {
+    const dz = document.getElementById(cfg.dropZone);
+    const fi = document.getElementById(cfg.fileInput);
+    const su = document.getElementById(cfg.streamUrl);
+
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dz.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) handleFile(ch, e.dataTransfer.files[0]);
+    });
+
+    fi.addEventListener('change', () => {
+        if (fi.files.length > 0) handleFile(ch, fi.files[0]);
+    });
+
+    su.addEventListener('input', () => {
+        if (su.value.trim()) {
+            cfg.source = { type: 'stream', value: su.value.trim() };
+            document.getElementById(cfg.fileInfo).style.display = 'none';
+            updateStartButton();
+        } else if (cfg.source && cfg.source.type === 'stream') {
+            cfg.source = null;
+            updateStartButton();
+        }
+    });
+});
+
+function handleFile(ch, file) {
+    const validExt = /\.(mp4|avi|mov|mkv|webm)$/i;
+    if (!validExt.test(file.name)) {
+        window.toast?.warning(`${ch} 目: 不支持的格式，请使用 mp4/avi/mov/mkv`);
+        return;
     }
+    const cfg = sources[ch];
+    cfg.source = { type: 'file', value: file };
+    document.getElementById(cfg.fileInfo).style.display = 'block';
+    document.getElementById(cfg.fileInfo).innerHTML =
+        `<span style="color:var(--green);">✓</span> ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+    document.getElementById(cfg.streamUrl).value = '';
+    updateStartButton();
+}
 
-    // 尝试读取共享数据
-    try {
-        const r = await (await fetch('http://127.0.0.1:5000/analysis/data')).json();
-        const methods = Object.values(r);
-        if (methods.length) {
-            dataPanel.innerHTML = methods.map(m => `
+function updateStartButton() {
+    document.getElementById('btnStart').disabled = !(sources.A.source && sources.B.source);
+}
+
+// ── 平台选择 ──────────────────────────────────────
+
+const platformSelect = document.getElementById('platformSelect');
+platformSelect.addEventListener('change', () => {
+    document.getElementById('detPlatform').textContent =
+        PLATFORM_NAMES[platformSelect.value] || platformSelect.value;
+});
+
+// ── 检测控制 ──────────────────────────────────────
+
+const confidenceSlider = document.getElementById('confidenceSlider');
+const confidenceVal = document.getElementById('confidenceVal');
+confidenceSlider.addEventListener('input', () => {
+    confidenceVal.textContent = parseFloat(confidenceSlider.value).toFixed(2);
+});
+
+let pollTimer = null;
+
+const DetectionControl = {
+    async start() {
+        if (!sources.A.source || !sources.B.source) return;
+
+        const config = {
+            platform_id: platformSelect.value,
+            confidence: parseFloat(confidenceSlider.value),
+            frame_interval: parseInt(document.getElementById('frameInterval').value),
+        };
+
+        try {
+            const result = await DetectionAPI.start(sources.A.source, sources.B.source, config);
+            if (result.success) {
+                this._setRunning(true);
+                this._startPolling();
+                window.toast?.success('双目检测已启动');
+            }
+        } catch (err) {
+            window.toast?.error('启动失败: ' + err.message);
+        }
+    },
+
+    async pause() { /* 同前 */ },
+    async stop() { /* 同前 */ },
+    async saveResults() { /* 同前 */ },
+
+    // ... 其余内部方法与之前相同 ...
+    async pause() {
+        try { await DetectionAPI.pause(); this._setRunning(false); window.toast?.show('已暂停'); }
+        catch { window.toast?.error('暂停失败'); }
+    },
+
+    async stop() {
+        try {
+            await DetectionAPI.stop();
+            this._setRunning(false); this._stopPolling();
+            window.toast?.show('检测已停止');
+            this._showResults();
+        } catch { window.toast?.error('停止失败'); }
+    },
+
+    async saveResults() {
+        try {
+            const result = await DetectionAPI.saveResults();
+            if (result.success) {
+                window.toast?.success(`已保存 ${result.track_count} 条轨迹到 ${result.platform} 平台`);
+                document.getElementById('resultCard').style.display = 'none';
+            }
+        } catch (err) { window.toast?.error('保存失败: ' + err.message); }
+    },
+
+    _setRunning(running) {
+        const btnStart = document.getElementById('btnStart');
+        const btnPause = document.getElementById('btnPause');
+        const btnStop = document.getElementById('btnStop');
+        btnStart.style.display = running ? 'none' : '';
+        btnPause.style.display = running ? '' : 'none';
+        btnStart.disabled = running;
+        btnStop.disabled = !running;
+        document.querySelectorAll('.drop-zone').forEach(el => el.style.pointerEvents = running ? 'none' : '');
+        document.querySelectorAll('input[type="text"]').forEach(el => el.disabled = running);
+        document.querySelectorAll('input[type="file"]').forEach(el => el.disabled = running);
+    },
+
+    _startPolling() { this._stopPolling(); pollTimer = setInterval(() => this._poll(), 500); },
+    _stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } },
+
+    async _poll() {
+        try {
+            const status = await DetectionAPI.status();
+            if (!status.session) return;
+            const s = status.session;
+
+            document.getElementById('detStatus').textContent = this._statusText(s.status);
+            document.getElementById('detProgress').textContent = Math.round(s.progress * 100) + '%';
+            document.getElementById('progressFill').style.width = (s.progress * 100) + '%';
+            document.getElementById('detFrames').textContent = `${s.current_frame_a || s.current_frame} / ${s.total_frames}`;
+            document.getElementById('detTrackCount').textContent = s.track_count;
+            document.getElementById('det3DPoints').textContent = s.points_3d || 0;
+            document.getElementById('detDuration').textContent = s.duration + 's';
+
+            if (s.track_count > 0) this._updateTrackList();
+
+            if (s.status === 'completed' || s.status === 'error') {
+                this._stopPolling(); this._setRunning(false);
+                if (s.status === 'error') window.toast?.error('检测异常: ' + (s.error || ''));
+                else window.toast?.success('检测完成');
+                this._showResults();
+            }
+        } catch { /* 静默 */ }
+    },
+
+    async _updateTrackList() {
+        try {
+            const data = await DetectionAPI.tracks('summary');
+            if (!data.tracks) return;
+            document.getElementById('trackList').innerHTML = data.tracks.map(t => `
                 <div class="list-item">
-                    <span class="list-item-dot" style="background:${m.color};color:${m.color};"></span>
+                    <span class="list-item-dot" style="background:var(--blue);"></span>
                     <div class="list-item-text">
-                        <div class="list-item-title">${m.name}</div>
+                        <div class="list-item-title">Track #${t.track_id} — ${t.class_name}</div>
                         <div class="list-item-sub">
-                            高度点: ${m.heights?.length || 0} ·
-                            速度样本: ${m.speeds?.length || 0} ·
-                            加速度样本: ${m.accelerations?.length || 0}
+                            ${t.point_count} 3D pts · 置信度 ${(t.confidence_avg*100).toFixed(0)}%
+                            ${t.is_active ? '· <span style="color:var(--green);">活跃</span>' : ''}
                         </div>
                     </div>
                 </div>
             `).join('');
-        } else {
-            dataPanel.innerHTML = '<p style="color:var(--text-tertiary);">暂无共享数据</p>';
-        }
-    } catch {
-        dataPanel.innerHTML = '<p style="color:var(--orange);"><svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;"><polygon points="8,2 15,14 1,14"/><line x1="8" y1="7" x2="8" y2="10"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg> 重建分析模块未运行（需端口 5000）</p>';
-    }
-}
+        } catch { /* 静默 */ }
+    },
 
-init();
+    _showResults() {
+        const card = document.getElementById('resultCard');
+        card.style.display = 'block';
+        const count = document.getElementById('detTrackCount').textContent;
+        const plat = document.getElementById('detPlatform').textContent;
+        document.getElementById('resultInfo').textContent =
+            `双目检测完成，共 ${count} 个目标已定位 3D 坐标，可保存到「${plat}」平台供 3D 可视化使用。`;
+    },
+
+    _statusText(s) {
+        const map = { idle:'待命中', running:'检测中', paused:'已暂停', completed:'已完成', error:'异常' };
+        return map[s] || s;
+    },
+};
+
+window.DetectionControl = DetectionControl;
+document.addEventListener('DOMContentLoaded', () => updateStartButton());

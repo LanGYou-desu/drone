@@ -961,6 +961,136 @@ tbody tr:hover { background: var(--bg-card-hover); }
 }
 
 /* ============================================================
+   检测模块组件
+   ============================================================ */
+
+/* 拖拽上传区 */
+.drop-zone {
+    border: 2px dashed var(--border-default);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: var(--blue);
+    background: var(--bg-elevated);
+}
+
+/* 预览容器 */
+.preview-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 240px;
+}
+.preview-container canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+}
+
+/* 统计行 */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-default);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-label {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+.stat-value {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 进度条 */
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* 开关行 */
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* 表单组 */
+.form-group {
+    margin-bottom: 12px;
+}
+.form-label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+/* 徽章扩展 */
+.badge-green {
+    background: rgba(63,185,80,0.15);
+    color: var(--green);
+}
+.badge-red {
+    background: rgba(248,81,73,0.15);
+    color: var(--red);
+}
+.badge-blue {
+    background: rgba(88,166,255,0.15);
+    color: var(--blue);
+}
+
+/* 检测跟踪列表 */
+#trackList .list-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-default);
+}
+#trackList .list-item:last-child {
+    border-bottom: none;
+}
+
+/* ============================================================
    减少动画（无障碍）
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {

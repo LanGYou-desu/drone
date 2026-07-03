@@ -320,3 +320,78 @@
   <line x1="5.5" y1="2.5" x2="5.5" y2="13.5"/>
 </svg>
 {%- endmacro %}
+
+{# ──────────── 检测相关 (新增) ──────────── #}
+
+{% macro icon_video(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;">
+  {# 播放按钮三角形 #}
+  <polygon points="5.5,3 12.5,8 5.5,13" fill="none"/>
+  {# 外框屏幕 #}
+  <rect x="1.5" y="2" width="13" height="12" rx="1.5"/>
+</svg>
+{%- endmacro %}
+
+{% macro icon_camera_detect(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;">
+  {# 相机机身 #}
+  <rect x="1.5" y="4" width="13" height="10" rx="2"/>
+  {# 镜头 #}
+  <circle cx="8" cy="9" r="2.5"/>
+  {# 闪光/检测指示 #}
+  <circle cx="12" cy="6" r="1.2" fill="currentColor"/>
+  {# 顶部取景器 #}
+  <path d="M5 4L6 2h4l1 2" fill="none"/>
+</svg>
+{%- endmacro %}
+
+{% macro icon_target_track(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;">
+  {# 外圈准星 #}
+  <circle cx="8" cy="8" r="6"/>
+  {# 内圈 #}
+  <circle cx="8" cy="8" r="2.5"/>
+  {# 十字线 #}
+  <line x1="8" y1="1" x2="8" y2="4.5"/>
+  <line x1="8" y1="11.5" x2="8" y2="15"/>
+  <line x1="1" y1="8" x2="4.5" y2="8"/>
+  <line x1="11.5" y1="8" x2="15" y2="8"/>
+  {# 跟踪点 #}
+  <circle cx="8" cy="8" r="1" fill="currentColor"/>
+</svg>
+{%- endmacro %}
+
+{% macro icon_save(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;">
+  {# 软盘轮廓 #}
+  <rect x="1.5" y="2" width="13" height="12.5" rx="1"/>
+  {# 标签 #}
+  <rect x="10" y="2" width="4.5" height="5" rx="0.5"/>
+  {# 写保护缺口 #}
+  <rect x="4" y="2" width="5" height="5" rx="0.5"/>
+  {# 下箭头 #}
+  <path d="M8 7v5" fill="none"/>
+  <polyline points="5.5,10 8,12.5 10.5,10" fill="none"/>
+</svg>
+{%- endmacro %}
+
+{% macro icon_history(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:text-bottom;">
+  {# 时钟外圈 #}
+  <circle cx="8" cy="8" r="6.5"/>
+  {# 时针 #}
+  <line x1="8" y1="8" x2="8" y2="5"/>
+  {# 分针 #}
+  <line x1="8" y1="8" x2="10.5" y2="8"/>
+  {# 中心点 #}
+  <circle cx="8" cy="8" r="0.7" fill="currentColor"/>
+  {# 逆时针箭头 #}
+  <path d="M1.5 2v4h4" fill="none"/>
+</svg>
+{%- endmacro %}
+
+{% macro icon_stop(size='1em') -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:text-bottom;">
+  <rect x="3" y="3" width="10" height="10" rx="1.5"/>
+</svg>
+{%- endmacro %}

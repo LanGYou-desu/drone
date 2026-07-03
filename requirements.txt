@@ -1,3 +1,6 @@
 flask
 requests
 pywebview
+ultralytics
+opencv-python
+numpy

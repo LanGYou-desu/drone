@@ -1,0 +1,261 @@
+"""
+检测 API — Detection API
+
+双目无人机检测的 HTTP 端点实现。
+"""
+
+import json
+import os
+
+from flask import jsonify, request, send_file
+
+from trajectory_recognition.views import api_detection_bp
+from trajectory_recognition.services.detection_service import (
+    create_session, start_detection, stop_detection,
+    pause_detection, resume_detection,
+    get_session, get_active_session, list_sessions, delete_session,
+)
+from trajectory_recognition.services.data_bridge import (
+    tracks_to_dat, backup_existing_fact,
+    list_detect_files, save_detection_metadata,
+)
+
+
+# ── 启动 / 停止 / 暂停 ──────────────────────────
+
+@api_detection_bp.route('/start', methods=['POST'])
+def start():
+    """启动双目检测"""
+    try:
+        # 支持 FormData（文件上传）和 JSON（流地址）
+        if request.files:
+            # 文件上传模式
+            file_a = request.files.get('video_a')
+            file_b = request.files.get('video_b')
+            config = json.loads(request.form.get('config', '{}'))
+
+            if not file_a or not file_b:
+                return jsonify({'success': False, 'error': '需要两个视频文件（video_a + video_b）'}), 400
+
+            # 保存临时文件
+            upload_dir = os.path.join(os.getcwd(), 'data', 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            path_a = os.path.join(upload_dir, f"temp_a_{file_a.filename}")
+            path_b = os.path.join(upload_dir, f"temp_b_{file_b.filename}")
+            file_a.save(path_a)
+            file_b.save(path_b)
+
+            source_a, source_b = path_a, path_b
+        else:
+            data = request.get_json(silent=True) or {}
+            source_a = data.get('source_a')
+            source_b = data.get('source_b')
+            config = data
+
+            if not source_a or not source_b:
+                return jsonify({'success': False, 'error': '缺少 source_a 或 source_b'}), 400
+
+        platform_id = config.get('platform_id', 'visible')
+        session = create_session(source_a, source_b, platform_id, config)
+        start_detection(session.session_id)
+
+        return jsonify({
+            'success': True,
+            'session': session.to_dict(),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_detection_bp.route('/stop', methods=['POST'])
+def stop():
+    data = request.get_json(silent=True) or {}
+    sid = data.get('session_id') or (get_active_session().session_id if get_active_session() else None)
+    if not sid:
+        return jsonify({'success': False, 'error': '没有活跃的检测会话'}), 400
+    stop_detection(sid)
+    return jsonify({'success': True})
+
+
+@api_detection_bp.route('/pause', methods=['POST'])
+def pause():
+    data = request.get_json(silent=True) or {}
+    sid = data.get('session_id') or (get_active_session().session_id if get_active_session() else None)
+    if not sid:
+        return jsonify({'success': False, 'error': '没有活跃的检测会话'}), 400
+    pause_detection(sid)
+    return jsonify({'success': True})
+
+
+@api_detection_bp.route('/resume', methods=['POST'])
+def resume():
+    data = request.get_json(silent=True) or {}
+    sid = data.get('session_id') or (get_active_session().session_id if get_active_session() else None)
+    if not sid:
+        return jsonify({'success': False, 'error': '没有可恢复的会话'}), 400
+    resume_detection(sid)
+    return jsonify({'success': True})
+
+
+# ── 状态 / 跟踪 / 预览 ──────────────────────────
+
+@api_detection_bp.route('/status', methods=['GET'])
+def status():
+    sid = request.args.get('session_id')
+    session = get_session(sid) if sid else get_active_session()
+    if not session:
+        return jsonify({'success': True, 'session': None})
+    return jsonify({'success': True, 'session': session.to_dict()})
+
+
+@api_detection_bp.route('/tracks', methods=['GET'])
+def tracks():
+    sid = request.args.get('session_id')
+    session = get_session(sid) if sid else get_active_session()
+    if not session or not session._tracker:
+        return jsonify({'success': True, 'tracks': []})
+
+    fmt = request.args.get('format', 'summary')
+    all_tracks = session._tracker.get_all_tracks()
+
+    if fmt == 'full':
+        result = []
+        for t in all_tracks:
+            d = t.to_summary()
+            d['positions'] = t.positions
+            d['timestamps'] = t.timestamps
+            d['bboxes'] = t.bboxes
+            result.append(d)
+        return jsonify({'success': True, 'tracks': result})
+
+    return jsonify({
+        'success': True,
+        'tracks': [t.to_summary() for t in all_tracks],
+    })
+
+
+@api_detection_bp.route('/preview', methods=['GET'])
+def preview():
+    """返回最新预览帧（当前未缓存帧，返回 204）"""
+    return jsonify({'success': False, 'error': '预览帧流暂未实现，请使用状态轮询'}), 501
+
+
+# ── 文件管理 ──────────────────────────────────
+
+@api_detection_bp.route('/files', methods=['GET'])
+def list_files():
+    try:
+        files = list_detect_files()
+        return jsonify({
+            'success': True,
+            'files': files,
+            'total': len(files),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_detection_bp.route('/files/<filename>', methods=['DELETE'])
+def delete_file(filename: str):
+    try:
+        # 安全检查：只允许删除 .dat 文件
+        if not filename.endswith('.dat') or '..' in filename or '/' in filename:
+            return jsonify({'success': False, 'error': '无效的文件名'}), 400
+
+        fpath = os.path.join(os.getcwd(), 'data', 'fact', filename)
+        if os.path.isfile(fpath):
+            os.remove(fpath)
+            return jsonify({'success': True, 'message': f'已删除 {filename}'})
+        return jsonify({'success': False, 'error': '文件不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── 配置 ─────────────────────────────────────
+
+@api_detection_bp.route('/config', methods=['POST'])
+def save_config():
+    try:
+        data = request.get_json(silent=True) or {}
+        config_path = os.path.join(os.getcwd(), 'config.json')
+
+        current = {}
+        if os.path.isfile(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                current = json.load(f)
+
+        # 合并 detection 配置
+        if 'detection' not in current:
+            current['detection'] = {}
+        det_keys = ['model', 'device', 'input_width', 'input_height',
+                     'confidence_threshold', 'nms_threshold',
+                     'frame_interval', 'tracker', 'auto_save']
+        for k in det_keys:
+            if k in data:
+                current['detection'][k] = data[k]
+
+        # 合并 stereo 配置
+        if 'stereo' in data:
+            if 'stereo' not in current:
+                current['stereo'] = {}
+            current['stereo'].update(data['stereo'])
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(current, f, ensure_ascii=False, indent=4)
+
+        return jsonify({'success': True, 'config': current})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_detection_bp.route('/config', methods=['GET'])
+def get_config():
+    try:
+        config_path = os.path.join(os.getcwd(), 'config.json')
+        if os.path.isfile(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return jsonify({'success': True, 'config': json.load(f)})
+        return jsonify({'success': True, 'config': {}})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── 保存结果 ─────────────────────────────────
+
+@api_detection_bp.route('/save', methods=['POST'])
+def save_results():
+    """手动保存检测结果到 data/fact/"""
+    try:
+        data = request.get_json(silent=True) or {}
+        sid = data.get('session_id')
+        session = get_session(sid) if sid else get_active_session()
+
+        if not session:
+            return jsonify({'success': False, 'error': '没有可用的检测会话'}), 400
+
+        platform_id = data.get('platform_id') or session.platform_id
+        tracker = session._tracker
+
+        if not tracker:
+            return jsonify({'success': False, 'error': '没有跟踪数据可保存'}), 400
+
+        tracks = tracker.get_all_tracks()
+
+        # 备份
+        backup_path = backup_existing_fact()
+
+        # 写入
+        files = tracks_to_dat(tracks, platform_id=platform_id, auto_backup=False)
+
+        # 元信息
+        save_detection_metadata(tracks, session.to_dict())
+
+        return jsonify({
+            'success': True,
+            'files': files,
+            'track_count': len(files),
+            'platform': platform_id,
+            'backup': backup_path,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

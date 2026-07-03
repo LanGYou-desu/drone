@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>检测历史 — 鹰眼长空</title>
+    <script>
+    (function() {
+        var theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+    })();
+    </script>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% from "icons.html" import icon_drone, icon_camera_detect, icon_target_track, icon_history, icon_settings, icon_help, icon_antenna, icon_folder, icon_activity, icon_save %}
+</head>
+<body>
+    <nav class="navbar">
+        <span class="navbar-brand">
+            {{ icon_drone() }}
+            鹰眼长空
+        </span>
+        <div class="navbar-links">
+            <a href="/">{{ icon_camera_detect() }} 无人机检测</a>
+            <a href="/history" class="active">{{ icon_history() }} 检测历史</a>
+        </div>
+        <div class="navbar-actions">
+            <a href="http://127.0.0.1:5000" title="重建分析">
+                {{ icon_antenna() }} <span class="nav-label">分析</span>
+            </a>
+            <a href="http://127.0.0.1:5000/docs" title="帮助文档">
+                {{ icon_help() }} <span class="nav-label">帮助</span>
+            </a>
+            <a href="/settings" title="设置">
+                {{ icon_settings() }} <span class="nav-label">设置</span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="page">
+        <div class="page-header">
+            <h1>{{ icon_history() }} 检测历史</h1>
+            <p>已保存的检测轨迹文件与数据备份</p>
+        </div>
+
+        {# ── 统计概览 ── #}
+        <div class="grid grid-3" style="margin-bottom:16px;">
+            <div class="card">
+                <div class="card-header"><h3>{{ icon_save() }} 检测轨迹文件</h3></div>
+                <div class="stat-value" id="savedFiles" style="font-size:1.8rem;">—</div>
+                <div style="font-size:0.78rem;color:var(--text-tertiary);">data/fact/detect_*.dat</div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>{{ icon_target_track() }} 累计轨迹点</h3></div>
+                <div class="stat-value" id="totalTracks" style="font-size:1.8rem;">—</div>
+                <div style="font-size:0.78rem;color:var(--text-tertiary);">x y z t 数据行</div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>{{ icon_folder() }} 备份数量</h3></div>
+                <div class="stat-value" id="backupCount" style="font-size:1.8rem;">—</div>
+                <div style="font-size:0.78rem;color:var(--text-tertiary);">data/backup/</div>
+            </div>
+        </div>
+
+        {# ── data/fact/ 中的检测文件 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+                <h3>{{ icon_save() }} 已保存的检测轨迹</h3>
+                <span style="font-size:0.78rem;color:var(--text-tertiary);">data/fact/detect_*.dat</span>
+                <button class="btn btn-ghost btn-sm" onclick="HistoryPage.refresh()" style="margin-left:auto;" title="刷新">⟳</button>
+            </div>
+            <div id="dataFileList">
+                <p style="color:var(--text-tertiary);font-size:0.85rem;text-align:center;padding:24px;">加载中...</p>
+            </div>
+        </div>
+
+        {# ── data/backup/ 备份列表 ── #}
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ icon_folder() }} 数据备份</h3>
+                <span style="font-size:0.78rem;color:var(--text-tertiary);">data/backup/</span>
+            </div>
+            <div id="backupList">
+                <p style="color:var(--text-tertiary);font-size:0.85rem;text-align:center;padding:24px;">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+    <script type="module" src="/static/js/pages/history.js"></script>
+</body>
+</html>

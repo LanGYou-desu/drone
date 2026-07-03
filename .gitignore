@@ -25,6 +25,15 @@ config.json
 # Reports (generated, not tracked)
 reports/
 
+# Models (large binary files, not tracked)
+models/*.pt
+models/*.onnx
+models/*.engine
+!models/README.md
+
+# Ultralytics runs
+runs/
+
 # PDF
 *.pdf
 !docs/鹰眼长空使用手册.pdf

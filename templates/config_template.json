@@ -55,5 +55,25 @@
         "speed": 1.0,
         "acceleration": 1.0,
         "curvature": 1.0
+    },
+    "detection": {
+        "model": "yolov8n.pt",
+        "confidence_threshold": 0.5,
+        "nms_threshold": 0.45,
+        "frame_interval": 5,
+        "tracker": "bytetrack",
+        "input_width": 640,
+        "input_height": 640,
+        "device": "cpu",
+        "auto_save": true
+    },
+    "stereo": {
+        "baseline": 1.0,
+        "fov_horizontal": 90.0,
+        "fov_vertical": 60.0,
+        "resolution_width": 1920,
+        "resolution_height": 1080,
+        "tilt_angle": 0.0,
+        "convergence_angle": 0.0
     }
 }

@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>轨迹识别 — 鹰眼长空</title>
+    <title>无人机检测 — 鹰眼长空</title>
 
-    {# 防闪烁 #}
     <script>
     (function() {
         var theme = localStorage.getItem('theme') || 'dark';
@@ -14,7 +13,7 @@
     </script>
 
     <link rel="stylesheet" href="/static/css/main.css">
-    {% from "icons.html" import icon_drone, icon_dna, icon_search, icon_brain, icon_tag, icon_activity, icon_folder, icon_antenna, icon_settings, icon_help %}
+    {% from "icons.html" import icon_drone, icon_video, icon_camera_detect, icon_target_track, icon_save, icon_stop, icon_play, icon_pause, icon_settings, icon_help, icon_antenna, icon_folder, icon_history, icon_activity, icon_upload, icon_tag %}
 </head>
 <body>
     <nav class="navbar">
@@ -23,7 +22,8 @@
             鹰眼长空
         </span>
         <div class="navbar-links">
-            <a href="/" class="active">{{ icon_dna() }} 轨迹识别</a>
+            <a href="/" class="active">{{ icon_camera_detect() }} 无人机检测</a>
+            <a href="/history">{{ icon_history() }} 检测历史</a>
         </div>
         <div class="navbar-actions">
             <a href="http://127.0.0.1:5000" title="重建分析">
@@ -40,47 +40,188 @@
 
     <div class="page">
         <div class="page-header">
-            <h1>{{ icon_dna() }} 轨迹识别</h1>
-            <p>读取共享轨迹数据，进行模式识别与分类</p>
+            <h1>{{ icon_camera_detect() }} 双目无人机视频检测</h1>
+            <p>双路摄像头同时采集，YOLO 检测 + 三角测量定位，生成 3D 轨迹数据</p>
         </div>
 
-        <div class="grid grid-3">
-            <div class="card">
-                <div class="card-header"><h3>{{ icon_search() }} 特征提取</h3></div>
-                <p style="color:var(--text-secondary);font-size:0.85rem;">从轨迹数据中提取速度、加速度、曲率等运动学特征。</p>
-                <div class="stat" style="margin-top:12px;">
-                    <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
-                </div>
+        {# ── 双目视频源 + 平台选择 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+                <h3>{{ icon_video() }} 视频源</h3>
+                <span style="font-size:0.78rem;color:var(--text-tertiary);">双目摄像头同时输入，用于立体视觉定位</span>
             </div>
-            <div class="card">
-                <div class="card-header"><h3>{{ icon_brain() }} 识别模型</h3></div>
-                <p style="color:var(--text-secondary);font-size:0.85rem;">基于规则的分类器与机器学习模型。</p>
-                <div class="stat" style="margin-top:12px;">
-                    <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+                {# 摄像头 A（左） #}
+                <div style="flex:1;min-width:260px;">
+                    <div style="font-size:0.85rem;font-weight:600;color:var(--blue);margin-bottom:8px;">📷 摄像头 A（左目）</div>
+                    <div id="dropZoneA" class="drop-zone" style="min-height:100px;padding:16px;">
+                        {{ icon_upload('1.5em') }}
+                        <p style="margin:4px 0 2px;font-weight:600;font-size:0.85rem;">拖拽视频文件</p>
+                        <p style="font-size:0.72rem;color:var(--text-tertiary);">mp4 / avi / mov / mkv</p>
+                        <input type="file" id="fileInputA" accept="video/*" style="display:none;">
+                        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInputA').click()" style="margin-top:6px;">
+                            {{ icon_folder() }} 浏览
+                        </button>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                        <input type="text" id="streamUrlA" class="input" placeholder="或输入流地址 / 摄像头ID" style="flex:1;font-size:0.82rem;">
+                    </div>
+                    <div id="fileInfoA" style="margin-top:4px;font-size:0.78rem;color:var(--text-secondary);display:none;"></div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-header"><h3>{{ icon_tag() }} 分类器</h3></div>
-                <p style="color:var(--text-secondary);font-size:0.85rem;">输出轨迹类型、飞行模式识别结果与异常检测。</p>
-                <div class="stat" style="margin-top:12px;">
-                    <div class="stat-value" style="color:var(--text-tertiary);font-size:1.2rem;">待实现</div>
+                {# 摄像头 B（右） #}
+                <div style="flex:1;min-width:260px;">
+                    <div style="font-size:0.85rem;font-weight:600;color:var(--green);margin-bottom:8px;">📷 摄像头 B（右目）</div>
+                    <div id="dropZoneB" class="drop-zone" style="min-height:100px;padding:16px;">
+                        {{ icon_upload('1.5em') }}
+                        <p style="margin:4px 0 2px;font-weight:600;font-size:0.85rem;">拖拽视频文件</p>
+                        <p style="font-size:0.72rem;color:var(--text-tertiary);">mp4 / avi / mov / mkv</p>
+                        <input type="file" id="fileInputB" accept="video/*" style="display:none;">
+                        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInputB').click()" style="margin-top:6px;">
+                            {{ icon_folder() }} 浏览
+                        </button>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                        <input type="text" id="streamUrlB" class="input" placeholder="或输入流地址 / 摄像头ID" style="flex:1;font-size:0.82rem;">
+                    </div>
+                    <div id="fileInfoB" style="margin-top:4px;font-size:0.78rem;color:var(--text-secondary);display:none;"></div>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-2" style="margin-top:20px;">
-            <div class="card">
-                <div class="card-header"><h3>{{ icon_activity() }} 系统状态</h3></div>
-                <div id="statusPanel" style="font-size:0.85rem;color:var(--text-secondary);">加载中...</div>
+        {# ── 检测控制栏 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>{{ icon_target_track() }} 检测控制</h3></div>
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <button id="btnStart" class="btn btn-primary" onclick="DetectionControl.start()" disabled>
+                    {{ icon_play() }} 开始检测
+                </button>
+                <button id="btnPause" class="btn btn-secondary" onclick="DetectionControl.pause()" disabled style="display:none;">
+                    {{ icon_pause() }} 暂停
+                </button>
+                <button id="btnStop" class="btn btn-danger" onclick="DetectionControl.stop()" disabled>
+                    {{ icon_stop() }} 停止
+                </button>
+                {# 平台选择 #}
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <label style="font-size:0.82rem;color:var(--text-secondary);white-space:nowrap;">{{ icon_tag() }} 目标平台</label>
+                    <select id="platformSelect" class="input" style="width:110px;padding:4px 8px;">
+                        <option value="visible">可见光</option>
+                        <option value="infrared">红外</option>
+                        <option value="radar">雷达</option>
+                        <option value="self">自选</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+                    <label style="font-size:0.82rem;color:var(--text-secondary);white-space:nowrap;">置信度</label>
+                    <input type="range" id="confidenceSlider" min="0.1" max="1.0" step="0.05" value="0.5" style="width:100px;">
+                    <span id="confidenceVal" style="font-size:0.82rem;color:var(--text-primary);min-width:32px;">0.5</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="font-size:0.82rem;color:var(--text-secondary);white-space:nowrap;">抽帧间隔</label>
+                    <select id="frameInterval" class="input" style="width:80px;padding:4px 8px;">
+                        <option value="1">1</option>
+                        <option value="3">3</option>
+                        <option value="5" selected>5</option>
+                        <option value="10">10</option>
+                        <option value="30">30</option>
+                    </select>
+                </div>
             </div>
+        </div>
+
+        {# ── 双目预览 + 信息面板 ── #}
+        <div class="grid grid-2" style="margin-bottom:16px;">
+            {# 双目预览 #}
             <div class="card">
-                <div class="card-header"><h3>{{ icon_folder() }} 共享数据</h3></div>
-                <div id="dataPanel" style="font-size:0.85rem;color:var(--text-secondary);">加载中...</div>
+                <div class="card-header"><h3>{{ icon_camera_detect() }} 双目检测预览</h3></div>
+                <div style="display:flex;gap:8px;">
+                    <div style="flex:1;">
+                        <div style="font-size:0.72rem;color:var(--blue);margin-bottom:4px;text-align:center;">左目 A</div>
+                        <div id="previewA" class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
+                            <canvas id="canvasA"></canvas>
+                            <div class="preview-placeholder">
+                                {{ icon_video('2em') }}
+                                <p style="margin-top:8px;font-size:0.78rem;color:var(--text-tertiary);">等待输入</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:0.72rem;color:var(--green);margin-bottom:4px;text-align:center;">右目 B</div>
+                        <div id="previewB" class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
+                            <canvas id="canvasB"></canvas>
+                            <div class="preview-placeholder">
+                                {{ icon_video('2em') }}
+                                <p style="margin-top:8px;font-size:0.78rem;color:var(--text-tertiary);">等待输入</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# 检测信息面板 #}
+            <div class="card">
+                <div class="card-header"><h3>{{ icon_activity() }} 实时信息</h3></div>
+                <div id="infoPanel">
+                    <div class="stat-row">
+                        <span class="stat-label">状态</span>
+                        <span class="stat-value" id="detStatus">待命中</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">目标平台</span>
+                        <span class="stat-value" id="detPlatform">可见光</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">进度</span>
+                        <span class="stat-value" id="detProgress">—</span>
+                    </div>
+                    <div class="progress-bar" style="margin:8px 0;">
+                        <div class="progress-fill" id="progressFill" style="width:0%;"></div>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">当前帧 / 总帧</span>
+                        <span class="stat-value" id="detFrames">—</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">检测目标数</span>
+                        <span class="stat-value" id="detTrackCount">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">3D 定位点数</span>
+                        <span class="stat-value" id="det3DPoints">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">已用时间</span>
+                        <span class="stat-value" id="detDuration">—</span>
+                    </div>
+                </div>
+                {# 目标列表 #}
+                <div style="margin-top:12px;">
+                    <div style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">
+                        {{ icon_target_track() }} 跟踪目标
+                    </div>
+                    <div id="trackList" style="max-height:180px;overflow-y:auto;">
+                        <p style="font-size:0.82rem;color:var(--text-tertiary);">暂无目标</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── 结果操作 ── #}
+        <div class="card" id="resultCard" style="display:none;">
+            <div class="card-header"><h3>{{ icon_save() }} 检测结果</h3></div>
+            <div id="resultInfo" style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="btnSave" onclick="DetectionControl.saveResults()">
+                    {{ icon_save() }} 保存到 data/
+                </button>
+                <a class="btn btn-secondary" href="http://127.0.0.1:5000" target="_blank">
+                    {{ icon_antenna() }} 在 3D 视图中查看
+                </a>
             </div>
         </div>
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+    <script type="module" src="/static/js/pages/detection.js"></script>
     <script type="module" src="/static/js/pages/recognition.js"></script>
 </body>
 </html>
