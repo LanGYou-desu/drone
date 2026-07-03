@@ -313,8 +313,8 @@ def save_results():
         from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
         target_file = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
 
-        # 备份已在管道完成时自动完成，此处直接写入
-        backup_path = None
+        # 手动保存先备份旧数据再写入
+        backup_path = backup_existing_fact(filenames=[target_file], label='manual')
         files = tracks_to_dat(tracks, platform_id=platform_id, auto_backup=False)
 
         # 通知重建模块刷新
