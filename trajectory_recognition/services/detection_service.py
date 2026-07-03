@@ -272,7 +272,7 @@ def _run_detection_pipeline(session: DetectionSession):
                     tracks_to_dat(
                         trk.get_all_tracks(),
                         platform_id=session.platform_id,
-                        auto_backup=False,  # 手动保存时再备份
+                        auto_backup=True,  # 覆盖前备份旧数据
                     )
                     notify_reconstruction()
             except Exception:
