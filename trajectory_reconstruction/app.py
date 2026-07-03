@@ -46,6 +46,17 @@ def create_app() -> Flask:
         response.headers['Expires'] = '0'
         return response
 
+    @app.route('/favicon.ico')
+    def favicon():
+        from flask import Response
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
+               '<polygon points="8,1 14,4 14,10 8,13 2,10 2,4" fill="none" stroke="#58a6ff" stroke-width="1.2"/>'
+               '<line x1="8" y1="4" x2="8" y2="10" stroke="#58a6ff" stroke-width="1.2"/>'
+               '<line x1="5" y1="5.5" x2="11" y2="8.5" stroke="#58a6ff" stroke-width="1.2"/>'
+               '<line x1="11" y1="5.5" x2="5" y2="8.5" stroke="#58a6ff" stroke-width="1.2"/>'
+               '</svg>')
+        return Response(svg, mimetype='image/svg+xml')
+
     # 延迟导入，避免循环依赖
     from trajectory_reconstruction.core.config.config_manager import ensure_config
     from trajectory_reconstruction.core.state import init_from_config
