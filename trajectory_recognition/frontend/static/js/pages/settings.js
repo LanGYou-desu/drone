@@ -1,5 +1,5 @@
 /**
- * 检测设置页面 — 每平台独立保存立体参数和空间位置
+ * 检测设置页面
  */
 
 var _stereoData = {}, _posData = {};
@@ -24,29 +24,25 @@ function toggleTheme() {
 }
 function toggleAutoSave() { document.getElementById('autoSaveSwitch').classList.toggle('active'); }
 
-// ── 加载立体参数 ───────────────────────────────
+// ── 加载平台参数（立体+位置）───────────────────
 
-function loadStereoPlatform() {
-    var pid = document.getElementById('stereoPlatform').value;
-    var d = (_stereoData && _stereoData[pid]) ? _stereoData[pid] : {};
-    setVal('stereoBaseline', d.baseline, 1.0);
-    setVal('stereoFovH', d.fov_horizontal, 90.0);
-    setVal('stereoFovV', d.fov_vertical, 60.0);
-    setVal('stereoResW', d.resolution_width, 1920);
-    setVal('stereoResH', d.resolution_height, 1080);
-    setVal('stereoTilt', d.tilt_angle, 0.0);
-    setVal('stereoConv', d.convergence_angle, 0.0);
-}
-
-function loadPosPlatform() {
-    var pid = document.getElementById('posPlatform').value;
-    var d = (_posData && _posData[pid]) ? _posData[pid] : {};
-    setVal('posX', d.x, 0.0);
-    setVal('posY', d.y, 1.5);
-    setVal('posZ', d.z, 0.0);
-    setVal('posPitch', d.pitch, 0.0);
-    setVal('posYaw', d.yaw, 0.0);
-    setVal('posRoll', d.roll, 0.0);
+function loadPlatformParams() {
+    var pid = document.getElementById('platSelect').value;
+    var s = (_stereoData && _stereoData[pid]) ? _stereoData[pid] : {};
+    var p = (_posData && _posData[pid]) ? _posData[pid] : {};
+    setVal('stereoBaseline', s.baseline, 1.0);
+    setVal('stereoFovH', s.fov_horizontal, 90.0);
+    setVal('stereoFovV', s.fov_vertical, 60.0);
+    setVal('stereoResW', s.resolution_width, 1920);
+    setVal('stereoResH', s.resolution_height, 1080);
+    setVal('stereoTilt', s.tilt_angle, 0.0);
+    setVal('stereoConv', s.convergence_angle, 0.0);
+    setVal('posX', p.x, 0.0);
+    setVal('posY', p.y, 1.5);
+    setVal('posZ', p.z, 0.0);
+    setVal('posPitch', p.pitch, 0.0);
+    setVal('posYaw', p.yaw, 0.0);
+    setVal('posRoll', p.roll, 0.0);
 }
 
 // ── 分区域保存 ──────────────────────────────────
@@ -65,13 +61,13 @@ async function saveSection(section) {
         config.frame_interval = parseInt(document.getElementById('detFrameInterval').value);
         config.tracker = document.getElementById('detTracker').value;
         config.auto_save = document.getElementById('autoSaveSwitch').classList.contains('active');
-        var tcRaw = document.getElementById('detTargetClasses').value.trim();
-        if (tcRaw) config.target_classes = tcRaw.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return !isNaN(n);});
+        var tc = document.getElementById('detTargetClasses').value.trim();
+        if (tc) config.target_classes = tc.split(',').map(function(s){return parseInt(s.trim());}).filter(function(n){return !isNaN(n);});
         else config.target_classes = null;
     }
-    if (section === 'stereo') {
-        var pid = document.getElementById('stereoPlatform').value;
-        var d = {
+    if (section === 'platform') {
+        var pid = document.getElementById('platSelect').value;
+        _stereoData[pid] = {
             baseline: parseFloat(document.getElementById('stereoBaseline').value),
             fov_horizontal: parseFloat(document.getElementById('stereoFovH').value),
             fov_vertical: parseFloat(document.getElementById('stereoFovV').value),
@@ -80,12 +76,7 @@ async function saveSection(section) {
             tilt_angle: parseFloat(document.getElementById('stereoTilt').value),
             convergence_angle: parseFloat(document.getElementById('stereoConv').value),
         };
-        _stereoData[pid] = d;
-        config.stereo = _stereoData;
-    }
-    if (section === 'position') {
-        var pid = document.getElementById('posPlatform').value;
-        var d = {
+        _posData[pid] = {
             x: parseFloat(document.getElementById('posX').value),
             y: parseFloat(document.getElementById('posY').value),
             z: parseFloat(document.getElementById('posZ').value),
@@ -93,7 +84,7 @@ async function saveSection(section) {
             yaw: parseFloat(document.getElementById('posYaw').value),
             roll: parseFloat(document.getElementById('posRoll').value),
         };
-        _posData[pid] = d;
+        config.stereo = _stereoData;
         config.platform_positions = _posData;
     }
 
@@ -101,9 +92,9 @@ async function saveSection(section) {
         var r = await fetch('/api/detection/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(config) });
         var data = await r.json();
         if (data.success) {
-            var names = {model:'模型设置', detection:'检测参数', stereo:'立体参数', position:'空间位置'};
+            var names = {model:'模型设置', detection:'检测参数', platform:'平台参数'};
             showToast(names[section] + ' 已保存');
-        } else { showToast('保存失败: ' + (data.error || ''), true); }
+        } else { showToast('保存失败', true); }
     } catch (err) { showToast('保存失败', true); }
 }
 
@@ -132,8 +123,7 @@ async function loadConfig() {
 
         _stereoData = c.stereo || {};
         _posData = c.platform_positions || {};
-        loadStereoPlatform();
-        loadPosPlatform();
+        loadPlatformParams();
     } catch (e) { /* default */ }
 }
 
