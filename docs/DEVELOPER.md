@@ -42,7 +42,7 @@
 | 模块 | 端口 | 职责 | 状态 |
 |------|------|------|------|
 | `trajectory_reconstruction` | 5000 | 轨迹加载、3D 可视化、预测、AI 策略、分析 | **已完成** |
-| `trajectory_recognition` | 5001 | 轨迹模式识别与分类 | **框架（待开发）** |
+| `trajectory_recognition` | 5001 | 双目 YOLO 无人机检测与轨迹生成 | **已完成** |
 
 **技术栈：** Python Flask · pywebview · Three.js (本地) · ECharts (本地) · OpenAI 兼容 AI 接口
 
@@ -173,22 +173,35 @@ drone/
 │   │               ├── toast.js         # Toast 通知
 │   │               └── utils.js         # lerp 工具
 │
-├── trajectory_recognition/              # ===== 识别模块（框架）=====
+├── trajectory_recognition/              # ===== 检测模块 =====
 │   ├── app.py                           # Flask 应用工厂 (:5001)
 │   ├── __main__.py                      # 独立入口
-│   ├── frontend/
-│   │   ├── pages/index.html             # 主页面
-│   │   └── static/js/pages/recognition.js
-│   ├── features/__init__.py             # 特征提取（待实现）
-│   ├── models/__init__.py               # 模型定义（待实现）
-│   └── classifier/__init__.py           # 分类器（待实现）
+│   ├── train.py                         # YOLO 训练脚本
+│   ├── detection/                       # YOLO 检测引擎
+│   │   ├── engine.py                    #   模型加载与推理
+│   │   ├── tracker.py                   #   多目标跟踪
+│   │   ├── preprocess.py                #   视频预处理
+│   │   └── stereo.py                    #   双目三角测量
+│   ├── services/                        # 业务编排
+│   │   ├── detection_service.py         #   检测会话管理
+│   │   └── data_bridge.py               #   数据桥接
+│   ├── views/                           # HTTP 接口
+│   │   ├── pages.py                     #   页面路由
+│   │   └── api_detection.py             #   检测 API
+│   └── frontend/
+│       ├── pages/                       #   index/settings/history
+│       └── static/js/pages/             #   4 个 JS 模块
 │
 ├── data/                                # 共享运行时数据
 │   ├── fact/                            # 实际轨迹 (.dat)
-│   │   ├── visible.dat                  # 可见光（60 点，Z 字起伏）
-│   │   ├── infrared.dat                 # 红外（60 点，盘旋上升）
-│   │   └── radar.dat                    # 雷达（60 点，S 形加速）
+│   │   ├── visible.dat                  # 可见光
+│   │   ├── infrared.dat                 # 红外
+│   │   └── radar.dat                    # 雷达
 │   ├── predict/                         # 预测结果（启动时清除）
+│   │   ├── predict_visible.dat
+│   │   ├── predict_infrared.dat
+│   │   └── predict_radar.dat
+│   ├── uploads/                         # 临时视频上传
 │   └── backup/                          # 快照备份
 │       └── <YYYYmmdd_HHMMSS>_<label>/
 │           ├── manifest.json            # 元信息
