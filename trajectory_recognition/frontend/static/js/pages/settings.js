@@ -2,7 +2,7 @@
  * 检测设置页面
  */
 
-var _stereoData = {}, _posData = {};
+var _platformsData = {};
 
 // ── 主题 ──────────────────────────────────────────
 
@@ -28,18 +28,17 @@ function toggleAutoSave() { document.getElementById('autoSaveSwitch').classList.
 
 function loadPlatformParams() {
     var pid = document.getElementById('platSelect').value;
-    var s = (_stereoData && _stereoData[pid]) ? _stereoData[pid] : {};
-    var p = (_posData && _posData[pid]) ? _posData[pid] : {};
-    setVal('stereoBaseline', s.baseline, 1.0);
-    setVal('stereoFovH', s.fov_horizontal, 90.0);
-    setVal('stereoFovV', s.fov_vertical, 60.0);
-    setVal('stereoResW', s.resolution_width, 1920);
-    setVal('stereoResH', s.resolution_height, 1080);
-    setVal('stereoTilt', s.tilt_angle, 0.0);
-    setVal('stereoConv', s.convergence_angle, 0.0);
-    setVal('posX', p.x, 0.0);
-    setVal('posY', p.y, 1.5);
-    setVal('posZ', p.z, 0.0);
+    var p = (_platformsData && _platformsData[pid]) ? _platformsData[pid] : {};
+    setVal('stereoBaseline', p.baseline, 1.0);
+    setVal('stereoFovH', p.fov_horizontal, 90.0);
+    setVal('stereoFovV', p.fov_vertical, 60.0);
+    setVal('stereoResW', p.resolution_width, 1920);
+    setVal('stereoResH', p.resolution_height, 1080);
+    setVal('stereoTilt', p.tilt_angle, 0.0);
+    setVal('stereoConv', p.convergence_angle, 0.0);
+    setVal('posX', p.pos_x, 0.0);
+    setVal('posY', p.pos_y, 1.5);
+    setVal('posZ', p.pos_z, 0.0);
     setVal('posPitch', p.pitch, 0.0);
     setVal('posYaw', p.yaw, 0.0);
     setVal('posRoll', p.roll, 0.0);
@@ -67,7 +66,7 @@ async function saveSection(section) {
     }
     if (section === 'platform') {
         var pid = document.getElementById('platSelect').value;
-        _stereoData[pid] = {
+        _platformsData[pid] = {
             baseline: parseFloat(document.getElementById('stereoBaseline').value),
             fov_horizontal: parseFloat(document.getElementById('stereoFovH').value),
             fov_vertical: parseFloat(document.getElementById('stereoFovV').value),
@@ -75,17 +74,14 @@ async function saveSection(section) {
             resolution_height: parseInt(document.getElementById('stereoResH').value),
             tilt_angle: parseFloat(document.getElementById('stereoTilt').value),
             convergence_angle: parseFloat(document.getElementById('stereoConv').value),
-        };
-        _posData[pid] = {
-            x: parseFloat(document.getElementById('posX').value),
-            y: parseFloat(document.getElementById('posY').value),
-            z: parseFloat(document.getElementById('posZ').value),
+            pos_x: parseFloat(document.getElementById('posX').value),
+            pos_y: parseFloat(document.getElementById('posY').value),
+            pos_z: parseFloat(document.getElementById('posZ').value),
             pitch: parseFloat(document.getElementById('posPitch').value),
             yaw: parseFloat(document.getElementById('posYaw').value),
             roll: parseFloat(document.getElementById('posRoll').value),
         };
-        config.stereo = _stereoData;
-        config.platform_positions = _posData;
+        config.platforms = _platformsData;
     }
 
     try {
@@ -121,8 +117,7 @@ async function loadConfig() {
         var sw = document.getElementById('autoSaveSwitch');
         if (d.auto_save !== false) sw.classList.add('active'); else sw.classList.remove('active');
 
-        _stereoData = c.stereo || {};
-        _posData = c.platform_positions || {};
+        _platformsData = c.platforms || {};
         loadPlatformParams();
     } catch (e) { /* default */ }
 }

@@ -262,17 +262,11 @@ def save_config():
             if k in data:
                 current['detection'][k] = data[k]
 
-        # 合并 stereo 配置
-        if 'stereo' in data:
-            if 'stereo' not in current:
-                current['stereo'] = {}
-            current['stereo'].update(data['stereo'])
-
-        # 合并 platform_positions 配置
-        if 'platform_positions' in data:
-            if 'platform_positions' not in current:
-                current['platform_positions'] = {}
-            current['platform_positions'].update(data['platform_positions'])
+        # 合并 platforms 配置
+        if 'platforms' in data:
+            if 'platforms' not in current:
+                current['platforms'] = {}
+            current['platforms'].update(data['platforms'])
 
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(current, f, ensure_ascii=False, indent=4)

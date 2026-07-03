@@ -106,8 +106,7 @@ def create_session(
     """创建双目检测会话"""
     cfg = _load_config()
     det_cfg = cfg.get("detection", {})
-    all_stereo = cfg.get("stereo", {})
-    all_positions = cfg.get("platform_positions", {})
+    platforms = cfg.get("platforms", {})
 
     session = DetectionSession(
         source_a=source_a,
@@ -116,8 +115,7 @@ def create_session(
         config_snapshot={
             **(config or {}),
             "detection": det_cfg,
-            "stereo": all_stereo,
-            "platform_positions": all_positions,
+            "platforms": platforms,
         },
         stereo_params=stereo_cfg,
     )
@@ -189,9 +187,9 @@ def _to_world(pt3d, platform_pos):
     y, z = y2, z2
     # 平移
     return [
-        x + platform_pos.get("x", 0),
-        y + platform_pos.get("y", 0),
-        z + platform_pos.get("z", 0),
+        x + platform_pos.get("pos_x", 0),
+        y + platform_pos.get("pos_y", 0),
+        z + platform_pos.get("pos_z", 0),
     ]
 
 
@@ -210,14 +208,19 @@ def _run_detection_pipeline(session: DetectionSession):
         from trajectory_recognition.detection.stereo import StereoTriangulator, StereoParams
 
         det_cfg = session.config_snapshot.get("detection", {})
-        all_stereo = session.config_snapshot.get("stereo", {})
+        platforms = session.config_snapshot.get("platforms", {})
         pid = session.platform_id
-        stereo_cfg = all_stereo.get(pid, all_stereo.get("visible", {})) if all_stereo else {}
+        plat_cfg = platforms.get(pid, platforms.get("visible", {})) if platforms else {}
+
+        # 提取立体参数
+        stereo_keys = ["baseline", "fov_horizontal", "fov_vertical",
+                       "resolution_width", "resolution_height",
+                       "tilt_angle", "convergence_angle"]
+        stereo_cfg = {k: plat_cfg[k] for k in stereo_keys if k in plat_cfg}
         session.stereo_params = stereo_cfg
 
-        # 平台位置和朝向
-        positions = session.config_snapshot.get("platform_positions", {})
-        platform_pos = positions.get(pid, positions.get("visible", {}))
+        # 提取位置朝向
+        platform_pos = {k: plat_cfg.get(k, 0) for k in ["pos_x", "pos_y", "pos_z", "pitch", "yaw", "roll"]}
 
         # 初始化组件
         detector = YOLODetector(
