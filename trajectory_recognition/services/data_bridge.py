@@ -66,9 +66,25 @@ def backup_existing_fact(
         shutil.copy2(os.path.join(src, f), os.path.join(fact_dst, f))
 
     # 写 manifest（与 trajectory_reconstruction 统一格式）
+    # 从文件名推断平台名 + 统计点数
+    PLATFORM_NAMES = {"visible":"可见光","infrared":"红外","radar":"雷达","self":"自选"}
+    methods = {}
+    for f in dat_files:
+        for pid, fname in PLATFORM_FACT_MAP.items():
+            if f == fname:
+                cnt = 0
+                fpath = os.path.join(src, f)
+                try:
+                    with open(fpath, 'r') as fh:
+                        cnt = sum(1 for _ in fh)
+                except Exception:
+                    pass
+                methods[pid] = {"name": PLATFORM_NAMES.get(pid, pid), "point_count": cnt}
+
     manifest = {
         "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "label": label,
+        "methods": methods,
         "files": {
             "fact": dat_files,
             "predict": [],
