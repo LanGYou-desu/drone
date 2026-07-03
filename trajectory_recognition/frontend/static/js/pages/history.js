@@ -42,7 +42,7 @@ const HistoryPage = {
                         </div>
                     </div>
                     <div style="display:flex;gap:4px;">
-                        <a class="btn btn-ghost btn-sm" href="${RECON_BASE}" target="_blank" title="在 3D 视图中查看">查看</a>
+                        <a class="btn btn-ghost btn-sm" href="${RECON_BASE}" title="在 3D 视图中查看">查看</a>
                         <button class="btn btn-ghost btn-sm" onclick="HistoryPage._deleteFile('${f.name}')" title="删除">
                             <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><line x1="2" y1="3.5" x2="14" y2="3.5"/><rect x="3.5" y="4" width="9" height="10" rx="0.8"/><line x1="6.5" y1="6" x2="6.5" y2="12"/><line x1="9.5" y1="6" x2="9.5" y2="12"/></svg>
                         </button>
@@ -100,7 +100,7 @@ const HistoryPage = {
                             ${b.timestamp ? ' · ' + new Date(b.timestamp).toLocaleString('zh-CN') : ''}
                         </div>
                     </div>
-                    <a class="btn btn-ghost btn-sm" href="${RECON_BASE}/data" target="_blank" title="在数据管理中查看">管理</a>
+                    <a class="btn btn-ghost btn-sm" href="${RECON_BASE}/data" title="在数据管理中查看">管理</a>
                 </div>
             `).join('');
         } catch (err) {

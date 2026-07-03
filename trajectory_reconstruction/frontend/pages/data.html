@@ -13,17 +13,19 @@
         <!-- 上传 -->
         <div class="card">
             <div class="card-header"><h3>{{ icon_upload() }} 上传数据</h3></div>
-            <div id="dropZone" class="drop-zone" style="padding:12px;min-height:80px;">
-                {{ icon_upload('1.2em') }}
-                <p style="margin:2px 0;font-weight:600;font-size:0.8rem;">拖拽 .dat 文件到此处</p>
-                <p style="font-size:0.68rem;color:var(--text-tertiary);">每行: x y z t</p>
+            <div id="dropZone" class="drop-zone" style="padding:10px 12px;min-height:70px;">
+                {{ icon_upload('1.1em') }}
+                <p style="margin:1px 0;font-weight:600;font-size:0.78rem;">拖拽 .dat 文件到此处</p>
+                <p style="font-size:0.66rem;color:var(--text-tertiary);margin:0;">每行: x y z t</p>
                 <input type="file" id="dataFile" accept=".dat,.txt" style="display:none;">
-                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dataFile').click()" style="margin-top:4px;">
-                    {{ icon_folder() }} 浏览文件
-                </button>
+                <div style="display:flex;gap:6px;margin-top:4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('dataFile').click()" style="flex:1;">
+                        {{ icon_folder() }} 浏览文件
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="uploadBtn" style="flex:1;" disabled>上传为自选平台</button>
+                </div>
             </div>
-            <div id="fileInfo" style="margin-top:4px;font-size:0.72rem;color:var(--text-secondary);display:none;"></div>
-            <button class="btn btn-primary btn-sm" id="uploadBtn" style="margin-top:8px;width:100%;">上传为自选平台</button>
+            <div id="fileInfo" style="margin-top:4px;font-size:0.7rem;color:var(--text-secondary);display:none;"></div>
         </div>
 
         <!-- 数据更新 -->
