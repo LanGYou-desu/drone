@@ -32,19 +32,24 @@ def backup_existing_fact(
     source_dir: str = "data/fact/",
     backup_dir: str = "data/backup/",
     label: str = "auto",
+    filenames: Optional[list] = None,
 ) -> Optional[str]:
     """
-    备份 data/fact/ 中的现有 .dat 文件到 data/backup/。
+    备份 data/fact/ 中的指定 .dat 文件到 data/backup/。
 
+    未指定 filenames 则备份全部 .dat 文件。
     格式: data/backup/{YYYYmmdd_HHMMSS}_{label}/
     """
     src = os.path.join(PROJECT_ROOT, source_dir)
     if not os.path.isdir(src):
         return None
 
-    dat_files = [f for f in os.listdir(src) if f.endswith('.dat')]
+    if filenames:
+        dat_files = [f for f in filenames if os.path.isfile(os.path.join(src, f))]
+    else:
+        dat_files = [f for f in os.listdir(src) if f.endswith('.dat')]
     if not dat_files:
-        return None  # 空目录不备份
+        return None
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = os.path.join(PROJECT_ROOT, backup_dir, f"{timestamp}_{label}")
@@ -91,11 +96,11 @@ def tracks_to_dat(
     out = os.path.join(PROJECT_ROOT, output_dir)
     os.makedirs(out, exist_ok=True)
 
-    # 自动备份
-    if auto_backup:
-        backup_existing_fact(source_dir=output_dir)
-
     filename = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
+
+    # 自动备份（只备份即将覆盖的文件）
+    if auto_backup:
+        backup_existing_fact(source_dir=output_dir, filenames=[filename])
     fpath = os.path.join(out, filename)
 
     # 收集所有 track 的 (x, y, z, t) 点，按时序合并
