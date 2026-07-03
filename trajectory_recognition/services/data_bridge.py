@@ -55,21 +55,16 @@ def backup_existing_fact(
     for f in dat_files:
         shutil.copy2(os.path.join(src, f), os.path.join(fact_dst, f))
 
-    # 写 manifest
+    # 写 manifest（与 trajectory_reconstruction 统一格式）
     manifest = {
-        "created": datetime.now().isoformat(),
+        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "label": label,
-        "files": dat_files,
-        "point_counts": {},
+        "files": {
+            "fact": dat_files,
+            "predict": [],
+            "memory": [os.path.basename(f) for f in dat_files],
+        },
     }
-    for f in dat_files:
-        fpath = os.path.join(src, f)
-        try:
-            with open(fpath, 'r') as fh:
-                manifest["point_counts"][f] = sum(1 for _ in fh)
-        except Exception:
-            manifest["point_counts"][f] = 0
-
     with open(os.path.join(backup_path, "manifest.json"), 'w', encoding='utf-8') as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=2)
 

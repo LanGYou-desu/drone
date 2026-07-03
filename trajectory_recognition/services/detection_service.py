@@ -48,6 +48,8 @@ class DetectionSession:
     _stereo: Optional[object] = field(default=None, repr=False)
     _thread: Optional[threading.Thread] = field(default=None, repr=False)
     _pause_event: Optional[threading.Event] = field(default=None, repr=False)
+    _frame_a: Optional[bytes] = field(default=None, repr=False)  # 左目最新帧 JPEG
+    _frame_b: Optional[bytes] = field(default=None, repr=False)  # 右目最新帧 JPEG
     _stop_event: Optional[threading.Event] = field(default=None, repr=False)
 
     @property
@@ -202,6 +204,13 @@ def _run_detection_pipeline(session: DetectionSession):
 
             session.current_frame_a = frame_a.frame_id
             session.current_frame_b = frame_b.frame_id
+
+            # 缓存预览帧（JPEG 编码）
+            import cv2
+            _, buf_a = cv2.imencode('.jpg', frame_a.image, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            _, buf_b = cv2.imencode('.jpg', frame_b.image, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            session._frame_a = buf_a.tobytes()
+            session._frame_b = buf_b.tobytes()
 
             # YOLO 检测（左右目分别推理）
             dets_a = detector.detect(frame_a.image)

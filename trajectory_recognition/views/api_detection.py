@@ -136,15 +136,28 @@ def tracks():
 
 @api_detection_bp.route('/preview', methods=['GET'])
 def preview():
-    """返回最新预览帧（当前未缓存帧，返回 204）"""
-    return jsonify({'success': False, 'error': '预览帧流暂未实现，请使用状态轮询'}), 501
+    """返回最新预览帧 JPEG"""
+    channel = request.args.get('channel', 'a')  # 'a' 左目 / 'b' 右目
+    sid = request.args.get('session_id')
+    session = get_session(sid) if sid else get_active_session()
+
+    if not session:
+        return jsonify({'success': False, 'error': '没有活跃的检测会话'}), 404
+
+    frame = session._frame_a if channel == 'a' else session._frame_b
+    if not frame:
+        return jsonify({'success': False, 'error': '暂无预览帧'}), 404
+
+    from flask import Response
+    return Response(frame, mimetype='image/jpeg',
+                    headers={'Cache-Control': 'no-cache'})
 
 
 # ── 备份列表（自给自足，不依赖 :5000）──
 
 @api_detection_bp.route('/backups', methods=['GET'])
 def list_backups():
-    """列出 data/backup/ 中的所有备份"""
+    """列出 data/backup/ 中的所有备份（统一 manifest 格式）"""
     try:
         import json as _json
         backup_dir = os.path.join(os.getcwd(), 'data', 'backup')
@@ -161,12 +174,22 @@ def list_backups():
             if os.path.isfile(manifest_path):
                 with open(manifest_path, 'r', encoding='utf-8') as f:
                     manifest = _json.load(f)
+
+            # 统一格式: {created, label, files: {fact:[], predict:[], memory:[]}}
+            files_dict = manifest.get('files', {})
+            fact_files = files_dict.get('fact', []) if isinstance(files_dict, dict) else []
+            pt_count = 0
+            for ff in fact_files:
+                fp = os.path.join(d, 'fact', ff)
+                if os.path.isfile(fp):
+                    pt_count += sum(1 for _ in open(fp, 'r'))
+
             backups.append({
                 'name': name,
                 'timestamp': manifest.get('created', ''),
-                'label': manifest.get('label', ''),
-                'files': manifest.get('files', []),
-                'point_counts': manifest.get('point_counts', {}),
+                'label': manifest.get('label', 'auto'),
+                'file_count': len(fact_files),
+                'total_points': pt_count,
             })
         return jsonify({'success': True, 'backups': backups})
     except Exception as e:

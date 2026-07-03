@@ -88,17 +88,16 @@ const HistoryPage = {
             document.getElementById('backupCount').textContent = data.backups.length;
 
             el.innerHTML = data.backups.map(b => {
-                var totalPts = Object.values(b.point_counts || {}).reduce(function(s,v){return s+v;}, 0);
                 return `
                 <div class="list-item" style="padding:12px;">
                     <span class="list-item-dot" style="background:var(--orange);"></span>
                     <div class="list-item-text" style="flex:1;">
                         <div class="list-item-title">
                             ${b.name}
-                            <span class="badge badge-blue" style="margin-left:8px;">${b.label || 'manual'}</span>
+                            <span class="badge badge-blue" style="margin-left:8px;">${b.label || 'auto'}</span>
                         </div>
                         <div class="list-item-sub">
-                            ${(b.files||[]).length} 个文件 · ${totalPts} 个轨迹点
+                            ${b.file_count} 个文件 · ${b.total_points} 个轨迹点
                             ${b.timestamp ? ' · ' + new Date(b.timestamp).toLocaleString('zh-CN') : ''}
                         </div>
                     </div>

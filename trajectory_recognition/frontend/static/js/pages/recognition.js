@@ -162,10 +162,25 @@ const DetectionControl = {
             document.getElementById('detStatus').textContent = this._statusText(s.status);
             document.getElementById('detProgress').textContent = Math.round(s.progress * 100) + '%';
             document.getElementById('progressFill').style.width = (s.progress * 100) + '%';
-            document.getElementById('detFrames').textContent = `${s.current_frame_a || s.current_frame} / ${s.total_frames}`;
+            document.getElementById('detFrames').textContent = `${s.current_frame_a || 0} / ${s.total_frames}`;
             document.getElementById('detTrackCount').textContent = s.track_count;
             document.getElementById('det3DPoints').textContent = s.points_3d || 0;
             document.getElementById('detDuration').textContent = s.duration + 's';
+
+            // 刷新预览帧
+            const ts = Date.now();
+            const imgA = document.getElementById('imgA');
+            const imgB = document.getElementById('imgB');
+            if (imgA && s.status === 'running') {
+                imgA.style.display = '';
+                imgA.previousElementSibling && (imgA.previousElementSibling.style.display = 'none');
+                imgA.src = DetectionAPI.previewUrl('a') + '&_=' + ts;
+            }
+            if (imgB && s.status === 'running') {
+                imgB.style.display = '';
+                imgB.previousElementSibling && (imgB.previousElementSibling.style.display = 'none');
+                imgB.src = DetectionAPI.previewUrl('b') + '&_=' + ts;
+            }
 
             if (s.track_count > 0) this._updateTrackList();
 
@@ -213,4 +228,40 @@ const DetectionControl = {
 };
 
 window.DetectionControl = DetectionControl;
-document.addEventListener('DOMContentLoaded', () => updateStartButton());
+
+// ── 页面加载时恢复状态 ──────────────────────────
+
+async function restoreSession() {
+    try {
+        const data = await DetectionAPI.status();
+        if (!data.session || data.session.status === 'idle') return;
+
+        const s = data.session;
+        DetectionControl._setRunning(s.status === 'running');
+        document.getElementById('detStatus').textContent = DetectionControl._statusText(s.status);
+        document.getElementById('detPlatform').textContent =
+            ({visible:'可见光',infrared:'红外',radar:'雷达',self:'自选'})[s.platform_id] || s.platform_id;
+        document.getElementById('progressFill').style.width = (s.progress * 100) + '%';
+        document.getElementById('detTrackCount').textContent = s.track_count;
+
+        if (s.status === 'running' || s.status === 'paused') {
+            DetectionControl._startPolling();
+        }
+    } catch { /* 无活跃会话 */ }
+}
+
+// 离开页面时提醒
+window.addEventListener('beforeunload', async (e) => {
+    try {
+        const data = await DetectionAPI.status();
+        if (data.session && (data.session.status === 'running' || data.session.status === 'paused')) {
+            e.preventDefault();
+            e.returnValue = '检测正在进行中，确定离开？';
+        }
+    } catch { }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateStartButton();
+    restoreSession();
+});

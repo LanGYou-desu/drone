@@ -21,7 +21,14 @@
 13. [3D 渲染系统](#13-3d-渲染系统)
 14. [分析系统](#14-分析系统)
 15. [API 完整参考](#15-api-完整参考)
-16. [识别模块（未开发）](#16-识别模块未开发)
+16. [检测识别模块](#16-检测识别模块)
+    - [架构](#161-架构)
+    - [数据流](#162-数据流)
+    - [核心接口](#163-核心接口)
+    - [API 端点](#164-api-端点)
+    - [配置扩展](#165-配置扩展)
+    - [数据共享](#166-与重建模块的数据共享)
+    - [YOLO 模型训练](#167-yolo-模型训练)
 17. [开发指南](#17-开发指南)
 18. [调试与测试](#18-调试与测试)
 19. [代码规范](#19-代码规范)
@@ -631,7 +638,7 @@ score = w_h*h_norm + w_s*s_norm + w_a*a_norm + w_c*c_norm
 
 ---
 
-## 16. 识别模块（未开发）
+## 16. 检测识别模块
 
 ### 16.1 架构
 
@@ -739,16 +746,157 @@ data/fact/detect_<id>.dat      ← 落盘，供 trajectory_reconstruction 消费
 
 检测结果通过 `data_bridge.py` 写入 `data/fact/detect_*.dat`，格式与现有 fact*.dat 一致（每行 `x y z t`）。`trajectory_reconstruction` 启动时自动加载，无需额外适配。
 
-### 16.7 待实现
+### 16.7 YOLO 模型训练
 
-所有模块均为 stub（`raise NotImplementedError`），需按以下顺序实现：
+#### 快速开始
 
-1. **`detection/preprocess.py`** — 视频 I/O + 抽帧
-2. **`detection/engine.py`** — YOLO 模型加载与推理（依赖 ultralytics 或 onnxruntime）
-3. **`detection/tracker.py`** — 跟踪器集成
-4. **`services/detection_service.py`** — 会话管理与流水线编排
-5. **`services/data_bridge.py`** — .dat 格式转换
-6. **`views/api_detection.py`** — 各端点逐步实现
+```bash
+# 1. 准备数据集（YOLO 格式）
+dataset/
+├── data.yaml              # 数据集描述文件
+├── train/
+│   ├── images/            # 训练图片 (.jpg/.png)
+│   └── labels/            # 标注文件 (.txt，与图片同名)
+└── valid/
+    ├── images/            # 验证图片
+    └── labels/            # 验证标注
+
+# 2. 编写 data.yaml
+# path: ./dataset
+# train: train/images
+# val: valid/images
+# names:
+#   0: drone               # 至少包含 drone 类
+#   1: bird                # 可选：区分飞鸟
+#   2: airplane            # 可选：区分飞机
+
+# 3. 开始训练
+python -m trajectory_recognition.train \
+    --data dataset/data.yaml \
+    --model models/yolov8n.pt \
+    --epochs 100 \
+    --imgsz 640
+
+# 4. 训练完成后复制到 models/
+cp runs/detect/drone_detect/weights/best.pt models/drone_detect.pt
+```
+
+#### 训练参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--data` | `dataset/data.yaml` | 数据集描述文件路径 |
+| `--model` | `yolov8n.pt` | 预训练权重（yolov8n/s/m/l/x 或 yolov11 系列） |
+| `--epochs` | `100` | 训练轮数，小数据集 50~100，大数据集 100~300 |
+| `--imgsz` | `640` | 输入尺寸，小目标（无人机）建议 1280 |
+| `--batch` | `16` | 批次大小，根据 GPU 显存调整（16GB→32, 8GB→16, 4GB→8） |
+| `--device` | `0` | 训练设备（0/1/cpu） |
+| `--freeze` | `None` | 冻结前 N 层微调，小数据集推荐 `--freeze 10` |
+| `--lr` | `0.01` | 初始学习率 |
+| `--name` | `drone_detect` | 实验名称，输出到 `runs/detect/<name>/` |
+| `--workers` | `8` | 数据加载线程数 |
+| `--resume` | — | 从 checkpoint 继续训练 |
+
+#### 导出加速推理
+
+```bash
+# ONNX（通用加速，CPU 快 2~3x）
+python -m trajectory_recognition.train --export runs/detect/drone_detect/weights/best.pt --format onnx
+
+# TensorRT（NVIDIA GPU 快 3~5x）
+python -m trajectory_recognition.train --export best.pt --format engine
+
+# 支持格式: onnx / engine / tflite / openvino
+```
+
+#### 仅验证（不训练）
+
+```bash
+python -m trajectory_recognition.train --val --model models/drone_detect.pt --data dataset/data.yaml
+# 输出: mAP@0.5, mAP@0.5:0.95, Precision, Recall
+```
+
+#### 标注格式 (YOLO)
+
+每张图片对应一个同名的 `.txt` 文件，每行一个目标：
+
+```
+class_id x_center y_center width height
+```
+
+所有值归一化到 [0, 1]（相对于图片宽高）。示例：
+
+```
+0 0.523 0.418 0.082 0.065
+0 0.315 0.672 0.045 0.038
+1 0.710 0.230 0.120 0.095
+```
+
+**推荐标注工具：**
+
+| 工具 | 类型 | 地址 |
+|------|------|------|
+| Roboflow | 在线 | https://roboflow.com |
+| LabelImg | 本地 | https://github.com/HumanSignal/labelImg |
+| CVAT | 在线/自部署 | https://www.cvat.ai |
+| Label Studio | 在线/自部署 | https://labelstud.io |
+
+#### 推荐公开数据集
+
+| 数据集 | 内容 | 地址 |
+|--------|------|------|
+| DUT-Anti-UAV | 红外无人机检测 | https://github.com/wangdongdut/DUT-Anti-UAV |
+| UAVDT | 城市无人机轨迹 | https://sites.google.com/view/grli-uavdt |
+| Drone-vs-Bird | 无人机 vs 飞鸟分类 | https://github.com/DroneDetection/Drone-vs-Bird |
+| MAV-VID | 多旋翼无人机视频 | https://github.com/MAV-VID/MAV-VID |
+
+#### 数据增强建议
+
+无人机检测场景特殊（小目标、远距离、复杂天空背景），建议开启以下增强：
+
+| 增强 | 参数 | 作用 |
+|------|------|------|
+| Mosaic | `mosaic=1.0` | 4 图拼接，提升小目标检测 |
+| 缩放 | `scale=0.5` | 模拟远近距离变化 |
+| HSV 扰动 | `hsv_h=0.015, hsv_s=0.7, hsv_v=0.4` | 应对不同天气/光照 |
+| 上下翻转 | `flipud=0.0` | **关闭**，天空在上 |
+| 左右翻转 | `fliplr=0.5` | 水平翻转 OK |
+| 模糊 | 运动模糊 | 模拟高速运动 |
+| Copy-Paste | `copy_paste=0.1` | 提高复杂背景泛化 |
+
+这些已在 `train.py` 中预设，无需手动调整。
+
+#### 训练策略建议
+
+**Phase 1 — 冻结微调（小数据集 < 1000 张）**
+```bash
+python -m trajectory_recognition.train --data dataset/data.yaml --model yolov8n.pt --epochs 30 --freeze 10
+```
+冻结 backbone 前 10 层，仅训练检测头，快速收敛。
+
+**Phase 2 — 全网络训练**
+```bash
+python -m trajectory_recognition.train --data dataset/data.yaml --model runs/detect/drone_detect/weights/last.pt --epochs 100
+```
+解冻全网络，精细调优。
+
+**Phase 3 — 大尺寸精调**
+```bash
+python -m trajectory_recognition.train --data dataset/data.yaml --model runs/detect/drone_detect/weights/best.pt --epochs 30 --imgsz 1280 --batch 4
+```
+提高输入分辨率，增强小目标检测能力。
+
+#### 可选用模型对比
+
+| 模型 | 大小 | mAP@0.5 | CPU 推理 | GPU 推理 | 适用场景 |
+|------|------|---------|---------|---------|---------|
+| yolov8n | 6 MB | 37.3 | 80 ms | 3 ms | 实时检测，边缘设备 |
+| yolov8s | 22 MB | 44.9 | 140 ms | 5 ms | 平衡精度与速度 |
+| yolov8m | 52 MB | 50.2 | 230 ms | 8 ms | 需要较高精度 |
+| yolov8l | 88 MB | 52.9 | 340 ms | 12 ms | 离线高精度分析 |
+| yolov11n | 5 MB | 39.5 | 70 ms | 2.5 ms | 最新架构，速度最快 |
+
+> 速度基于 640×640 输入，CPU i7-13700，GPU RTX 4060。无人机检测推荐 **yolov8n**（实时）或 **yolov8s**（精度）。
 
 ---
 
