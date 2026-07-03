@@ -14,6 +14,7 @@ venv/
 # Data (runtime — generated outputs, not tracked)
 data/backup/
 data/predict/
+data/uploads/
 
 # OS
 .DS_Store

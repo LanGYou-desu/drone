@@ -167,20 +167,12 @@ const DetectionControl = {
             document.getElementById('det3DPoints').textContent = s.points_3d || 0;
             document.getElementById('detDuration').textContent = s.duration + 's';
 
-            // 刷新预览帧
+            // 刷新预览帧（onload/onerror 自动处理占位符显隐）
             const ts = Date.now();
             const imgA = document.getElementById('imgA');
             const imgB = document.getElementById('imgB');
-            if (imgA && s.status === 'running') {
-                imgA.style.display = '';
-                imgA.previousElementSibling && (imgA.previousElementSibling.style.display = 'none');
-                imgA.src = DetectionAPI.previewUrl('a') + '&_=' + ts;
-            }
-            if (imgB && s.status === 'running') {
-                imgB.style.display = '';
-                imgB.previousElementSibling && (imgB.previousElementSibling.style.display = 'none');
-                imgB.src = DetectionAPI.previewUrl('b') + '&_=' + ts;
-            }
+            if (imgA && s.status === 'running') imgA.src = DetectionAPI.previewUrl('a') + '&_=' + ts;
+            if (imgB && s.status === 'running') imgB.src = DetectionAPI.previewUrl('b') + '&_=' + ts;
 
             if (s.track_count > 0) this._updateTrackList();
 

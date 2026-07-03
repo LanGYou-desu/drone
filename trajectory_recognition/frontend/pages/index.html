@@ -137,8 +137,8 @@
                 <div style="display:flex;gap:8px;">
                     <div style="flex:1;">
                         <div style="font-size:0.72rem;color:var(--blue);margin-bottom:4px;text-align:center;">左目 A</div>
-                        <div id="previewA" class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
-                            <img id="imgA" style="width:100%;height:100%;object-fit:contain;display:none;" alt="左目预览">
+                        <div class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
+                            <img id="imgA" style="width:100%;height:100%;object-fit:contain;" alt="左目预览" onload="this.style.display='';this.nextElementSibling.style.display='none'" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
                             <div class="preview-placeholder">
                                 {{ icon_video('2em') }}
                                 <p style="margin-top:8px;font-size:0.78rem;color:var(--text-tertiary);">等待输入</p>
@@ -147,8 +147,8 @@
                     </div>
                     <div style="flex:1;">
                         <div style="font-size:0.72rem;color:var(--green);margin-bottom:4px;text-align:center;">右目 B</div>
-                        <div id="previewB" class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
-                            <img id="imgB" style="width:100%;height:100%;object-fit:contain;display:none;" alt="右目预览">
+                        <div class="preview-container" style="aspect-ratio:4/3;min-height:160px;">
+                            <img id="imgB" style="width:100%;height:100%;object-fit:contain;" alt="右目预览" onload="this.style.display='';this.nextElementSibling.style.display='none'" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
                             <div class="preview-placeholder">
                                 {{ icon_video('2em') }}
                                 <p style="margin-top:8px;font-size:0.78rem;color:var(--text-tertiary);">等待输入</p>
