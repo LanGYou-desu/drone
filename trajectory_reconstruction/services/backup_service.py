@@ -217,8 +217,8 @@ def restore_backup(name: str) -> tuple[bool, str]:
                 shutil.copy2(src_fp, os.path.join(predict_dst, fname))
                 restored_count += 1
 
-    # 从磁盘重新加载 fact 文件到内存，重新合成
-    refresh_fact_data()
+    # 从磁盘重新加载 fact 文件到内存，重新合成（保留 self 数据）
+    refresh_fact_data(keep_self=True)
 
     # 删除恢复前自动备份
     delete_backup(pre_backup_name)

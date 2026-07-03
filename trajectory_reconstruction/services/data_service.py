@@ -64,10 +64,10 @@ def initialize_data():
     save_metadata()
 
 
-def refresh_fact_data() -> bool:
+def refresh_fact_data(keep_self: bool = False) -> bool:
     """
     重新加载 data/fact/*.dat 数据到 visible/infrared/radar
-    同时清空自选平台数据点（保留元信息）
+    keep_self=True 时保留自选平台数据（恢复备份时使用）
     """
     default_data = load_default_data()
     updated = False
@@ -76,14 +76,29 @@ def refresh_fact_data() -> bool:
             detection_methods[mid]['points'] = data['points']
             detection_methods[mid]['timestamps'] = data['timestamps']
             updated = True
-    # 清除自选文件和数据
-    self_path = os.path.join('data', 'fact', 'self.dat')
-    if os.path.isfile(self_path):
-        os.remove(self_path)
-    if 'self' in detection_methods:
-        detection_methods['self']['points'] = []
-        detection_methods['self']['timestamps'] = []
-        updated = True
+
+    if not keep_self:
+        # 清除自选文件和数据
+        self_path = os.path.join('data', 'fact', 'self.dat')
+        if os.path.isfile(self_path):
+            os.remove(self_path)
+        if 'self' in detection_methods:
+            detection_methods['self']['points'] = []
+            detection_methods['self']['timestamps'] = []
+    else:
+        # 恢复时加载 self.dat
+        self_path = os.path.join('data', 'fact', 'self.dat')
+        if os.path.isfile(self_path):
+            pts, tss = load_dat_file(self_path)
+            if 'self' not in detection_methods:
+                detection_methods['self'] = {
+                    'name': '自选', 'color': '#ff9500', 'visible': True, 'enabled': True,
+                    'weight': 1.0, 'points': [], 'timestamps': [],
+                }
+            detection_methods['self']['points'] = pts
+            detection_methods['self']['timestamps'] = tss
+            updated = True
+
     # 清除所有预测文件
     _clear_predict_files()
     # 重新合成
