@@ -325,21 +325,7 @@ def _run_detection_pipeline(session: DetectionSession):
         # 完成后保持 session 可查询，不清空 _active_session_id
         # 只有新 session 启动或手动 stop 才切换
 
-        # 自动保存（tracks_to_dat 内部已含 auto_backup）
-        if session.config_snapshot.get("detection", {}).get("auto_save", True):
-            try:
-                from trajectory_recognition.services.data_bridge import tracks_to_dat, notify_reconstruction
-                trk = session._tracker
-                if trk:
-                    from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
-                    tracks_to_dat(
-                        trk.get_all_tracks(),
-                        platform_id=session.platform_id,
-                        auto_backup=False,  # 手动保存时才备份
-                    )
-                    notify_reconstruction()
-            except Exception as e:
-                print(f"[detection] 自动保存失败: {e}")
+        # 仅确认保存时才写入磁盘，此处不做任何操作
 
 
 def pause_detection(session_id: str):
