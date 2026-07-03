@@ -64,7 +64,7 @@
         "tracker": "bytetrack",
         "input_width": 640,
         "input_height": 640,
-        "device": "cpu",
+        "device": "auto",
         "auto_save": true,
         "target_classes": [4, 14]
     },
