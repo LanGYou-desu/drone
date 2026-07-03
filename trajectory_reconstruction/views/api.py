@@ -70,7 +70,7 @@ def restore_backup():
         return jsonify({'success': False, 'error': '缺少 backup_file'}), 400
 
     ok, msg = backup_service.restore_backup(backup_file)
-    return jsonify({'success': ok, 'message' if ok else 'error': msg}), (200 if ok else 400)
+    return jsonify({'success': ok, 'message': msg}), 200
 
 
 @api_bp.route('/api/restore_all_backups', methods=['POST'])
