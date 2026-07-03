@@ -79,10 +79,14 @@ def tracks_to_dat(
     auto_backup: bool = True,
 ) -> list[str]:
     """
-    将跟踪目标的 3D 轨迹点写入平台的 .dat 文件。
+    将双目融合后的 3D 轨迹合并写入一个 .dat 文件。
 
-    每行格式: x y z t
-    仅写入有 3D positions 的 track，跳过仅有 2D 的目标。
+    所有 track 的 3D 点按时序合并，输出格式:
+      x y z t
+
+    平台映射:
+      visible → fact1.dat    infrared → fact2.dat
+      radar   → fact3.dat    self     → self.dat
     """
     out = os.path.join(PROJECT_ROOT, output_dir)
     os.makedirs(out, exist_ok=True)
@@ -91,35 +95,35 @@ def tracks_to_dat(
     if auto_backup:
         backup_existing_fact(source_dir=output_dir)
 
-    base_name = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
-    written = []
+    filename = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
+    fpath = os.path.join(out, filename)
 
-    tracks_with_3d = [t for t in tracks if t.positions and len(t.positions) > 0]
+    # 收集所有 track 的 (x, y, z, t) 点，按时序合并
+    all_points = []  # [(t, x, y, z), ...]
+    for track in tracks:
+        if not track.positions:
+            continue
+        for i, pos in enumerate(track.positions):
+            ts = track.timestamps[i] if i < len(track.timestamps) else 0.0
+            if len(pos) >= 3:
+                all_points.append((ts, pos[0], pos[1], pos[2]))
 
-    if not tracks_with_3d:
-        # 没有 3D 数据，写空文件标记
-        fpath = os.path.join(out, base_name)
-        with open(fpath, 'w') as f:
-            pass
-        return [fpath]
+    if not all_points:
+        # 双目未定位到 3D 点，降级写 2D
+        for track in tracks:
+            for i, xy in enumerate(track.positions_2d):
+                ts = track.timestamps[i] if i < len(track.timestamps) else 0.0
+                all_points.append((ts, xy[0], xy[1], 0.0))
 
-    for i, track in enumerate(tracks_with_3d):
-        filename = base_name if i == 0 else base_name.replace('.dat', f'_track{track.track_id}.dat')
-        fpath = os.path.join(out, filename)
+    # 按时序排序
+    all_points.sort(key=lambda p: p[0])
 
-        with open(fpath, 'w', encoding='utf-8') as f:
-            for j, (pos, ts) in enumerate(zip(track.positions, track.timestamps)):
-                if len(pos) >= 3:
-                    f.write(f"{pos[0]:.4f} {pos[1]:.4f} {pos[2]:.4f} {ts:.4f}\n")
-                elif j < len(track.positions_2d) and len(track.positions_2d[j]) >= 2:
-                    # 降级：仅有 2D 坐标时 z=0
-                    xy = track.positions_2d[j]
-                    f.write(f"{xy[0]:.4f} {xy[1]:.4f} 0.0000 {ts:.4f}\n")
+    with open(fpath, 'w', encoding='utf-8') as f:
+        for ts, x, y, z in all_points:
+            f.write(f"{x:.4f} {y:.4f} {z:.4f} {ts:.4f}\n")
 
-        written.append(fpath)
-        print(f"[data_bridge] 写入 {fpath} ({len(track.positions)} 个 3D 点)")
-
-    return written
+    print(f"[data_bridge] 合并写入 {fpath} ({len(all_points)} 个 3D 点)")
+    return [fpath]
 
 
 def tracks_to_memory(tracks: list, target_methods: dict) -> dict:
