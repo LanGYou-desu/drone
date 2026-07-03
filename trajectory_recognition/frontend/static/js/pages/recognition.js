@@ -263,6 +263,16 @@ async function restoreSession() {
         document.getElementById('detTrackCount').textContent = s.track_count;
         document.getElementById('detDuration').textContent = s.duration + 's';
 
+        // 恢复视频文件信息
+        if (s.source_a) {
+            document.getElementById('fileInfoA').style.display = 'block';
+            document.getElementById('fileInfoA').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + s.source_a;
+        }
+        if (s.source_b) {
+            document.getElementById('fileInfoB').style.display = 'block';
+            document.getElementById('fileInfoB').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + s.source_b;
+        }
+
         if (s.status === 'running' || s.status === 'paused') {
             DetectionControl._startPolling();
         }
