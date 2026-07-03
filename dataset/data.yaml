@@ -1,0 +1,12 @@
+# YOLO 无人机检测数据集配置
+# 将标注好的图片放入对应目录即可开始训练
+
+path: ./dataset          # 数据集根目录（相对于训练脚本运行位置）
+train: train/images      # 训练集图片
+val: valid/images        # 验证集图片
+
+# 类别定义（按此顺序标注）
+names:
+  0: drone               # 无人机（必须包含此类）
+  1: bird                # 飞鸟（可选：用于区分空中目标）
+  2: airplane            # 飞机（可选）

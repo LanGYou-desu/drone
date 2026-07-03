@@ -115,14 +115,22 @@
             </button>
         </div>
 
-        {# ── 双目标定 ── #}
+        {# ── 平台立体参数 ── #}
         <div class="card" style="margin-bottom:16px;">
-            <div class="card-header"><h3>{{ icon_camera_detect() }} 双目标定</h3></div>
-            <p style="font-size:0.72rem;color:var(--text-tertiary);margin-bottom:10px;">用于三角测量定位 3D 坐标</p>
+            <div class="card-header"><h3>{{ icon_camera_detect() }} 平台立体参数</h3></div>
+            <p style="font-size:0.72rem;color:var(--text-tertiary);margin-bottom:8px;">为每个平台分别设置双目参数和空间位置</p>
+            <div class="form-group">
+                <label class="form-label">选择平台</label>
+                <select id="stereoPlatform" class="input" onchange="loadStereoPlatform()">
+                    <option value="visible">可见光</option>
+                    <option value="infrared">红外</option>
+                    <option value="radar">雷达</option>
+                    <option value="self">自选</option>
+                </select>
+            </div>
             <div class="form-group">
                 <label class="form-label">基线距离 (m)</label>
                 <input type="number" id="stereoBaseline" class="input" value="1.0" step="0.01" min="0.1" max="50">
-                <span style="font-size:0.7rem;color:var(--text-tertiary);">两摄像头光心水平距离</span>
             </div>
             <div class="form-row" style="display:flex;gap:12px;">
                 <div class="form-group" style="flex:1;">
@@ -148,16 +156,59 @@
                 <div class="form-group" style="flex:1;">
                     <label class="form-label">俯仰角 (°)</label>
                     <input type="number" id="stereoTilt" class="input" value="0.0" step="0.5" min="-90" max="90">
-                    <span style="font-size:0.7rem;color:var(--text-tertiary);">水平=0，向上为正</span>
                 </div>
                 <div class="form-group" style="flex:1;">
                     <label class="form-label">会聚角 (°)</label>
                     <input type="number" id="stereoConv" class="input" value="0.0" step="0.5" min="-30" max="30">
-                    <span style="font-size:0.7rem;color:var(--text-tertiary);">平行光轴=0</span>
                 </div>
             </div>
             <button class="btn btn-primary btn-sm" onclick="saveSection('stereo')" style="margin-top:8px;">
-                {{ icon_save() }} 保存标定参数
+                {{ icon_save() }} 保存立体参数
+            </button>
+        </div>
+        {# ── 平台空间位置 ── #}
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><h3>{{ icon_target_track() }} 平台空间位置</h3></div>
+            <p style="font-size:0.72rem;color:var(--text-tertiary);margin-bottom:8px;">检测平台在世界坐标系中的位置和朝向</p>
+            <div class="form-group">
+                <label class="form-label">选择平台</label>
+                <select id="posPlatform" class="input" onchange="loadPosPlatform()">
+                    <option value="visible">可见光</option>
+                    <option value="infrared">红外</option>
+                    <option value="radar">雷达</option>
+                    <option value="self">自选</option>
+                </select>
+            </div>
+            <div class="form-row" style="display:flex;gap:12px;">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">X (m)</label>
+                    <input type="number" id="posX" class="input" value="0.0" step="0.1" min="-100" max="100">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">Y (m)</label>
+                    <input type="number" id="posY" class="input" value="1.5" step="0.1" min="-100" max="100">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">Z (m)</label>
+                    <input type="number" id="posZ" class="input" value="0.0" step="0.1" min="-100" max="100">
+                </div>
+            </div>
+            <div class="form-row" style="display:flex;gap:12px;">
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">Pitch (°)</label>
+                    <input type="number" id="posPitch" class="input" value="0.0" step="0.5" min="-90" max="90">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">Yaw (°)</label>
+                    <input type="number" id="posYaw" class="input" value="0.0" step="0.5" min="-180" max="180">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label class="form-label">Roll (°)</label>
+                    <input type="number" id="posRoll" class="input" value="0.0" step="0.5" min="-180" max="180">
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveSection('position')" style="margin-top:8px;">
+                {{ icon_save() }} 保存空间位置
             </button>
         </div>
 

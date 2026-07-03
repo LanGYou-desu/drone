@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>鹰眼长空 — 数据流图 (DFD)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fff;
+    font-family: "Microsoft YaHei", "SimHei", sans-serif;
+    padding: 20px 32px;
+    color: #222;
+  }
+  h1 { text-align: center; font-size: 20px; margin-bottom: 2px; }
+  h2 { font-size: 14px; margin: 28px 0 8px; padding: 5px 10px; background: #f5f5f5; border-left: 3px solid #555; }
+  h3 { font-size: 12px; font-weight: normal; margin: 18px 0 6px; color: #555; }
+  .sub { text-align: center; color: #888; font-size: 11px; margin-bottom: 16px; }
+  .mermaid { text-align: center; margin-bottom: 16px; }
+  .legend { font-size: 10px; color: #999; margin: 12px 0; text-align: center; }
+  .legend span { margin: 0 12px; }
+</style>
+</head>
+<body>
+<h1>鹰眼长空 — 数据流图 (DFD)</h1>
+<p class="sub">Gane-Sarson 符号：直角方框=外部实体 · 圆角框=处理 · 右侧开口框=数据存储 · 虚线框=跨图引用</p>
+
+<!-- ========== Level 0 ========== -->
+<h2>Level 0 — 上下文图</h2>
+<div class="mermaid">
+flowchart LR
+    USER[用户]:::ent
+    AIAPI[AI 大模型 API]:::ent
+    SYS(鹰眼长空\n无人机监测系统):::proc
+    USER -->|视频文件 · 操作指令| SYS
+    SYS -->|3D轨迹 · 预测 · 策略报告| USER
+    SYS -->|轨迹数据 Prompt| AIAPI
+    AIAPI -->|捕捉策略文本| SYS
+    classDef ent fill:#fff,stroke:#333,stroke-width:2px
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+</div>
+
+<!-- ========== Level 1a: 识别侧 ========== -->
+<h2>Level 1a — 轨迹识别与数据生产</h2>
+<div class="mermaid">
+flowchart LR
+    USER_A[用户]:::ent
+    P1(P1 轨迹识别\n视频检测+双目定位):::proc
+    D1[(data/fact/\n轨迹.dat)]:::ds
+    D4A[(config.json\n检测参数)]:::ds
+    D6[(data/uploads/\n上传视频)]:::ds
+    D7[(models/\nYOLO权重)]:::ds
+
+    USER_A -->|上传双路视频| P1
+    P1 -->|读取视频| D6
+    P1 -->|加载权重| D7
+    P1 -->|读取参数| D4A
+    P1 -->|写入检测轨迹| D1
+
+    classDef ent fill:#fff,stroke:#333,stroke-width:2px
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+</div>
+
+<!-- ========== Level 1b: 重建侧 ========== -->
+<h2>Level 1b — 轨迹重建 · 预测 · AI · 备份</h2>
+<div class="mermaid">
+flowchart TB
+    USER_B[用户]:::ent
+    AIAPI_B[AI 大模型 API]:::ent
+
+    P1_REF(P1 轨迹识别):::proc_ext
+
+    P2(P2 轨迹重建\n数据加载+加权合成):::proc
+    P3(P3 轨迹预测\n外推预测+时机评分):::proc
+    P4(P4 AI 策略\nPrompt+API调用):::proc
+    P5(P5 备份管理\n快照+恢复):::proc
+
+    D1B[(data/fact/)]:::ds
+    D2[(data/predict/)]:::ds
+    D3[(data/backup/)]:::ds
+    D4B[(config.json)]:::ds
+    D5[(reports/)]:::ds
+
+    P1_REF -->|POST refresh| P2
+
+    USER_B -->|数据操作| P2
+    USER_B -->|预测请求| P3
+    USER_B -->|AI策略请求| P4
+    USER_B -->|备份操作| P5
+
+    P2 -->|读取+合成| D1B
+    P2 -->|平台配置| D4B
+
+    P3 -->|读取轨迹| D1B
+    P3 -->|预测结果| D2
+
+    P4 -->|读取轨迹| D1B
+    P4 -->|API Key| D4B
+    P4 -->|保存报告| D5
+    P4 -->|轨迹Prompt| AIAPI_B
+    AIAPI_B -->|策略文本| P4
+
+    P5 -->|快照| D3
+    P5 -->|备份+恢复| D1B
+    P5 -->|备份+恢复| D2
+
+    P2 -->|最新数据| P3
+    P2 -->|轨迹数据| P4
+
+    classDef ent fill:#fff,stroke:#333,stroke-width:2px
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef proc_ext fill:#fafafa,stroke:#555,stroke-width:1.5px,stroke-dasharray:4 3
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+</div>
+
+<!-- ========== Level 2 ========== -->
+<h2>Level 2 — 各过程详细展开</h2>
+
+<!-- 2.1 -->
+<h3>2.1 轨迹识别</h3>
+<div class="mermaid">
+flowchart LR
+    USR1[用户]:::ent
+    P11(1.1 会话管理):::proc
+    P12(1.2 帧提取):::proc
+    P13(1.3 YOLO检测):::proc
+    P14(1.4 目标跟踪):::proc
+    P15(1.5 双目定位):::proc
+    P16(1.6 数据桥接):::proc
+    P2X(P2 轨迹重建):::proc_ext
+    DS1[(config.json)]:::ds
+    DS2[(models/)]:::ds
+    DS3[(data/uploads/)]:::ds
+    DS4[(data/fact/)]:::ds
+    DS5[(data/backup/)]:::ds
+
+    USR1 -->|上传视频| P11
+    P11 -->|启动| P12
+    P12 -->|视频帧| P13
+    P13 -->|检测框| P14
+    P14 -->|跟踪轨迹| P15
+    P15 -->|3D点| P16
+    P16 -->|写入.dat| DS4
+    P16 -->|自动备份| DS5
+    P16 -->|通知刷新| P2X
+    P13 -->|加载模型| DS2
+    P12 -->|读取视频| DS3
+    P11 -->|读取参数| DS1
+    P13 -->|置信度| DS1
+
+    classDef ent fill:#fff,stroke:#333,stroke-width:2px
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef proc_ext fill:#fafafa,stroke:#777,stroke-width:1.5px,stroke-dasharray:4 3
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+</div>
+
+<!-- 2.2 -->
+<h3>2.2 轨迹重建</h3>
+<div class="mermaid">
+flowchart LR
+    P21(2.1 初始化加载):::proc
+    P22(2.2 数据刷新):::proc
+    P23(2.3 加权合成):::proc
+    P24(2.4 平台管理):::proc
+    P25(2.5 自选平台):::proc
+    P1_IN(P1.6 检测完成):::proc_ext
+    P3_OUT(P3 预测):::proc_ext
+    P4_OUT(P4 AI策略):::proc_ext
+    D_F2[(data/fact/)]:::ds
+    D_C2[(config.json)]:::ds
+    D_MEM[("detection_methods\n内存共享dict")]:::mem
+
+    P1_IN -->|POST refresh| P22
+    P21 -->|读取文件| D_F2
+    P21 -->|写入状态| D_MEM
+    P22 -->|重载文件| D_F2
+    P22 -->|更新状态| D_MEM
+    P23 -->|读多平台| D_MEM
+    P23 -->|写综合| D_MEM
+    P23 -->|持久化| D_C2
+    P24 -->|读写配置| D_C2
+    P24 -->|更新状态| D_MEM
+    P25 -->|写入| D_F2
+    P25 -->|写入| D_MEM
+    D_MEM -.->|轨迹数据| P3_OUT
+    D_MEM -.->|轨迹数据| P4_OUT
+
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef proc_ext fill:#fafafa,stroke:#888,stroke-width:1.5px,stroke-dasharray:4 3
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+    classDef mem fill:#fff,stroke:#444,stroke-width:2px,stroke-dasharray:3 2
+</div>
+
+<!-- 2.3 -->
+<h3>2.3 轨迹预测</h3>
+<div class="mermaid">
+flowchart LR
+    P31(3.1 参数校验):::proc
+    P32(3.2 单平台预测\n线性外推):::proc
+    P33(3.3 全平台预测\n时间网格对齐):::proc
+    P34(3.4 综合预测\n加权合成):::proc
+    P35(3.5 捕捉时机\n运动学评分):::proc
+    D_M3[("detection_methods")]:::mem
+    D_P3[(data/predict/)]:::ds
+    D_C3[(config.json)]:::ds
+
+    P31 -->|读取| D_C3
+    P32 -->|读轨迹| D_M3
+    P32 -->|写预测| D_M3
+    P33 -->|批量调用| P32
+    P33 -->|存盘| D_P3
+    P34 -->|多平台加权| D_M3
+    P34 -->|存盘| D_P3
+    P35 -->|运动学分析| D_M3
+    P35 -->|评分| D_M3
+
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+    classDef mem fill:#fff,stroke:#444,stroke-width:2px,stroke-dasharray:3 2
+</div>
+
+<!-- 2.4 -->
+<h3>2.4 AI 策略生成</h3>
+<div class="mermaid">
+flowchart LR
+    P41(4.1 构建Prompt):::proc
+    P42(4.2 API调用):::proc
+    P43(4.3 结果校验):::proc
+    P44(4.4 报告保存):::proc
+    AIAPI2[AI大模型API]:::ent
+    D_M4[("detection_methods")]:::mem
+    D_C4[(config.json)]:::ds
+    D_R[(reports/)]:::ds
+
+    P41 -->|读取轨迹| D_M4
+    P41 -->|提示词| P42
+    P42 -->|API Key| D_C4
+    P42 -->|POST| AIAPI2
+    AIAPI2 -->|策略响应| P43
+    P43 -->|校验通过| P44
+    P44 -->|写入| D_R
+
+    classDef ent fill:#fff,stroke:#333,stroke-width:2px
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+    classDef mem fill:#fff,stroke:#444,stroke-width:2px,stroke-dasharray:3 2
+</div>
+
+<!-- 2.5 -->
+<h3>2.5 备份管理</h3>
+<div class="mermaid">
+flowchart LR
+    P51(5.1 创建快照):::proc
+    P52(5.2 恢复快照):::proc
+    P53(5.3 删除快照):::proc
+    P54(5.4 清理数据):::proc
+    D_F5[(data/fact/)]:::ds
+    D_P5[(data/predict/)]:::ds
+    D_B5[(data/backup/)]:::ds
+    D_M5[("detection_methods")]:::mem
+
+    P51 -->|读取| D_F5
+    P51 -->|读取| D_P5
+    P51 -->|转储| D_M5
+    P51 -->|写入| D_B5
+    P52 -->|读取快照| D_B5
+    P52 -->|覆盖| D_F5
+    P52 -->|刷新| D_M5
+    P53 -->|删除| D_B5
+    P54 -->|先备份| P51
+    P54 -->|清空| D_F5
+    P54 -->|清空| D_P5
+    P54 -->|清空| D_M5
+
+    classDef proc fill:#fafafa,stroke:#333,stroke-width:2px
+    classDef ds fill:#fff,stroke:#333,stroke-width:2px
+    classDef mem fill:#fff,stroke:#444,stroke-width:2px,stroke-dasharray:3 2
+</div>
+
+<p class="legend" style="margin-top:20px;">
+  <span>■ 外部实体</span>
+  <span>□ 处理过程</span>
+  <span>□ 数据存储</span>
+  <span>□ 跨图引用</span>
+  <span>→ 数据流</span>
+  <span>-→ 触发/引用</span>
+</p>
+</body>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'neutral',
+  themeVariables: {
+    fontSize: '12px',
+    fontFamily: '"Microsoft YaHei", "SimHei", sans-serif',
+  },
+  flowchart: {
+    useMaxWidth: true,
+    htmlLabels: true,
+    curve: 'basis',
+    padding: 25,
+    nodeSpacing: 70,
+    rankSpacing: 100,
+  },
+  securityLevel: 'loose',
+});
+</script>
+</html>

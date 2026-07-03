@@ -106,7 +106,8 @@ def create_session(
     """创建双目检测会话"""
     cfg = _load_config()
     det_cfg = cfg.get("detection", {})
-    stereo_cfg = cfg.get("stereo", {})
+    all_stereo = cfg.get("stereo", {})
+    all_positions = cfg.get("platform_positions", {})
 
     session = DetectionSession(
         source_a=source_a,
@@ -115,6 +116,8 @@ def create_session(
         config_snapshot={
             **(config or {}),
             "detection": det_cfg,
+            "stereo": all_stereo,
+            "platform_positions": all_positions,
         },
         stereo_params=stereo_cfg,
     )
@@ -146,6 +149,52 @@ def start_detection(session_id: str) -> DetectionSession:
     return session
 
 
+# BBOX 颜色（按类别）
+_CLASS_COLORS = [
+    (0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0),
+    (255, 0, 255), (0, 255, 255), (128, 255, 0), (255, 128, 0),
+]
+
+def _draw_bboxes(image, detections):
+    """在图像上绘制检测框和类别标签"""
+    if cv2 is None:
+        return
+    for det in detections:
+        x1, y1, x2, y2 = map(int, det.bbox)
+        c = _CLASS_COLORS[det.class_id % len(_CLASS_COLORS)]
+        cv2.rectangle(image, (x1, y1), (x2, y2), c, 2)
+        label = f"{det.class_name} {det.confidence:.2f}"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        cv2.rectangle(image, (x1, y1 - th - 4), (x1 + tw + 4, y1), c, -1)
+        cv2.putText(image, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+
+def _to_world(pt3d, platform_pos):
+    """将相机局部坐标转换为世界坐标（平台位置 + 朝向）"""
+    import math
+    if not platform_pos:
+        return pt3d
+    x, y, z = pt3d
+    pitch = math.radians(platform_pos.get("pitch", 0))
+    yaw = math.radians(platform_pos.get("yaw", 0))
+    roll = math.radians(platform_pos.get("roll", 0))
+    # 旋转（ZYX 顺序）
+    # Yaw
+    x2 = x * math.cos(yaw) - z * math.sin(yaw)
+    z2 = x * math.sin(yaw) + z * math.cos(yaw)
+    x, z = x2, z2
+    # Pitch
+    y2 = y * math.cos(pitch) - z * math.sin(pitch)
+    z2 = y * math.sin(pitch) + z * math.cos(pitch)
+    y, z = y2, z2
+    # 平移
+    return [
+        x + platform_pos.get("x", 0),
+        y + platform_pos.get("y", 0),
+        z + platform_pos.get("z", 0),
+    ]
+
+
 def _run_detection_pipeline(session: DetectionSession):
     """
     双目检测流水线（在后台线程中运行）:
@@ -161,7 +210,14 @@ def _run_detection_pipeline(session: DetectionSession):
         from trajectory_recognition.detection.stereo import StereoTriangulator, StereoParams
 
         det_cfg = session.config_snapshot.get("detection", {})
-        stereo_cfg = session.stereo_params
+        all_stereo = session.config_snapshot.get("stereo", {})
+        pid = session.platform_id
+        stereo_cfg = all_stereo.get(pid, all_stereo.get("visible", {})) if all_stereo else {}
+        session.stereo_params = stereo_cfg
+
+        # 平台位置和朝向
+        positions = session.config_snapshot.get("platform_positions", {})
+        platform_pos = positions.get(pid, positions.get("visible", {}))
 
         # 初始化组件
         detector = YOLODetector(
@@ -212,6 +268,14 @@ def _run_detection_pipeline(session: DetectionSession):
             session.current_frame_a = frame_a.frame_id
             session.current_frame_b = frame_b.frame_id
 
+            # YOLO 检测（左右目分别推理）
+            dets_a = detector.detect(frame_a.image)
+            dets_b = detector.detect(frame_b.image)
+
+            # 在预览帧上绘制检测框 + 类别标签
+            self._draw_bboxes(frame_a.image, dets_a)
+            self._draw_bboxes(frame_b.image, dets_b)
+
             # 缓存预览帧（JPEG 编码）
             if cv2 is None:
                 raise ImportError("opencv-python 未安装")
@@ -220,25 +284,21 @@ def _run_detection_pipeline(session: DetectionSession):
             session._frame_a = buf_a.tobytes()
             session._frame_b = buf_b.tobytes()
 
-            # YOLO 检测（左右目分别推理）
-            dets_a = detector.detect(frame_a.image)
-            dets_b = detector.detect(frame_b.image)
-
             # 跟踪（基于左目）
             tracks = tracker.update(dets_a, frame_a.frame_id, frame_a.timestamp)
 
-            # 双目匹配 + 三角测量
+            # 双目匹配 + 三角测量 + 世界坐标变换
             if stereo and dets_a and dets_b:
                 matches = stereo.match_detections(dets_a, dets_b)
                 for dl, dr, pt3d in matches:
                     if pt3d is None:
                         continue
-                    # 找到对应的 track 并添加 3D 点
+                    # 世界坐标变换
+                    pt3d = self._to_world(pt3d, platform_pos)
                     for track in tracks:
                         if not track.bboxes:
                             continue
                         last_bbox = track.bboxes[-1]
-                        # 匹配：bbox 中心接近
                         cxl = (dl.bbox[0] + dl.bbox[2]) / 2
                         tcx = (last_bbox[0] + last_bbox[2]) / 2
                         if abs(cxl - tcx) < 10:
