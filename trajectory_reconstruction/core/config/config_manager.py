@@ -33,21 +33,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     'detection_methods': {
         'visible': {
             'name': '可见光',
-            'color': '#FF3B30',
+            'color': '#ff6b6b',
             'visible': True,
             'weight': 1.0,
             'enabled': True,
         },
         'infrared': {
             'name': '红外',
-            'color': '#34C759',
+            'color': '#4ecdc4',
             'visible': True,
             'weight': 1.0,
             'enabled': True,
         },
         'radar': {
             'name': '雷达',
-            'color': '#FFCC00',
+            'color': '#ffe66d',
             'visible': True,
             'weight': 1.0,
             'enabled': True,
