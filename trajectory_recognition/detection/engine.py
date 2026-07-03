@@ -94,6 +94,15 @@ class YOLODetector:
         """加载 YOLO 模型权重"""
         try:
             from ultralytics import YOLO
+            # 自动检测 GPU
+            device = self.device
+            if device == "auto":
+                try:
+                    import torch
+                    device = "0" if torch.cuda.is_available() else "cpu"
+                except Exception:
+                    device = "cpu"
+                self.device = device
             self._model = YOLO(self.model_path)
             print(f"[YOLO] 模型已加载: {self.model_path} on {self.device}")
         except ImportError:

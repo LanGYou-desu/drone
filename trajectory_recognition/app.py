@@ -20,6 +20,7 @@ _SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'trajectory_reconstruction', 'front
 
 def create_app() -> Flask:
     """创建轨迹识别 Flask 应用"""
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")  # 避免 OpenCV+PyTorch OpenMP 冲突
     os.chdir(_PROJECT_ROOT)  # 统一工作目录
 
     shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
