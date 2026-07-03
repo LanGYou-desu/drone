@@ -269,10 +269,11 @@ def _run_detection_pipeline(session: DetectionSession):
                 from trajectory_recognition.services.data_bridge import tracks_to_dat, notify_reconstruction
                 trk = session._tracker
                 if trk:
+                    from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
                     tracks_to_dat(
                         trk.get_all_tracks(),
                         platform_id=session.platform_id,
-                        auto_backup=True,  # 覆盖前备份旧数据
+                        auto_backup=True,
                     )
                     notify_reconstruction()
             except Exception:

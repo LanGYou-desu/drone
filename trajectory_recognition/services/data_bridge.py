@@ -33,6 +33,7 @@ def backup_existing_fact(
     backup_dir: str = "data/backup/",
     label: str = "auto",
     filenames: Optional[list] = None,
+    platform_id: str = "",
 ) -> Optional[str]:
     """
     备份 data/fact/ 中的指定 .dat 文件到 data/backup/。
@@ -40,6 +41,9 @@ def backup_existing_fact(
     未指定 filenames 则备份全部 .dat 文件。
     格式: data/backup/{YYYYmmdd_HHMMSS}_{label}/
     """
+    # label 加上平台名，如 "detect_visible"
+    if platform_id and label == "auto":
+        label = f"detect_{platform_id}"
     src = os.path.join(PROJECT_ROOT, source_dir)
     if not os.path.isdir(src):
         return None
@@ -98,9 +102,9 @@ def tracks_to_dat(
 
     filename = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
 
-    # 自动备份（只备份即将覆盖的文件）
+    # 自动备份（只备份即将覆盖的文件，用平台名标记）
     if auto_backup:
-        backup_existing_fact(source_dir=output_dir, filenames=[filename])
+        backup_existing_fact(source_dir=output_dir, filenames=[filename], platform_id=platform_id)
     fpath = os.path.join(out, filename)
 
     # 收集所有 track 的 (x, y, z, t) 点，按时序合并

@@ -139,7 +139,7 @@ def list_backups() -> list[dict]:
             'created': manifest.get('created', ''),
             'method': ' + '.join(method_names) if method_names else '空',
             'method_summary': ' + '.join(method_names) if method_names else '空',
-            'label': manifest.get('label', ''),
+            'label': manifest.get('label') or 'manual',
             'methods': methods,
             'point_count': sum(m.get('point_count', 0) for m in methods.values()),
         })

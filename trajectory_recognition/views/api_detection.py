@@ -200,7 +200,7 @@ def list_backups():
             backups.append({
                 'name': name,
                 'timestamp': manifest.get('created', ''),
-                'label': manifest.get('label', 'auto'),
+                'label': manifest.get('label') or 'auto',
                 'file_count': len(fact_files),
                 'total_points': pt_count,
             })
