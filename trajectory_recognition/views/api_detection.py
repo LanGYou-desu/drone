@@ -16,8 +16,7 @@ from trajectory_recognition.services.detection_service import (
     get_session, get_active_session, list_sessions, delete_session,
 )
 from trajectory_recognition.services.data_bridge import (
-    tracks_to_dat, backup_existing_fact,
-    list_detect_files, save_detection_metadata,
+    tracks_to_dat, backup_existing_fact, list_detect_files,
 )
 
 
@@ -321,9 +320,6 @@ def save_results():
         # 通知重建模块刷新
         from trajectory_recognition.services.data_bridge import notify_reconstruction
         notify_reconstruction()
-
-        # 元信息
-        save_detection_metadata(tracks, session.to_dict())
 
         return jsonify({
             'success': True,

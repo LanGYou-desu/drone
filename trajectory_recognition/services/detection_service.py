@@ -276,8 +276,8 @@ def _run_detection_pipeline(session: DetectionSession):
                         auto_backup=True,
                     )
                     notify_reconstruction()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[detection] 自动保存失败: {e}")
 
 
 def pause_detection(session_id: str):

@@ -71,7 +71,8 @@ def restore_backup():
         return jsonify({'success': False, 'error': '缺少 backup_file'}), 400
 
     ok, msg = backup_service.restore_backup(backup_file, full=full)
-    return jsonify({'success': ok, 'message': msg}), 200
+    key = 'message' if ok else 'error'
+    return jsonify({'success': ok, key: msg}), (200 if ok else 400)
 
 
 @api_bp.route('/api/restore_all_backups', methods=['POST'])
@@ -97,7 +98,8 @@ def delete_backup():
     if not name:
         return jsonify({'success': False, 'error': '缺少 backup_name'}), 400
     ok, msg = backup_service.delete_backup(name)
-    return jsonify({'success': ok, 'message' if ok else 'error': msg}), (200 if ok else 400)
+    key = 'message' if ok else 'error'
+    return jsonify({'success': ok, key: msg}), (200 if ok else 400)
 
 
 @api_bp.route('/api/toggle_method', methods=['POST'])

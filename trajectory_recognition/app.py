@@ -13,8 +13,6 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_MODULE_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-os.chdir(_PROJECT_ROOT)
-
 # 静态资源目录：优先本模块，回退到重建模块
 _OWN_STATIC = os.path.join(_MODULE_DIR, 'frontend', 'static')
 _SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'trajectory_reconstruction', 'frontend', 'static')
@@ -22,6 +20,8 @@ _SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'trajectory_reconstruction', 'front
 
 def create_app() -> Flask:
     """创建轨迹识别 Flask 应用"""
+    os.chdir(_PROJECT_ROOT)  # 统一工作目录
+
     shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
     module_pages = os.path.join(_MODULE_DIR, 'frontend', 'pages')
     shared_static = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static')

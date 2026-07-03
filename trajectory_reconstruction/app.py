@@ -22,6 +22,8 @@ _OWN_STATIC = os.path.join(_MODULE_DIR, 'frontend', 'static')
 
 def create_app() -> Flask:
     """创建轨迹重建与分析 Flask 应用"""
+    os.chdir(_PROJECT_ROOT)  # 确保工作目录正确
+
     shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
     module_pages = os.path.join(_MODULE_DIR, 'frontend', 'pages')
     app = Flask(

@@ -152,106 +152,6 @@ def tracks_to_dat(
     return [fpath]
 
 
-def tracks_to_memory(tracks: list, target_methods: dict) -> dict:
-    """将跟踪轨迹注入 detection_methods 内存结构"""
-    for track in tracks:
-        if not track.positions:
-            continue
-        mid = f"detect_{track.track_id}"
-        target_methods[mid] = {
-            "name": f"检测目标 {track.track_id}",
-            "color": "#58a6ff",
-            "visible": True,
-            "weight": 1.0,
-            "points": [list(p) for p in track.positions],
-            "timestamps": list(track.timestamps),
-        }
-    return target_methods
-
-
-def merge_tracks(tracks: list) -> list[list[float]]:
-    """多目标轨迹合并为综合轨迹（按时序质心）"""
-    all_ts = set()
-    for t in tracks:
-        for ts in t.timestamps:
-            all_ts.add(ts)
-    if not all_ts:
-        return []
-
-    sorted_ts = sorted(all_ts)
-    merged = []
-    for ts in sorted_ts:
-        points_at_t = []
-        for t in tracks:
-            if ts in t.timestamps:
-                idx = t.timestamps.index(ts)
-                if idx < len(t.positions):
-                    points_at_t.append(t.positions[idx])
-        if points_at_t:
-            avg = [sum(c) / len(points_at_t) for c in zip(*points_at_t)]
-            merged.append(avg)
-
-    return merged
-
-
-def save_detection_metadata(
-    tracks: list,
-    session_info: dict,
-    output_dir: str = "data/fact/",
-) -> str:
-    """保存检测元信息 JSON"""
-    out = os.path.join(PROJECT_ROOT, output_dir)
-    os.makedirs(out, exist_ok=True)
-    fpath = os.path.join(out, "detect_manifest.json")
-
-    meta = {
-        "saved_at": datetime.now().isoformat(),
-        "session": session_info,
-        "tracks": [t.to_summary() if hasattr(t, 'to_summary') else {} for t in tracks],
-    }
-    with open(fpath, 'w', encoding='utf-8') as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-    return fpath
-
-
-def load_detection_tracks(data_dir: str = "data/fact/") -> list[dict]:
-    """加载之前保存的检测轨迹"""
-    d = os.path.join(PROJECT_ROOT, data_dir)
-    if not os.path.isdir(d):
-        return []
-
-    tracks = []
-    for fname in sorted(os.listdir(d)):
-        if not fname.startswith("detect_") or not fname.endswith(".dat"):
-            # 也检查平台文件
-            if fname not in PLATFORM_FACT_MAP.values():
-                continue
-            if fname == "self.dat":
-                continue  # 跳过自选
-
-        fpath = os.path.join(d, fname)
-        points = []
-        try:
-            with open(fpath, 'r') as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) >= 4:
-                        points.append([float(p) for p in parts[:4]])
-        except Exception:
-            continue
-
-        if points:
-            tracks.append({
-                "name": fname,
-                "path": fpath,
-                "point_count": len(points),
-                "size_kb": round(os.path.getsize(fpath) / 1024, 1),
-                "modified": datetime.fromtimestamp(os.path.getmtime(fpath)).isoformat(),
-            })
-
-    return tracks
-
-
 def list_detect_files(data_dir: str = "data/fact/") -> list[dict]:
     """列出 data/fact/ 中的所有轨迹文件"""
     d = os.path.join(PROJECT_ROOT, data_dir)
@@ -280,9 +180,9 @@ def list_detect_files(data_dir: str = "data/fact/") -> list[dict]:
 
 
 def notify_reconstruction():
-    """通知重建模块刷新数据（静默失败）"""
+    """通知重建模块刷新数据"""
     try:
         import requests
         requests.post('http://127.0.0.1:5000/api/refresh_data', timeout=2)
     except Exception:
-        pass  # 重建模块未运行，忽略
+        pass  # 重建模块未运行，静默忽略

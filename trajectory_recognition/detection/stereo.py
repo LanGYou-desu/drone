@@ -91,11 +91,8 @@ class StereoTriangulator:
         xl = (bbox_left[0] + bbox_left[2]) / 2.0
         yl = (bbox_left[1] + bbox_left[3]) / 2.0
         xr = (bbox_right[0] + bbox_right[2]) / 2.0
-        yr = (bbox_right[1] + bbox_right[3]) / 2.0
-
-        # 2. 视差（水平）
+        # 2. 视差（水平，已校正的双目只需水平视差）
         disparity = xl - xr
-
         if abs(disparity) < 1.0:
             return None  # 视差太小，无法可靠测距
 
