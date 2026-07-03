@@ -56,9 +56,6 @@ def predict_single(method_id: str, num_points: int = 6,
     timestamps = data.get('timestamps', [])
     pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
 
-    if pred_points:
-        save_predict_data(method_id, pred_points, pred_times)
-
     return {
         'prediction': pred_points,
         'pred_times': pred_times,
@@ -81,8 +78,8 @@ def predict_all(num_points: int = 6, time_step: float | None = None) -> dict:
             if ts and ts[-1] > max_end:
                 max_end = ts[-1]
 
-    # 目标结束时间 = 最晚结束 + 统一预测时长
-    target_end = max_end + num_points * time_step
+    # 统一预测时间数组（锚点 + N 个预测点，等间隔）
+    pred_times_unified = [round(max_end + i * time_step, 6) for i in range(num_points + 1)]
 
     results = {}
     for mid, data in detection_methods.items():
@@ -93,11 +90,11 @@ def predict_all(num_points: int = 6, time_step: float | None = None) -> dict:
         pts = data.get('points', [])
         if len(pts) < 2:
             continue
-        # 计算该平台到目标时间的预测点数
-        last_ts = data.get('timestamps', [0])[-1]
-        needed = max(1, int((target_end - last_ts) / time_step))
-        result = predict_single(mid, needed, time_step)
+        result = predict_single(mid, num_points, time_step)
         if result and result['prediction']:
+            # 覆盖预测时间为统一时间数组，所有平台预测段完全对齐
+            result['pred_times'] = pred_times_unified
+            save_predict_data(mid, result['prediction'], pred_times_unified)
             results[mid] = result
     # 合成综合预测
     if 'synthetic' in detection_methods:
