@@ -257,11 +257,17 @@ async function restoreSession() {
         document.getElementById('detStatus').textContent = DetectionControl._statusText(s.status);
         document.getElementById('detPlatform').textContent =
             ({visible:'可见光',infrared:'红外',radar:'雷达',self:'自选'})[s.platform_id] || s.platform_id;
+        document.getElementById('detProgress').textContent = Math.round(s.progress * 100) + '%';
         document.getElementById('progressFill').style.width = (s.progress * 100) + '%';
+        document.getElementById('detFrames').textContent = (s.current_frame_a || 0) + ' / ' + (s.total_frames || 0);
         document.getElementById('detTrackCount').textContent = s.track_count;
+        document.getElementById('detDuration').textContent = s.duration + 's';
 
         if (s.status === 'running' || s.status === 'paused') {
             DetectionControl._startPolling();
+        }
+        if (s.status === 'completed') {
+            DetectionControl._showResults();
         }
     } catch { /* 无活跃会话 */ }
 }
