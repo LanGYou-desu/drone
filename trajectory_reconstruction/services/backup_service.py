@@ -170,7 +170,7 @@ def _clear_all():
 
 def restore_backup(name: str) -> tuple[bool, str]:
     """
-    部分恢复：仅覆盖备份中存在的平台数据，其他平台不受影响。
+    恢复备份：先备份当前数据，再释放备份中的 fact/predict 文件。
     返回 (success, message)。
     """
     snap_path = _snapshot_path(name)
@@ -181,12 +181,15 @@ def restore_backup(name: str) -> tuple[bool, str]:
     if manifest is None:
         return False, '备份 manifest 丢失或损坏'
 
+    # 先备份当前数据
+    create_backup(label='pre_restore')
+
     from trajectory_reconstruction.core.io.data_loader import load_dat_file
-    from trajectory_reconstruction.services.data_service import save_metadata
+    from trajectory_reconstruction.services.data_service import save_metadata, refresh_fact_data
 
     restored_count = 0
 
-    # 部分恢复 fact/ 文件（只覆盖备份中存在的文件）
+    # 释放 fact/ 文件
     fact_src = os.path.join(snap_path, 'fact')
     fact_dst = 'data/fact'
     if os.path.isdir(fact_src):
@@ -197,34 +200,20 @@ def restore_backup(name: str) -> tuple[bool, str]:
                 shutil.copy2(src_fp, os.path.join(fact_dst, fname))
                 restored_count += 1
 
-    # 部分恢复内存数据（只覆盖备份中存在的平台）
-    memory_src = os.path.join(snap_path, 'memory')
-    if os.path.isdir(memory_src):
-        for fname in sorted(os.listdir(memory_src)):
-            if not fname.endswith('.dat'):
-                continue
-            method_id = fname[:-4]
-            if method_id not in detection_methods:
-                detection_methods[method_id] = {
-                    'name': manifest.get('methods', {}).get(method_id, {}).get('name', method_id),
-                    'color': manifest.get('methods', {}).get(method_id, {}).get('color', '#FF9500'),
-                    'visible': True,
-                    'enabled': True,
-                    'weight': 1.0,
-                    'points': [],
-                    'timestamps': [],
-                }
-            points, timestamps = load_dat_file(os.path.join(memory_src, fname))
-            if points:
-                detection_methods[method_id]['points'] = points
-                detection_methods[method_id]['timestamps'] = timestamps
+    # 释放 predict/ 文件
+    predict_src = os.path.join(snap_path, 'predict')
+    predict_dst = 'data/predict'
+    if os.path.isdir(predict_src):
+        os.makedirs(predict_dst, exist_ok=True)
+        for fname in os.listdir(predict_src):
+            src_fp = os.path.join(predict_src, fname)
+            if os.path.isfile(src_fp):
+                shutil.copy2(src_fp, os.path.join(predict_dst, fname))
                 restored_count += 1
 
-    save_metadata()
-    # 重新合成综合轨迹
-    from trajectory_reconstruction.services.data_service import synthesize_trajectory
-    synthesize_trajectory()
-    return True, f'已从 {name} 部分恢复 {restored_count} 个文件/平台'
+    # 从磁盘重新加载 fact 文件到内存，重新合成
+    refresh_fact_data()
+    return True, f'已从 {name} 恢复 {restored_count} 个文件（当前数据已备份至 pre_restore）'
 
 
 def restore_all_latest() -> tuple[list[str], str]:
