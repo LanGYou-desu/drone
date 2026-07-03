@@ -14,6 +14,11 @@ from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 
 class SessionStatus(str, Enum):
     IDLE = "idle"
@@ -207,7 +212,8 @@ def _run_detection_pipeline(session: DetectionSession):
             session.current_frame_b = frame_b.frame_id
 
             # 缓存预览帧（JPEG 编码）
-            import cv2
+            if cv2 is None:
+                raise ImportError("opencv-python 未安装")
             _, buf_a = cv2.imencode('.jpg', frame_a.image, [cv2.IMWRITE_JPEG_QUALITY, 60])
             _, buf_b = cv2.imencode('.jpg', frame_b.image, [cv2.IMWRITE_JPEG_QUALITY, 60])
             session._frame_a = buf_a.tobytes()

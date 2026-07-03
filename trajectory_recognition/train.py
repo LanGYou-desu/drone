@@ -78,7 +78,6 @@ ONNX 推理速度可提升 2-3x，TensorRT 可提升 3-5x。
 """
 
 import argparse
-import os
 import sys
 
 

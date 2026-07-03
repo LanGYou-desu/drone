@@ -10,6 +10,11 @@ from typing import Generator, Optional, Union
 
 import numpy as np
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 
 @dataclass
 class Frame:
@@ -66,12 +71,8 @@ class VideoProcessor:
             FileNotFoundError: 文件不存在
             RuntimeError: 无法打开视频流
         """
-        try:
-            import cv2
-        except ImportError:
-            raise ImportError(
-                "opencv-python 未安装，请运行: pip install opencv-python"
-            )
+        if cv2 is None:
+            raise ImportError("opencv-python 未安装，请运行: pip install opencv-python")
 
         self._cap = cv2.VideoCapture(source)
         if not self._cap.isOpened():
@@ -123,9 +124,7 @@ class VideoProcessor:
                 "height": 1080,
             }
         """
-        try:
-            import cv2
-        except ImportError:
+        if cv2 is None:
             raise ImportError("opencv-python 未安装")
 
         cap = cv2.VideoCapture(source)
