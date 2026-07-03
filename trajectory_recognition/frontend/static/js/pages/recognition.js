@@ -263,15 +263,20 @@ async function restoreSession() {
         document.getElementById('detTrackCount').textContent = s.track_count;
         document.getElementById('detDuration').textContent = s.duration + 's';
 
-        // 恢复视频文件信息
+        // 恢复视频文件信息和 source 使按钮可用
         if (s.source_a) {
+            var nameA = s.source_a.split(/[\\\\/]/).pop();
             document.getElementById('fileInfoA').style.display = 'block';
-            document.getElementById('fileInfoA').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + s.source_a;
+            document.getElementById('fileInfoA').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + nameA;
+            sources.A.source = { type: 'path', value: s.source_a };
         }
         if (s.source_b) {
+            var nameB = s.source_b.split(/[\\\\/]/).pop();
             document.getElementById('fileInfoB').style.display = 'block';
-            document.getElementById('fileInfoB').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + s.source_b;
+            document.getElementById('fileInfoB').innerHTML = '<span style=\"color:var(--green);\">✓</span> ' + nameB;
+            sources.B.source = { type: 'path', value: s.source_b };
         }
+        updateStartButton();
 
         if (s.status === 'running' || s.status === 'paused') {
             DetectionControl._startPolling();

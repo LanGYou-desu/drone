@@ -24,7 +24,7 @@ export const DetectionAPI = {
             const r = await fetch(`${BASE}/start`, { method: 'POST', body: fd });
             return r.json();
         }
-        // 流地址或混合：JSON 传输
+        // 已有文件路径（恢复的 session）或流地址：JSON 传输
         const body = {
             source_a: sourceA.type === 'file' ? sourceA.value.name : sourceA.value,
             source_b: sourceB.type === 'file' ? sourceB.value.name : sourceB.value,
