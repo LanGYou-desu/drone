@@ -85,6 +85,12 @@ def create_backup(label: str = 'manual') -> str:
     创建快照备份。
     返回快照目录名。
     """
+    # 自动标签：用当前活跃平台的中文名拼接
+    if label in ('manual', 'auto'):
+        active_platforms = [data.get('name', mid) for mid, data in detection_methods.items()
+                            if data.get('points') and data.get('visible', True)]
+        if active_platforms:
+            label = '+'.join(active_platforms)
     name = f"{time.strftime('%Y%m%d_%H%M%S')}_{label}"
     snap_path = _snapshot_path(name)
 

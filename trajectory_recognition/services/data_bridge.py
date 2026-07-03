@@ -41,9 +41,10 @@ def backup_existing_fact(
     未指定 filenames 则备份全部 .dat 文件。
     格式: data/backup/{YYYYmmdd_HHMMSS}_{label}/
     """
-    # label 加上平台名，如 "detect_visible"
+    # label 用中文平台名，如 "可见光"
+    PLATFORM_NAMES = {"visible": "可见光", "infrared": "红外", "radar": "雷达", "self": "自选"}
     if platform_id and label == "auto":
-        label = f"detect_{platform_id}"
+        label = PLATFORM_NAMES.get(platform_id, platform_id)
     src = os.path.join(PROJECT_ROOT, source_dir)
     if not os.path.isdir(src):
         return None
