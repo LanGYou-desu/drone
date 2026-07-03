@@ -16,14 +16,12 @@ from typing import Optional
 
 @dataclass
 class StereoParams:
-    """双目标定参数"""
+    """双目标定参数（朝向由 pitch/yaw/roll 统一处理）"""
     baseline: float = 1.0             # 基线距离（米）
     fov_horizontal: float = 90.0      # 水平视场角（度）
     fov_vertical: float = 60.0        # 垂直视场角（度）
     resolution_width: int = 1920      # 图像宽度（像素）
     resolution_height: int = 1080     # 图像高度（像素）
-    tilt_angle: float = 0.0           # 俯仰角（度），水平=0
-    convergence_angle: float = 0.0    # 会聚角（度），平行光轴=0
 
 
 class StereoTriangulator:
@@ -103,28 +101,9 @@ class StereoTriangulator:
         if Z <= 0 or Z > 5000:
             return None
 
-        # 4. 3D 坐标（以左目光心为原点）
+        # 4. 3D 坐标（以左目光心为原点，朝向旋转在 _to_world 中统一处理）
         X = (xl - self.cx) * Z / self.fx
         Y = (yl - self.cy) * Z / self.fy
-
-        # 5. 应用世界坐标修正
-        #    俯仰角: Y 轴旋转
-        #    会聚角: Z 轴旋转
-        tilt_rad = math.radians(self.params.tilt_angle)
-        conv_rad = math.radians(self.params.convergence_angle)
-
-        # 俯仰修正：绕 X 轴（相机抬头看天空）
-        if abs(tilt_rad) > 1e-6:
-            Y_new = Y * math.cos(tilt_rad) - Z * math.sin(tilt_rad)
-            Z_new = Y * math.sin(tilt_rad) + Z * math.cos(tilt_rad)
-            Y, Z = Y_new, Z_new
-
-        # 会聚修正：绕 Y 轴（两相机向内会聚）
-        if abs(conv_rad) > 1e-6:
-            half_conv = conv_rad / 2
-            X_new = X * math.cos(half_conv) - Z * math.sin(half_conv)
-            Z_new = X * math.sin(half_conv) + Z * math.cos(half_conv)
-            X, Z = X_new, Z_new
 
         return [round(X, 3), round(Y, 3), round(Z, 3)]
 

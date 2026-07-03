@@ -34,8 +34,6 @@ function loadPlatformParams() {
     setVal('stereoFovV', p.fov_vertical, 60.0);
     setVal('stereoResW', p.resolution_width, 1920);
     setVal('stereoResH', p.resolution_height, 1080);
-    setVal('stereoTilt', p.tilt_angle, 0.0);
-    setVal('stereoConv', p.convergence_angle, 0.0);
     setVal('posX', p.pos_x, 0.0);
     setVal('posY', p.pos_y, 1.5);
     setVal('posZ', p.pos_z, 0.0);
@@ -72,8 +70,6 @@ async function saveSection(section) {
             fov_vertical: parseFloat(document.getElementById('stereoFovV').value),
             resolution_width: parseInt(document.getElementById('stereoResW').value),
             resolution_height: parseInt(document.getElementById('stereoResH').value),
-            tilt_angle: parseFloat(document.getElementById('stereoTilt').value),
-            convergence_angle: parseFloat(document.getElementById('stereoConv').value),
             pos_x: parseFloat(document.getElementById('posX').value),
             pos_y: parseFloat(document.getElementById('posY').value),
             pos_z: parseFloat(document.getElementById('posZ').value),

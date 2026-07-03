@@ -117,7 +117,7 @@ def create_session(
             "detection": det_cfg,
             "platforms": platforms,
         },
-        stereo_params=stereo_cfg,
+        stereo_params={},
     )
     _sessions[session.session_id] = session
     return session
@@ -214,12 +214,11 @@ def _run_detection_pipeline(session: DetectionSession):
 
         # 提取立体参数
         stereo_keys = ["baseline", "fov_horizontal", "fov_vertical",
-                       "resolution_width", "resolution_height",
-                       "tilt_angle", "convergence_angle"]
+                       "resolution_width", "resolution_height"]
         stereo_cfg = {k: plat_cfg[k] for k in stereo_keys if k in plat_cfg}
         session.stereo_params = stereo_cfg
 
-        # 提取位置朝向
+        # 提取位置朝向（pitch/yaw/roll 同时用于立体修正和世界变换）
         platform_pos = {k: plat_cfg.get(k, 0) for k in ["pos_x", "pos_y", "pos_z", "pitch", "yaw", "roll"]}
 
         # 初始化组件
@@ -276,8 +275,8 @@ def _run_detection_pipeline(session: DetectionSession):
             dets_b = detector.detect(frame_b.image)
 
             # 在预览帧上绘制检测框 + 类别标签
-            self._draw_bboxes(frame_a.image, dets_a)
-            self._draw_bboxes(frame_b.image, dets_b)
+            _draw_bboxes(frame_a.image, dets_a)
+            _draw_bboxes(frame_b.image, dets_b)
 
             # 缓存预览帧（JPEG 编码）
             if cv2 is None:
@@ -297,7 +296,7 @@ def _run_detection_pipeline(session: DetectionSession):
                     if pt3d is None:
                         continue
                     # 世界坐标变换
-                    pt3d = self._to_world(pt3d, platform_pos)
+                    pt3d = _to_world(pt3d, platform_pos)
                     for track in tracks:
                         if not track.bboxes:
                             continue
