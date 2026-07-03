@@ -67,19 +67,38 @@ def predict_single(method_id: str, num_points: int = 6,
 
 def predict_all(num_points: int = 6, time_step: float | None = None) -> dict:
     """
-    对所有启用平台进行预测，综合轨迹的预测由其他平台加权合成
+    对所有启用平台进行预测，各平台预测统一对齐到最晚结束时间
     """
+    num_points, time_step = clamp_params(num_points, time_step)
+
+    # 找到所有平台中事实数据的最后时间戳
+    max_end = 0.0
+    for mid, data in detection_methods.items():
+        if mid == 'synthetic':
+            continue
+        if data.get('enabled', True) and len(data.get('points', [])) >= 2:
+            ts = data.get('timestamps', [])
+            if ts and ts[-1] > max_end:
+                max_end = ts[-1]
+
+    # 目标结束时间 = 最晚结束 + 统一预测时长
+    target_end = max_end + num_points * time_step
+
     results = {}
-    # 先预测各独立平台（跳过综合和未启用的平台）
     for mid, data in detection_methods.items():
         if mid == 'synthetic':
             continue
         if not data.get('enabled', True):
             continue
-        if len(data.get('points', [])) >= 2:
-            result = predict_single(mid, num_points, time_step)
-            if result and result['prediction']:
-                results[mid] = result
+        pts = data.get('points', [])
+        if len(pts) < 2:
+            continue
+        # 计算该平台到目标时间的预测点数
+        last_ts = data.get('timestamps', [0])[-1]
+        needed = max(1, int((target_end - last_ts) / time_step))
+        result = predict_single(mid, needed, time_step)
+        if result and result['prediction']:
+            results[mid] = result
     # 合成综合预测
     if 'synthetic' in detection_methods:
         if len(results) >= 2:
