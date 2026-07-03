@@ -41,6 +41,8 @@ def _write_manifest(name: str, label: str) -> dict:
     created = time.strftime('%Y-%m-%d %H:%M:%S')
     methods_info = {}
     for mid, data in detection_methods.items():
+        if not data.get('points'):
+            continue  # 跳过空平台
         methods_info[mid] = {
             'name': data.get('name', ''),
             'color': data.get('color', ''),
@@ -85,10 +87,19 @@ def create_backup(label: str = 'manual') -> str:
     创建快照备份。
     返回快照目录名。
     """
-    # 自动标签：用当前活跃平台的中文名拼接
+    # 自动标签：只用实际有磁盘文件的平台名拼接
     if label in ('manual', 'auto'):
-        active_platforms = [data.get('name', mid) for mid, data in detection_methods.items()
-                            if data.get('points') and data.get('visible', True)]
+        fact_dir = 'data/fact'
+        active_platforms = []
+        if os.path.isdir(fact_dir):
+            for fname in sorted(os.listdir(fact_dir)):
+                if not fname.endswith('.dat'):
+                    continue
+                for mid, data in detection_methods.items():
+                    fmap = {'visible': 'visible.dat', 'infrared': 'infrared.dat',
+                            'radar': 'radar.dat', 'self': 'self.dat'}
+                    if fmap.get(mid) == fname and data.get('points'):
+                        active_platforms.append(data.get('name', mid))
         if active_platforms:
             label = '+'.join(active_platforms)
     name = f"{time.strftime('%Y%m%d_%H%M%S')}_{label}"

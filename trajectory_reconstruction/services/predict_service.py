@@ -131,22 +131,26 @@ def _synthesize_predictions(results, num_points, time_step):
     if len(active) < 2:
         return [], []
 
-    # 构建统一时间网格（覆盖所有平台的原始+预测数据范围）
-    t_start = min(ts[0] for _, _, ts in active.values() if ts)
-    t_end = max(ts[-1] for _, _, ts in active.values() if ts)
-    if t_start >= t_end:
+    # 用最长平台的预测长度统一所有轨迹
+    max_pred_len = max(len(pred) for _, _, pred, _ in
+                       [(mid, w, result.get('prediction', []), result.get('pred_times', []))
+                        for mid, result in results.items()])
+    if max_pred_len < 2:
         return [], []
 
-    # 取最细时间步作为网格分辨率
-    min_dt = min(
-        min((ts[i + 1] - ts[i]) for i in range(len(ts) - 1) if ts[i + 1] > ts[i])
-        for _, _, ts in active.values() if len(ts) >= 2
-    )
-    if min_dt <= 0:
-        min_dt = 0.1
-    n_steps = max(2, int((t_end - t_start) / min_dt) + 1)
-    sorted_ts = [round(t_start + i * (t_end - t_start) / (n_steps - 1), 6)
-                 for i in range(n_steps)]
+    # 用最长平台的预测时间作为统一时间网格
+    ref_times = None
+    for mid, result in results.items():
+        pts = result.get('prediction', [])
+        ts = result.get('pred_times', [])
+        if len(pts) >= max_pred_len:
+            ref_times = ts[:max_pred_len]
+            break
+
+    if not ref_times:
+        return [], []
+
+    sorted_ts = ref_times
 
     # 按时间步加权合成
     syn_points, syn_times = [], []
