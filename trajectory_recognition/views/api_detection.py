@@ -21,6 +21,18 @@ from trajectory_recognition.services.data_bridge import (
 )
 
 
+def _cleanup_uploads(upload_dir: str = None):
+    """清理临时上传文件"""
+    import glob
+    d = upload_dir or os.path.join(os.getcwd(), 'data', 'uploads')
+    if os.path.isdir(d):
+        for f in glob.glob(os.path.join(d, 'temp_*')):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
 # ── 启动 / 停止 / 暂停 ──────────────────────────
 
 @api_detection_bp.route('/start', methods=['POST'])
@@ -37,8 +49,9 @@ def start():
             if not file_a or not file_b:
                 return jsonify({'success': False, 'error': '需要两个视频文件（video_a + video_b）'}), 400
 
-            # 保存临时文件
+            # 清理旧上传 + 保存临时文件
             upload_dir = os.path.join(os.getcwd(), 'data', 'uploads')
+            _cleanup_uploads(upload_dir)
             os.makedirs(upload_dir, exist_ok=True)
             path_a = os.path.join(upload_dir, f"temp_a_{file_a.filename}")
             path_b = os.path.join(upload_dir, f"temp_b_{file_b.filename}")

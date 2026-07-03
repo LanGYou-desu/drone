@@ -49,6 +49,17 @@ def create_app() -> Flask:
         response.headers['Expires'] = '0'
         return response
 
+    # ── 启动时清理临时上传 ──────────────────────
+
+    import glob
+    uploads = os.path.join(_PROJECT_ROOT, 'data', 'uploads')
+    if os.path.isdir(uploads):
+        for f in glob.glob(os.path.join(uploads, 'temp_*')):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
     # ── 注册蓝图 ──────────────────────────────────
 
     from trajectory_recognition.views import pages_bp, api_detection_bp
