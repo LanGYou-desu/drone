@@ -140,6 +140,39 @@ def preview():
     return jsonify({'success': False, 'error': '预览帧流暂未实现，请使用状态轮询'}), 501
 
 
+# ── 备份列表（自给自足，不依赖 :5000）──
+
+@api_detection_bp.route('/backups', methods=['GET'])
+def list_backups():
+    """列出 data/backup/ 中的所有备份"""
+    try:
+        import json as _json
+        backup_dir = os.path.join(os.getcwd(), 'data', 'backup')
+        if not os.path.isdir(backup_dir):
+            return jsonify({'success': True, 'backups': []})
+
+        backups = []
+        for name in sorted(os.listdir(backup_dir), reverse=True):
+            d = os.path.join(backup_dir, name)
+            if not os.path.isdir(d):
+                continue
+            manifest_path = os.path.join(d, 'manifest.json')
+            manifest = {}
+            if os.path.isfile(manifest_path):
+                with open(manifest_path, 'r', encoding='utf-8') as f:
+                    manifest = _json.load(f)
+            backups.append({
+                'name': name,
+                'timestamp': manifest.get('created', ''),
+                'label': manifest.get('label', ''),
+                'files': manifest.get('files', []),
+                'point_counts': manifest.get('point_counts', {}),
+            })
+        return jsonify({'success': True, 'backups': backups})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ── 文件管理 ──────────────────────────────────
 
 @api_detection_bp.route('/files', methods=['GET'])

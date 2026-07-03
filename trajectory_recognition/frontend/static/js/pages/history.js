@@ -5,7 +5,7 @@
  * 数据存储即文件系统，无需额外的 session 记录。
  */
 
-const RECON_BASE = 'http://127.0.0.1:5000';
+const RECON_BASE = 'http://127.0.0.1:5000';  // 仅用于"在 3D 视图中查看"跳转
 
 const HistoryPage = {
     async refresh() {
@@ -72,12 +72,12 @@ const HistoryPage = {
         }
     },
 
-    // ── data/backup/ 备份列表（通过重建模块 API）──
+    // ── data/backup/ 备份列表（本模块自给自足）──
 
     async _loadBackups() {
         const el = document.getElementById('backupList');
         try {
-            const r = await fetch(`${RECON_BASE}/api/list_backups`);
+            const r = await fetch('/api/detection/backups');
             const data = await r.json();
             if (!data.success || !data.backups || data.backups.length === 0) {
                 el.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.85rem;text-align:center;padding:24px;">暂无备份</p>';
@@ -87,24 +87,25 @@ const HistoryPage = {
 
             document.getElementById('backupCount').textContent = data.backups.length;
 
-            el.innerHTML = data.backups.map(b => `
+            el.innerHTML = data.backups.map(b => {
+                var totalPts = Object.values(b.point_counts || {}).reduce(function(s,v){return s+v;}, 0);
+                return `
                 <div class="list-item" style="padding:12px;">
                     <span class="list-item-dot" style="background:var(--orange);"></span>
                     <div class="list-item-text" style="flex:1;">
                         <div class="list-item-title">
-                            ${b.filename || b.name}
+                            ${b.name}
                             <span class="badge badge-blue" style="margin-left:8px;">${b.label || 'manual'}</span>
                         </div>
                         <div class="list-item-sub">
-                            ${b.point_count || b.method_count || '?'} 个数据点
+                            ${(b.files||[]).length} 个文件 · ${totalPts} 个轨迹点
                             ${b.timestamp ? ' · ' + new Date(b.timestamp).toLocaleString('zh-CN') : ''}
                         </div>
                     </div>
-                    <a class="btn btn-ghost btn-sm" href="${RECON_BASE}/data" title="在数据管理中查看">管理</a>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         } catch (err) {
-            el.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.85rem;text-align:center;padding:24px;">重建模块未运行<br><small>备份列表需要 :5000 服务</small></p>';
+            el.innerHTML = '<p style="color:var(--text-tertiary);font-size:0.85rem;text-align:center;padding:24px;">暂无备份数据</p>';
             document.getElementById('backupCount').textContent = '—';
         }
     },
