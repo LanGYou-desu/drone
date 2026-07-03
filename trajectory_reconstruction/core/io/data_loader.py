@@ -77,11 +77,14 @@ def load_default_data() -> dict[str, dict[str, list]]:
         { methodId: { 'points': [[x,y,z],...], 'timestamps': [t,...] } }
     """
     method_ids = ['visible', 'infrared', 'radar']
-    file_names = ['visible.dat', 'infrared.dat', 'radar.dat']
+    file_names_new = ['visible.dat', 'infrared.dat', 'radar.dat']
+    file_names_old = ['fact1.dat', 'fact2.dat', 'fact3.dat']  # 兼容旧备份
 
     methods: dict[str, dict[str, list]] = {}
-    for mid, fname in zip(method_ids, file_names):
-        file_path = os.path.join('data', 'fact', fname)
+    for mid, fname_new, fname_old in zip(method_ids, file_names_new, file_names_old):
+        file_path = os.path.join('data', 'fact', fname_new)
+        if not os.path.isfile(file_path):
+            file_path = os.path.join('data', 'fact', fname_old)
         points, timestamps = load_dat_file(file_path)
         methods[mid] = {'points': points, 'timestamps': timestamps}
 
