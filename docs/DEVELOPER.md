@@ -185,9 +185,9 @@ drone/
 │
 ├── data/                                # 共享运行时数据
 │   ├── fact/                            # 实际轨迹 (.dat)
-│   │   ├── fact1.dat                    # 可见光（60 点，Z 字起伏）
-│   │   ├── fact2.dat                    # 红外（60 点，盘旋上升）
-│   │   └── fact3.dat                    # 雷达（60 点，S 形加速）
+│   │   ├── visible.dat                  # 可见光（60 点，Z 字起伏）
+│   │   ├── infrared.dat                 # 红外（60 点，盘旋上升）
+│   │   └── radar.dat                    # 雷达（60 点，S 形加速）
 │   ├── predict/                         # 预测结果（启动时清除）
 │   └── backup/                          # 快照备份
 │       └── <YYYYmmdd_HHMMSS>_<label>/
@@ -266,16 +266,16 @@ core/         (领域逻辑)          ← 纯函数，不依赖 Flask、不依�
 | 函数 | 实现 |
 |------|------|
 | `load_dat_file(path)` | 逐行读取 `x y z t`，空格分隔，异常返回空列表 |
-| `save_predict_data(mid, pts, ts)` | 按 method_id 映射文件名（visible→pre1.dat 等），写入 data/predict/ |
-| `load_default_data()` | 加载 fact1/2/3.dat 到 {visible, infrared, radar} 字典 |
+| `save_predict_data(mid, pts, ts)` | 写入 data/predict/predict_{method_id}.dat |
+| `load_default_data()` | 加载 visible/infrared/radar.dat 到 {visible, infrared, radar} 字典 |
 
 **文件映射：**
 ```
-visible  → fact1.dat / pre1.dat
-infrared → fact2.dat / pre2.dat
-radar    → fact3.dat / pre3.dat
-self     → self.dat / preself.dat
-synthetic → 不落盘 / presyn.dat
+visible   → visible.dat / predict_visible.dat
+infrared  → infrared.dat / predict_infrared.dat
+radar     → radar.dat / predict_radar.dat
+self      → self.dat / predict_self.dat
+synthetic → 不落盘 / predict_synthetic.dat
 ```
 
 ### 7.2 数据服务：`services/data_service.py`

@@ -11,8 +11,13 @@ from trajectory_reconstruction.core.config.config_manager import ensure_config
 analysis_bp = Blueprint('analysis', __name__)
 
 # 预测文件映射
-_PREDICT_FILE_MAP = {'visible': 'pre1.dat', 'infrared': 'pre2.dat', 'radar': 'pre3.dat',
-                     'self': 'preself.dat', 'synthetic': 'presyn.dat'}
+_PREDICT_FILE_MAP = {
+    'visible': 'predict_visible.dat',
+    'infrared': 'predict_infrared.dat',
+    'radar': 'predict_radar.dat',
+    'self': 'predict_self.dat',
+    'synthetic': 'predict_synthetic.dat',
+}
 
 
 def _load_predict_data(method_id: str):

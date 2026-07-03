@@ -4,9 +4,9 @@
 将跟踪轨迹写入 data/ 目录，供 trajectory_reconstruction 模块加载。
 
 平台 → 文件映射:
-  visible  → fact1.dat
-  infrared → fact2.dat
-  radar    → fact3.dat
+  visible  → visible.dat
+  infrared → infrared.dat
+  radar    → radar.dat
   self     → self.dat
 
 .dat 格式: 每行 "x y z t"（空格分隔浮点数）
@@ -19,9 +19,9 @@ from datetime import datetime
 from typing import Optional
 
 PLATFORM_FACT_MAP = {
-    "visible":  "fact1.dat",
-    "infrared": "fact2.dat",
-    "radar":    "fact3.dat",
+    "visible":  "visible.dat",
+    "infrared": "infrared.dat",
+    "radar":    "radar.dat",
     "self":     "self.dat",
 }
 
@@ -90,8 +90,8 @@ def tracks_to_dat(
       x y z t
 
     平台映射:
-      visible → fact1.dat    infrared → fact2.dat
-      radar   → fact3.dat    self     → self.dat
+      visible → visible.dat    infrared → infrared.dat
+      radar   → radar.dat      self     → self.dat
     """
     out = os.path.join(PROJECT_ROOT, output_dir)
     os.makedirs(out, exist_ok=True)

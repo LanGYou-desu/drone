@@ -53,9 +53,7 @@ def save_predict_data(method_id: str, points: list[list[float]],
     """
     将预测结果保存到 data/predict/pre{id}.dat
     """
-    mapping = {'visible': '1', 'infrared': '2', 'radar': '3', 'self': 'self', 'synthetic': 'syn'}
-    num = mapping.get(method_id, method_id)
-    filename = f'pre{num}.dat'
+    filename = f'predict_{method_id}.dat'
     file_path = os.path.join('data', 'predict', filename)
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -79,7 +77,7 @@ def load_default_data() -> dict[str, dict[str, list]]:
         { methodId: { 'points': [[x,y,z],...], 'timestamps': [t,...] } }
     """
     method_ids = ['visible', 'infrared', 'radar']
-    file_names = ['fact1.dat', 'fact2.dat', 'fact3.dat']
+    file_names = ['visible.dat', 'infrared.dat', 'radar.dat']
 
     methods: dict[str, dict[str, list]] = {}
     for mid, fname in zip(method_ids, file_names):
