@@ -174,9 +174,11 @@ def _clear_all():
                     os.remove(fp)
 
 
-def restore_backup(name: str) -> tuple[bool, str]:
+def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
     """
     恢复备份：先备份当前数据，再释放备份中的 fact/predict 文件。
+    full=True: 清空全部后完整恢复
+    full=False: 部分恢复（只覆盖备份中存在的文件）
     返回 (success, message)。
     """
     snap_path = _snapshot_path(name)
@@ -194,6 +196,12 @@ def restore_backup(name: str) -> tuple[bool, str]:
     from trajectory_reconstruction.services.data_service import save_metadata, refresh_fact_data
 
     restored_count = 0
+
+    # 完整恢复：先清空
+    if full:
+        _clear_all()
+        os.makedirs('data/fact', exist_ok=True)
+        os.makedirs('data/predict', exist_ok=True)
 
     # 释放 fact/ 文件
     fact_src = os.path.join(snap_path, 'fact')
@@ -222,16 +230,17 @@ def restore_backup(name: str) -> tuple[bool, str]:
 
     # 删除恢复前自动备份
     delete_backup(pre_backup_name)
-    return True, f'已从 {name} 恢复 {restored_count} 个文件'
+    mode = '完整' if full else '部分'
+    return True, f'已从 {name} {mode}恢复 {restored_count} 个文件'
 
 
 def restore_all_latest() -> tuple[list[str], str]:
-    """恢复最新快照的全部数据"""
+    """一键恢复最新快照（完整覆盖）"""
     backups = list_backups()
     if not backups:
         return [], '没有可用的备份'
     latest = backups[0]['name']
-    ok, msg = restore_backup(latest)
+    ok, msg = restore_backup(latest, full=True)
     if ok:
         return [latest], msg
     return [], msg

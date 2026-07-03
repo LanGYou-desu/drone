@@ -66,10 +66,11 @@ def list_backups():
 def restore_backup():
     data = request.get_json(silent=True) or {}
     backup_file = data.get('backup_file', '')
+    full = data.get('full', False)
     if not backup_file:
         return jsonify({'success': False, 'error': '缺少 backup_file'}), 400
 
-    ok, msg = backup_service.restore_backup(backup_file)
+    ok, msg = backup_service.restore_backup(backup_file, full=full)
     return jsonify({'success': ok, 'message': msg}), 200
 
 

@@ -171,10 +171,11 @@ document.getElementById('restoreSelectedBtn').addEventListener('click', async ()
     if (selectedBackups.size === 0) { toast.warning('请先勾选备份'); return; }
     const name = [...selectedBackups][0];
     try {
+        const full = document.getElementById('fullRestoreCheck')?.checked || false;
         const r = await (await fetch('/api/restore_backup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ backup_file: name }),
+            body: JSON.stringify({ backup_file: name, full }),
         })).json();
         r.success ? toast.success(r.message) : toast.error(r.error);
         if (r.success) { sessionStorage.clear(); setTimeout(() => location.reload(), 800); }
