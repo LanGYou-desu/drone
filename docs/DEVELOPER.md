@@ -93,13 +93,14 @@ main.py
   ├─ threading.Thread(target=start_recog)    # 识别模块 :5001
   └─ start_recon(headless)
        └─ app.create_app()
-            ├─ os.chdir(PROJECT_ROOT)          # 统一工作目录
             ├─ ensure_config()                 # 校验/创建 config.json
             ├─ migrate_legacy()                # 清理旧版备份文件
             ├─ init_from_config()              # 初始化 detection_methods 元信息
             ├─ initialize_data()               # 加载 fact/*.dat → 自动合成综合轨迹
             ├─ register_blueprints()           # 注册 5 个蓝图
             └─ register_error_handlers()       # 400/404/500
+
+所有文件路径使用 PROJECT_ROOT 绝对路径，不依赖 os.chdir()。
 ```
 
 **关键点：** `initialize_data()` 在启动时清除 `data/predict/` 和 `data/fact/self.dat`，确保每次启动都是干净状态。
@@ -694,30 +695,44 @@ trajectory_recognition/
 ### 16.2 数据流
 
 ```
-视频输入 (上传/流/文件)
+双目视频输入 (左目 + 右目)
     ↓
-detection/preprocess.py        ← 抽帧、缩放、归一化
+detection/preprocess.py        ← 抽帧
     ↓
-detection/engine.py            ← YOLO 推理，输出 bbox + class + confidence
+┌─ detection/engine.py ────────┐
+│ 左目 YOLO 推理               │  右目 YOLO 推理
+│ → dets_left: [Detection...]  │  → dets_right: [Detection...]
+└──────────────────────────────┘
     ↓
-detection/tracker.py           ← 多目标跟踪，分配稳定 track_id
+detection/stereo.py            ← 跨目匹配 (class_id + 几何约束)
+    │                             三角测量 → 相机系 3D (X右 Y↓ Z前)
     ↓
-services/detection_service.py  ← 流程编排、进度追踪、状态管理
+detection/tracker.py           ← 多目标跟踪 (基于左目, ByteTrack/IOU)
     ↓
-services/data_bridge.py        ← 轨迹点 → .dat 格式 (x y z t)
+services/detection_service.py  ← _to_world(): 相机系 Y↓ → 世界系 Y↑
+    │                             旋转 (Yaw→Pitch→Roll) + 平移
     ↓
-data/fact/detect_<id>.dat      ← 落盘，供 trajectory_reconstruction 消费
+services/data_bridge.py        ← 3D 轨迹点 → .dat 格式 (x y z t)
+    ↓
+data/fact/visible.dat           ← 落盘，供 trajectory_reconstruction 消费
 ```
+
+**坐标系统：**
+- 相机系 (triangulate 输出): X=右 Y=↓ Z=前 (OpenCV 右手系, 原点=双目光心中点)
+- 世界系 (_to_world 输出):   X=右 Y=↑ Z=前
+- 变换: Y 轴翻转 (Y↓→Y↑) → 平台旋转 (extrinsic Yaw→Pitch→Roll) → 平台平移
 
 ### 16.3 核心接口
 
 | 类/函数 | 文件 | 职责 |
 |---------|------|------|
-| `YOLODetector` | `detection/engine.py` | 模型加载、`detect(frame) → list[Detection]` |
-| `MultiTracker` | `detection/tracker.py` | `update(detections, frame_id) → list[Track]` |
+| `YOLODetector` | `detection/engine.py` | 模型加载、`detect(frame) → list[Detection]`、`track(frame) → Results` |
+| `StereoTriangulator` | `detection/stereo.py` | 双目三角测量 Z=fB/d、跨目匹配 (class_id+几何约束) |
+| `MultiTracker` | `detection/tracker.py` | 多目标跟踪、`update(detections, frame_id, ts) → list[Track]` |
 | `VideoProcessor` | `detection/preprocess.py` | `extract_frames(source) → Generator[Frame]` |
 | `DetectionSession` | `services/detection_service.py` | 会话状态机（idle→running→paused→completed/error） |
-| `tracks_to_dat()` | `services/data_bridge.py` | 跟踪结果写为 data/fact/detect_*.dat |
+| `_to_world()` | `services/detection_service.py` | 相机系 Y↓ → 世界系 Y↑ (Y翻转+旋转+平移) |
+| `tracks_to_dat()` | `services/data_bridge.py` | 跟踪结果写为 data/fact/{platform}.dat |
 
 ### 16.4 API 端点
 
@@ -737,23 +752,47 @@ data/fact/detect_<id>.dat      ← 落盘，供 trajectory_reconstruction 消费
 
 ### 16.5 配置扩展
 
-`config.json` 新增 `detection` 段：
+`config.json` 包含 `detection` 段和 `platforms` 段：
 
 ```json
 {
     "detection": {
-        "model": "yolov8n.pt",
+        "model": "models/yolov8n.pt",
         "confidence_threshold": 0.5,
         "nms_threshold": 0.45,
-        "frame_interval": 5,
+        "frame_interval": 3,
         "tracker": "bytetrack",
         "input_width": 640,
         "input_height": 640,
-        "device": "cpu",
-        "auto_save": true
+        "device": "cuda:0",
+        "auto_save": false,
+        "target_classes": [0],
+        "target_class_id": 0
+    },
+    "platforms": {
+        "visible": {
+            "baseline": 1.0,
+            "fov_horizontal": 90,
+            "fov_vertical": 60,
+            "resolution_width": 1920,
+            "resolution_height": 1080,
+            "focal_length_px": 0,
+            "pos_x": 0, "pos_y": 0, "pos_z": 0,
+            "pitch": 0, "yaw": 0, "roll": 0
+        }
     }
 }
 ```
+
+**双目平台参数 (platforms.<id>)：**
+| 字段 | 说明 |
+|------|------|
+| `baseline` | 双目基线距离 (米) |
+| `fov_horizontal/vertical` | 视场角 (度), focal_length_px=0 时用于推算焦距 |
+| `focal_length_px` | 像素焦距, 0=从 FOV 自动推算 |
+| `resolution_width/height` | 相机分辨率 (像素) |
+| `pos_x/pos_y/pos_z` | 平台在世界坐标系中的位置 |
+| `pitch/yaw/roll` | 平台朝向 (度), 正=抬头/右转/右滚 |
 
 ### 16.6 与重建模块的数据共享
 

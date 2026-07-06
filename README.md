@@ -1,8 +1,8 @@
 # 鹰眼长空
 
-基于多平台协同的低空无人机智能监测系统。融合可见光、红外、雷达三种传感平台的轨迹数据，提供双目 YOLO 无人机检测、3D 可视化、加权合成、轨迹预测、捕捉时机分析和 AI 策略生成。
+基于多平台协同的低空无人机智能监测系统。融合可见光、红外、雷达三种传感平台的轨迹数据，提供双目立体视觉（YOLO + 三角测量）无人机检测、3D 可视化、加权合成、轨迹预测、捕捉时机分析和 AI 策略生成。
 
-**技术栈：** Python Flask · pywebview · Three.js · ECharts · YOLO (ultralytics) · OpenCV · OpenAI 兼容 AI 接口
+**技术栈：** Python Flask · pywebview · Three.js · ECharts · YOLO (ultralytics) · OpenCV · 双目立体视觉 · OpenAI 兼容 AI 接口
 
 ## 快速开始
 
@@ -42,17 +42,17 @@ drone/
 │   └── frontend/                        #   页面 + JS
 │
 ├── trajectory_recognition/              # 无人机检测 (:5001)
-│   ├── detection/                       #   YOLO 检测引擎
-│   │   ├── engine.py                    #   模型加载与推理
-│   │   ├── tracker.py                   #   多目标跟踪
-│   │   ├── preprocess.py                #   视频预处理
-│   │   └── stereo.py                    #   双目三角测量
+│   ├── detection/                       #   双目立体视觉检测引擎
+│   │   ├── engine.py                    #   YOLO 模型加载与推理
+│   │   ├── stereo.py                    #   双目三角测量 + 跨目匹配
+│   │   ├── tracker.py                   #   多目标跟踪 (ByteTrack/IOU)
+│   │   └── preprocess.py                #   视频抽帧预处理
 │   ├── services/                        #   业务编排
-│   │   ├── detection_service.py         #   检测会话管理
-│   │   └── data_bridge.py               #   数据桥接
-│   ├── views/                           #   HTTP 接口
-│   ├── train.py                         #   训练脚本
-│   └── frontend/                        #   页面 + JS
+│   │   ├── detection_service.py         #   检测会话管理 + 世界坐标变换
+│   │   └── data_bridge.py               #   轨迹数据桥接 → data/fact/
+│   ├── views/                           #   HTTP 接口 + 页面路由
+│   ├── train.py                         #   YOLO 训练脚本
+│   └── frontend/                        #   页面模板 + JS
 │
 ├── templates/                           # 共享前端资源
 │   ├── frontend/shared/                 #   base.html + icons.html
