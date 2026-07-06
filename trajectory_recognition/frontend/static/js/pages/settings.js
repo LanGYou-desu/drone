@@ -29,6 +29,7 @@ function toggleAutoSave() { document.getElementById('autoSaveSwitch').classList.
 function loadPlatformParams() {
     var pid = document.getElementById('platSelect').value;
     var p = (_platformsData && _platformsData[pid]) ? _platformsData[pid] : {};
+    setVal('stereoFocal', p.focal_length_px, 0);
     setVal('stereoBaseline', p.baseline, 1.0);
     setVal('stereoFovH', p.fov_horizontal, 90.0);
     setVal('stereoFovV', p.fov_vertical, 60.0);
@@ -65,6 +66,7 @@ async function saveSection(section) {
     if (section === 'platform') {
         var pid = document.getElementById('platSelect').value;
         _platformsData[pid] = {
+            focal_length_px: parseFloat(document.getElementById('stereoFocal').value) || 0,
             baseline: parseFloat(document.getElementById('stereoBaseline').value),
             fov_horizontal: parseFloat(document.getElementById('stereoFovH').value),
             fov_vertical: parseFloat(document.getElementById('stereoFovV').value),
