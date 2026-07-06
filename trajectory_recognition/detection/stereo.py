@@ -110,11 +110,9 @@ class StereoTriangulator:
         if Z <= 0 or Z > 5000:
             return None
 
-        # 4. 3D 坐标（双目光心中点为原点，世界 Y 轴向上）
-        #    X_left = (xl - cx) * Z / fx, 减去 B/2 将原点移到双目光心中点
+        # 4. 3D 坐标（原点=双目光心中点, X=右 Y=上 Z=前）
         X = (xl - self.cx) * Z / self.fx - self.params.baseline / 2
-        #    摄像头 Y 轴向下, 世界 Y 轴向上, 故取反: Y_world = (cy - yl) * Z / fy
-        Y = (self.cy - yl) * Z / self.fy
+        Y = (self.cy - yl) * Z / self.fy  # 摄像头Y轴向下, 取反得世界Y向上
 
         return [round(X, 3), round(Y, 3), round(Z, 3)]
 
