@@ -1,12 +1,13 @@
 """
 分析页面路由 — 提供数据分析页面及原始数据接口（含预测数据）
 """
+import math
 import os
 from flask import Blueprint, render_template, jsonify
 
 from trajectory_reconstruction.core.state import detection_methods, METHOD_ORDER
-from trajectory_reconstruction.core.io.data_loader import load_dat_file
-from trajectory_reconstruction.core.config.config_manager import ensure_config
+from trajectory_reconstruction.core.io.data_loader import load_dat_file, _data_dir
+from trajectory_reconstruction.core.config.config_manager import ensure_config, PROJECT_ROOT
 
 analysis_bp = Blueprint('analysis', __name__)
 
@@ -23,7 +24,7 @@ _PREDICT_FILE_MAP = {
 def _load_predict_data(method_id: str):
     """加载某平台的预测数据（若存在）"""
     fname = _PREDICT_FILE_MAP.get(method_id, f'pre{method_id}.dat')
-    file_path = os.path.join('data', 'predict', fname)
+    file_path = os.path.join(_data_dir('predict'), fname)
     return load_dat_file(file_path)
 
 
@@ -55,9 +56,9 @@ def _compute_metrics(points, timestamps):
             d1[2] * d2[0] - d1[0] * d2[2],
             d1[0] * d2[1] - d1[1] * d2[0],
         ]
-        cross_norm = (cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2) ** 0.5
-        d1_norm = (d1[0] ** 2 + d1[1] ** 2 + d1[2] ** 2) ** 0.5
-        curvatures.append(cross_norm / d1_norm ** 3 if d1_norm > 0 else 0)
+        cross_norm = math.sqrt(cross[0]**2 + cross[1]**2 + cross[2]**2)
+        d1_norm = math.sqrt(d1[0]**2 + d1[1]**2 + d1[2]**2)
+        curvatures.append(cross_norm / (d1_norm ** 3) if d1_norm > 1e-6 else 0.0)
 
     return speeds, accelerations, curvatures, [p[1] for p in points]
 

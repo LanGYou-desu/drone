@@ -18,9 +18,12 @@ import json
 import os
 from typing import Any
 
-# 配置文件路径（相对于项目根目录）
-CONFIG_PATH: str = 'config.json'
-CONFIG_TEMPLATE: str = 'templates/config_template.json'
+# 项目根目录（从本文件向上 4 级：core/config/config_manager.py）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+PROJECT_ROOT = _PROJECT_ROOT  # 公开别名，供其他模块使用
+# 配置文件路径（绝对路径，不依赖 cwd）
+CONFIG_PATH: str = os.path.join(_PROJECT_ROOT, 'config.json')
+CONFIG_TEMPLATE: str = os.path.join(_PROJECT_ROOT, 'templates', 'config_template.json')
 
 # ---- 默认配置 ----
 DEFAULT_CONFIG: dict[str, Any] = {

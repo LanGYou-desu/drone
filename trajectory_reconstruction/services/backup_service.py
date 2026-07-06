@@ -14,9 +14,12 @@ import shutil
 import time
 
 from trajectory_reconstruction.core.state import detection_methods
+from trajectory_reconstruction.core.config.config_manager import PROJECT_ROOT
 
 
-BACKUP_DIR = os.path.join('data', 'backup')
+BACKUP_DIR = os.path.join(PROJECT_ROOT, 'data', 'backup')
+FACT_DIR = os.path.join(PROJECT_ROOT, 'data', 'fact')
+PREDICT_DIR = os.path.join(PROJECT_ROOT, 'data', 'predict')
 
 # ---- 内部辅助 ----
 
@@ -89,10 +92,9 @@ def create_backup(label: str = 'manual') -> str:
     """
     # 自动标签：只用实际有磁盘文件的平台名拼接
     if label in ('manual', 'auto'):
-        fact_dir = 'data/fact'
         active_platforms = []
-        if os.path.isdir(fact_dir):
-            for fname in sorted(os.listdir(fact_dir)):
+        if os.path.isdir(FACT_DIR):
+            for fname in sorted(os.listdir(FACT_DIR)):
                 if not fname.endswith('.dat'):
                     continue
                 for mid, data in detection_methods.items():
@@ -110,8 +112,8 @@ def create_backup(label: str = 'manual') -> str:
     os.makedirs(os.path.join(snap_path, 'memory'), exist_ok=True)
 
     # 复制磁盘数据
-    _copy_dir('data/fact', os.path.join(snap_path, 'fact'))
-    _copy_dir('data/predict', os.path.join(snap_path, 'predict'))
+    _copy_dir(FACT_DIR, os.path.join(snap_path, 'fact'))
+    _copy_dir(PREDICT_DIR, os.path.join(snap_path, 'predict'))
 
     # Dump 内存数据
     for mid, data in detection_methods.items():
@@ -176,8 +178,7 @@ def _clear_all():
     if 'synthetic' in detection_methods:
         del detection_methods['synthetic']
     # 清空磁盘文件
-    for subdir in ('fact', 'predict'):
-        d = os.path.join('data', subdir)
+    for d in (FACT_DIR, PREDICT_DIR):
         if os.path.isdir(d):
             for fname in os.listdir(d):
                 fp = os.path.join(d, fname)
@@ -208,12 +209,12 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
     # 完整恢复：先清空
     if full:
         _clear_all()
-        os.makedirs('data/fact', exist_ok=True)
-        os.makedirs('data/predict', exist_ok=True)
+        os.makedirs(FACT_DIR, exist_ok=True)
+        os.makedirs(PREDICT_DIR, exist_ok=True)
 
     # 释放 fact/ 文件
     fact_src = os.path.join(snap_path, 'fact')
-    fact_dst = 'data/fact'
+    fact_dst = FACT_DIR
     if os.path.isdir(fact_src):
         os.makedirs(fact_dst, exist_ok=True)
         for fname in os.listdir(fact_src):
@@ -224,7 +225,7 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
 
     # 释放 predict/ 文件
     predict_src = os.path.join(snap_path, 'predict')
-    predict_dst = 'data/predict'
+    predict_dst = PREDICT_DIR
     if os.path.isdir(predict_src):
         os.makedirs(predict_dst, exist_ok=True)
         for fname in os.listdir(predict_src):

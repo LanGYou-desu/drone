@@ -167,12 +167,29 @@ def _draw_bboxes(image, detections):
         cv2.putText(image, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
 
+def _compute_iou(box_a: list, box_b: list) -> float:
+    """计算两个 bbox 的 IoU"""
+    xa = max(box_a[0], box_b[0])
+    ya = max(box_a[1], box_b[1])
+    xb = min(box_a[2], box_b[2])
+    yb = min(box_a[3], box_b[3])
+    inter_w = max(0, xb - xa)
+    inter_h = max(0, yb - ya)
+    inter_area = inter_w * inter_h
+    if inter_area == 0:
+        return 0.0
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+    union = area_a + area_b - inter_area
+    return inter_area / union if union > 0 else 0.0
+
+
 def _to_world(pt3d, platform_pos):
     """将相机局部坐标转换为世界坐标
 
     输入: 相机坐标系 (X=右 Y=↓ Z=前, OpenCV标准)
     输出: 世界坐标系 (X=右 Y=↑ Z=前)
-    步骤: Y轴翻转 → 平台旋转 → 平台平移
+    步骤: Y轴翻转 → 平台旋转(extrinsic Yaw→Pitch→Roll) → 平台平移
     """
     import math
     if not platform_pos:
@@ -185,7 +202,7 @@ def _to_world(pt3d, platform_pos):
     # 1. 摄像头坐标系 → 世界坐标系: Y轴翻转 (↓ → ↑)
     y = -y_down
 
-    # 2. 旋转: 平台朝向
+    # 2. 旋转: 平台朝向 (extrinsic Yaw→Pitch→Roll)
     # Yaw: 绕世界Y(↑)轴, 正=右转
     x2 = x * math.cos(yaw) + z * math.sin(yaw)
     z2 = z * math.cos(yaw) - x * math.sin(yaw)
@@ -197,8 +214,9 @@ def _to_world(pt3d, platform_pos):
     y, z = y2, z2
 
     # Roll: 绕世界Z(前)轴, 正=右滚
-    x2 = x * math.cos(roll) - y * math.sin(roll)
-    y2 = x * math.sin(roll) + y * math.cos(roll)
+    # R_z(+θ) 使 Y 轴向 -X 旋转（左滚），正=右滚需用 R_z(-θ)
+    x2 =  x * math.cos(roll) + y * math.sin(roll)
+    y2 = -x * math.sin(roll) + y * math.cos(roll)
     x, y = x2, y2
 
     # 3. 平移
@@ -214,7 +232,7 @@ def _run_detection_pipeline(session: DetectionSession):
     双目检测流水线（在后台线程中运行）:
 
     VideoProcessor_A ─→ YOLODetector ─→ (左目 dets) ─┐
-                                                        ├→ match_detections → StereoTriangulator → 3D tracks
+                                                       ├→ match_detections → StereoTriangulator → _to_world → 3D tracks
     VideoProcessor_B ─→ YOLODetector ─→ (右目 dets) ─┘
     """
     try:
@@ -234,8 +252,11 @@ def _run_detection_pipeline(session: DetectionSession):
         stereo_cfg = {k: plat_cfg[k] for k in stereo_keys if k in plat_cfg}
         session.stereo_params = stereo_cfg
 
-        # 提取位置朝向（pitch/yaw/roll 同时用于立体修正和世界变换）
+        # 提取位置朝向
         platform_pos = {k: plat_cfg.get(k, 0) for k in ["pos_x", "pos_y", "pos_z", "pitch", "yaw", "roll"]}
+
+        # 目标类别 ID（用于双目匹配时的类别约束）
+        target_class_id = det_cfg.get("target_class_id", None)
 
         # 初始化组件
         detector = YOLODetector(
@@ -259,10 +280,16 @@ def _run_detection_pipeline(session: DetectionSession):
         proc_a = VideoProcessor(frame_interval=frame_interval)
         proc_b = VideoProcessor(frame_interval=frame_interval)
 
-        # 获取总帧数
+        # 获取视频信息 + 时间同步校验
         info_a = proc_a.get_video_info(session.source_a)
         info_b = proc_b.get_video_info(session.source_b)
-        session.total_frames = max(info_a["total_frames"], info_b["total_frames"])
+        session.total_frames = min(info_a["total_frames"], info_b["total_frames"])
+
+        # 检查帧率是否一致（时间同步的基本前提）
+        fps_a = info_a.get("fps", 0)
+        fps_b = info_b.get("fps", 0)
+        if abs(fps_a - fps_b) > 0.5:  # 允许 0.5fps 容差
+            print(f"[警告] 双目视频帧率不一致: A={fps_a}fps, B={fps_b}fps — 可能导致时间同步偏差")
 
         # 预热
         detector.warmup()
@@ -270,6 +297,9 @@ def _run_detection_pipeline(session: DetectionSession):
         # 双路同步提取帧
         gen_a = proc_a.extract_frames(session.source_a)
         gen_b = proc_b.extract_frames(session.source_b)
+
+        # 3D-track 关联的 IoU 阈值
+        ASSOCIATION_IOU_THRESHOLD = 0.3
 
         while True:
             # 检查停止/暂停
@@ -285,6 +315,12 @@ def _run_detection_pipeline(session: DetectionSession):
 
             session.current_frame_a = frame_a.frame_id
             session.current_frame_b = frame_b.frame_id
+
+            # 时间同步校验：两帧时间戳相差过大时发出警告
+            time_diff = abs(frame_a.timestamp - frame_b.timestamp)
+            if time_diff > 0.1:  # 超过 100ms 视为不同步
+                print(f"[警告] 帧时间戳偏差较大: Δt={time_diff:.2f}s "
+                      f"(frame_a={frame_a.timestamp:.3f}, frame_b={frame_b.timestamp:.3f})")
 
             # YOLO 检测（左右目分别推理）
             dets_a = detector.detect(frame_a.image)
@@ -307,24 +343,34 @@ def _run_detection_pipeline(session: DetectionSession):
 
             # 双目匹配 + 三角测量 + 世界坐标变换
             if stereo and dets_a and dets_b:
-                matches = stereo.match_detections(dets_a, dets_b)
+                matches = stereo.match_detections(dets_a, dets_b, target_class_id=target_class_id)
+                # 当前帧时间戳（用于 3D 点时间戳对齐）
+                frame_ts = frame_a.timestamp
+
                 for dl, dr, pt3d in matches:
                     if pt3d is None:
                         continue
                     # 世界坐标变换
                     pt3d = _to_world(pt3d, platform_pos)
+
+                    # 3D 点与 track 关联 — 使用 IoU 匹配代替固定像素阈值
+                    best_track = None
+                    best_iou = 0.0
                     for track in tracks:
                         if not track.bboxes:
                             continue
                         last_bbox = track.bboxes[-1]
-                        cxl = (dl.bbox[0] + dl.bbox[2]) / 2
-                        tcx = (last_bbox[0] + last_bbox[2]) / 2
-                        if abs(cxl - tcx) < 10:
-                            track.add_point_3d(*pt3d)
-                            session.points_3d += 1
-                            break
+                        iou = _compute_iou(dl.bbox, last_bbox)
+                        if iou > best_iou:
+                            best_iou = iou
+                            best_track = track
+
+                    if best_track is not None and best_iou >= ASSOCIATION_IOU_THRESHOLD:
+                        best_track.add_point_3d(*pt3d, ts=frame_ts)
+                        session.points_3d += 1
 
             session.track_count = len(tracker.get_active_tracks())
+            # 进度以帧数较少的一方为准
             session.progress = min(
                 session.current_frame_a / max(session.total_frames, 1),
                 session.current_frame_b / max(session.total_frames, 1),
@@ -338,10 +384,6 @@ def _run_detection_pipeline(session: DetectionSession):
     finally:
         session.finished_at = time.time()
         session._thread = None
-        # 完成后保持 session 可查询，不清空 _active_session_id
-        # 只有新 session 启动或手动 stop 才切换
-
-        # 仅确认保存时才写入磁盘，此处不做任何操作
 
 
 def pause_detection(session_id: str):

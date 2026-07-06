@@ -7,7 +7,12 @@
 """
 import os
 
-from trajectory_reconstruction.core.config.config_manager import ensure_config
+from trajectory_reconstruction.core.config.config_manager import ensure_config, _PROJECT_ROOT
+
+
+def _data_dir(subdir: str = 'fact') -> str:
+    """返回 data/ 子目录的绝对路径"""
+    return os.path.join(_PROJECT_ROOT, 'data', subdir)
 
 
 def load_dat_file(file_path: str) -> tuple[list[list[float]], list[float]]:
@@ -54,7 +59,7 @@ def save_predict_data(method_id: str, points: list[list[float]],
     将预测结果保存到 data/predict/pre{id}.dat
     """
     filename = f'predict_{method_id}.dat'
-    file_path = os.path.join('data', 'predict', filename)
+    file_path = os.path.join(_data_dir('predict'), filename)
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
@@ -81,10 +86,11 @@ def load_default_data() -> dict[str, dict[str, list]]:
     file_names_old = ['fact1.dat', 'fact2.dat', 'fact3.dat']  # 兼容旧备份
 
     methods: dict[str, dict[str, list]] = {}
+    fact_dir = _data_dir('fact')
     for mid, fname_new, fname_old in zip(method_ids, file_names_new, file_names_old):
-        file_path = os.path.join('data', 'fact', fname_new)
+        file_path = os.path.join(fact_dir, fname_new)
         if not os.path.isfile(file_path):
-            file_path = os.path.join('data', 'fact', fname_old)
+            file_path = os.path.join(fact_dir, fname_old)
         points, timestamps = load_dat_file(file_path)
         methods[mid] = {'points': points, 'timestamps': timestamps}
 

@@ -5,9 +5,16 @@ import os
 from typing import Optional
 
 from trajectory_reconstruction.core.state import detection_methods
-from trajectory_reconstruction.core.config.config_manager import save_config, ensure_config
+from trajectory_reconstruction.core.config.config_manager import save_config, ensure_config, PROJECT_ROOT
 from trajectory_reconstruction.core.io.data_loader import load_dat_file, load_default_data
 from trajectory_reconstruction.core.math_utils import lerp_3d, nearest_avg_3d, smooth_points_3d
+
+# ── 路径辅助 ──
+def _fact_dir():
+    return os.path.join(PROJECT_ROOT, 'data', 'fact')
+
+def _predict_dir():
+    return os.path.join(PROJECT_ROOT, 'data', 'predict')
 
 
 # ---------- 元数据持久化 ----------
@@ -43,7 +50,7 @@ def initialize_data():
     """
     # 清除上次遗留的临时文件
     _clear_predict_files()
-    self_path = os.path.join('data', 'fact', 'self.dat')
+    self_path = os.path.join(_fact_dir(), 'self.dat')
     if os.path.isfile(self_path):
         os.remove(self_path)
 
@@ -79,7 +86,7 @@ def refresh_fact_data(keep_self: bool = False) -> bool:
 
     if not keep_self:
         # 清除自选文件和数据
-        self_path = os.path.join('data', 'fact', 'self.dat')
+        self_path = os.path.join(_fact_dir(), 'self.dat')
         if os.path.isfile(self_path):
             os.remove(self_path)
         if 'self' in detection_methods:
@@ -87,7 +94,7 @@ def refresh_fact_data(keep_self: bool = False) -> bool:
             detection_methods['self']['timestamps'] = []
     else:
         # 恢复时加载 self.dat
-        self_path = os.path.join('data', 'fact', 'self.dat')
+        self_path = os.path.join(_fact_dir(), 'self.dat')
         if os.path.isfile(self_path):
             pts, tss = load_dat_file(self_path)
             if 'self' not in detection_methods:
@@ -142,8 +149,9 @@ def _save_fact_file(filename: str, points: list, timestamps: list):
     """保存轨迹到 data/fact/ 目录"""
     cfg = ensure_config()
     default_step = cfg.get('prediction_settings', {}).get('time_step', 0.5)
-    os.makedirs(os.path.join('data', 'fact'), exist_ok=True)
-    path = os.path.join('data', 'fact', filename)
+    fact_dir = _fact_dir()
+    os.makedirs(fact_dir, exist_ok=True)
+    path = os.path.join(fact_dir, filename)
     with open(path, 'w', encoding='utf-8') as f:
         for i, p in enumerate(points):
             t = timestamps[i] if i < len(timestamps) else i * default_step
@@ -152,7 +160,7 @@ def _save_fact_file(filename: str, points: list, timestamps: list):
 
 def _clear_predict_files():
     """清除所有预测文件及综合轨迹内存数据"""
-    pred_dir = os.path.join('data', 'predict')
+    pred_dir = _predict_dir()
     if os.path.isdir(pred_dir):
         for fname in os.listdir(pred_dir):
             fp = os.path.join(pred_dir, fname)
@@ -165,11 +173,13 @@ def _clear_predict_files():
 
 
 def _auto_synthesize():
-    """自动合成综合轨迹（静默，忽略错误）"""
+    """自动合成综合轨迹（静默忽略数据不足的情况）"""
     try:
         synthesize_trajectory()
-    except Exception:
-        pass  # 数据不足时跳过
+    except ValueError:
+        pass  # 数据不足时跳过，正常情况
+    except Exception as e:
+        print(f'[WARN] 综合轨迹合成异常: {e}')
 
 
 def _ensure_synthetic_method():
@@ -269,7 +279,7 @@ def clear_all_data() -> Optional[str]:
     snapshot_name = create_backup(label='auto')
 
     # 2. 删除 fact/ 文件
-    fact_dir = os.path.join('data', 'fact')
+    fact_dir = _fact_dir()
     if os.path.isdir(fact_dir):
         for fname in os.listdir(fact_dir):
             fp = os.path.join(fact_dir, fname)
@@ -277,7 +287,7 @@ def clear_all_data() -> Optional[str]:
                 os.remove(fp)
 
     # 3. 删除 predict/ 文件
-    predict_dir = os.path.join('data', 'predict')
+    predict_dir = _predict_dir()
     if os.path.isdir(predict_dir):
         for fname in os.listdir(predict_dir):
             fp = os.path.join(predict_dir, fname)

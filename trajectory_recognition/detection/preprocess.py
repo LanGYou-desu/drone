@@ -37,13 +37,14 @@ class VideoProcessor:
     def __init__(
         self,
         frame_interval: int = 5,
-        target_size: tuple[int, int] = (640, 640),
+        target_size: Optional[tuple[int, int]] = None,
         max_frames: Optional[int] = None,
     ):
         """
         Args:
             frame_interval: 抽帧间隔（每 N 帧处理一次，1 = 逐帧）
-            target_size: 缩放目标尺寸 (width, height)，用于显示/预处理
+            target_size: 缩放目标尺寸 (width, height)，None=保持原始分辨率。
+                        YOLO 通过 imgsz 参数自行处理缩放，此处仅用于预览。
             max_frames: 最大处理帧数，None 表示处理全部
         """
         self.frame_interval = frame_interval
@@ -93,6 +94,13 @@ class VideoProcessor:
             if frame_count % self.frame_interval != 0:
                 frame_count += 1
                 continue
+
+            # 缩放到目标尺寸（仅当与原图不同时）
+            if self.target_size:
+                h, w = image.shape[:2]
+                tw, th = self.target_size
+                if (w, h) != (tw, th):
+                    image = cv2.resize(image, (tw, th))
 
             timestamp = frame_count / self._fps
 

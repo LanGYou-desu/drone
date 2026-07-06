@@ -148,20 +148,16 @@ def _synthesize_predictions(results, num_points, time_step):
         return [], []
 
     # 用最长平台的预测长度统一所有轨迹
-    max_pred_len = max(len(pred) for _, _, pred, _ in
-                       [(mid, w, result.get('prediction', []), result.get('pred_times', []))
-                        for mid, result in results.items()])
-    if max_pred_len < 2:
-        return [], []
-
-    # 用最长平台的预测时间作为统一时间网格
+    max_pred_len = 0
     ref_times = None
     for mid, result in results.items():
-        pts = result.get('prediction', [])
-        ts = result.get('pred_times', [])
-        if len(pts) >= max_pred_len:
-            ref_times = ts[:max_pred_len]
-            break
+        pred = result.get('prediction', [])
+        if len(pred) > max_pred_len:
+            max_pred_len = len(pred)
+            ref_times = result.get('pred_times', [])[:max_pred_len]
+
+    if max_pred_len < 2 or not ref_times:
+        return [], []
 
     if not ref_times:
         return [], []

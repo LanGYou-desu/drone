@@ -13,7 +13,6 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_MODULE_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
-os.chdir(_PROJECT_ROOT)
 
 # 静态资源（优先共享，回退模块）
 _SHARED_STATIC = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'static')
@@ -23,7 +22,6 @@ _OWN_STATIC = os.path.join(_MODULE_DIR, 'frontend', 'static')
 def create_app() -> Flask:
     """创建轨迹重建与分析 Flask 应用"""
     os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")  # 避免 OpenCV+PyTorch OpenMP 冲突
-    os.chdir(_PROJECT_ROOT)  # 确保工作目录正确
 
     shared_templates = os.path.join(_PROJECT_ROOT, 'templates', 'frontend', 'shared')
     module_pages = os.path.join(_MODULE_DIR, 'frontend', 'pages')

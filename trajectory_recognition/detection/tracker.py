@@ -10,17 +10,21 @@ from typing import Optional
 
 import numpy as np
 
+from trajectory_recognition.detection.engine import Detection, YOLODetector
+
 
 @dataclass
 class Track:
     """单个目标的跟踪记录"""
     track_id: int                            # 唯一跟踪 ID
     class_name: str                          # 目标类别
-    positions: list = field(default_factory=list)     # [[x, y, z], ...]  3D 坐标
-    positions_2d: list = field(default_factory=list)  # [[x, y], ...]    2D 像素坐标
-    timestamps: list = field(default_factory=list)     # [t, ...]
-    bboxes: list = field(default_factory=list)         # [[x1,y1,x2,y2], ...]
-    confidences: list = field(default_factory=list)    # 每帧置信度
+    class_id: int = 0                        # 类别 ID
+    positions: list = field(default_factory=list)        # [[x, y, z], ...]  3D 坐标
+    positions_2d: list = field(default_factory=list)     # [[x, y], ...]    2D 像素坐标
+    timestamps: list = field(default_factory=list)       # [t, ...]  每帧时间戳（对应 2D 检测）
+    timestamps_3d: list = field(default_factory=list)    # [t, ...]  3D 点的时间戳（与 positions 对齐）
+    bboxes: list = field(default_factory=list)           # [[x1,y1,x2,y2], ...]
+    confidences: list = field(default_factory=list)      # 每帧置信度
     first_seen: float = 0.0                  # 首次出现时间
     last_seen: float = 0.0                   # 最后一次出现时间
     is_active: bool = True                   # 当前是否活跃
@@ -33,6 +37,7 @@ class Track:
         return round(sum(self.confidences) / len(self.confidences), 4)
 
     def add_point_2d(self, x: float, y: float, bbox: list, conf: float, ts: float):
+        """追加 2D 检测点（每帧调用）"""
         self.positions_2d.append([x, y])
         self.bboxes.append(bbox)
         self.confidences.append(conf)
@@ -42,8 +47,15 @@ class Track:
             self.first_seen = ts
         self.frames_since_update = 0
 
-    def add_point_3d(self, x: float, y: float, z: float):
+    def add_point_3d(self, x: float, y: float, z: float, ts: float = 0.0):
+        """
+        追加 3D 三角测量点（仅在双目匹配成功时调用）。
+
+        ts 参数确保 3D 点与正确的帧时间戳关联，
+        而不是与 positions/timestamps 按索引对齐。
+        """
         self.positions.append([x, y, z])
+        self.timestamps_3d.append(ts)
 
     def mark_missed(self):
         self.frames_since_update += 1
@@ -52,7 +64,9 @@ class Track:
         return {
             "track_id": self.track_id,
             "class_name": self.class_name,
+            "class_id": self.class_id,
             "point_count": len(self.positions),
+            "point_count_2d": len(self.positions_2d),
             "confidence_avg": self.confidence_avg,
             "is_active": self.is_active,
             "latest_bbox": self.bboxes[-1] if self.bboxes else [],
@@ -65,20 +79,18 @@ class MultiTracker:
     """
     多目标跟踪器。
 
-    使用 ultralytics 内置的跟踪能力：
-      - BoT-SORT (默认): 高精度，适合无人机场景
-      - ByteTrack: 速度快
-
-    也支持独立使用（不依赖 ultralytics 跟踪），
-    通过简单的 IOU 匹配作为降级方案。
+    支持两种模式：
+      - ultralytics 内置跟踪（ByteTrack / BoT-SORT）：通过 update_from_ultralytics()
+      - 独立 IOU 跟踪（降级方案）：通过 update()
 
     使用示例:
         tracker = MultiTracker(tracker_type="bytetrack")
-        # 方式 1: 配合 ultralytics 内置跟踪
+
+        # 方式 1: 配合 ultralytics 内置跟踪（推荐）
         results = model.track(frame, persist=True, tracker="bytetrack.yaml")
         tracker.update_from_ultralytics(results, frame_id, timestamp)
 
-        # 方式 2: 独立跟踪
+        # 方式 2: 独立跟踪（无 ultralytics 跟踪时降级）
         detections = detector.detect(frame)
         tracks = tracker.update(detections, frame_id, timestamp)
     """
@@ -122,7 +134,7 @@ class MultiTracker:
         """
         输入当前帧检测结果，更新跟踪状态。
 
-        使用简单 IOU 匹配（不依赖 ultralytics 跟踪模块）。
+        使用贪心 IOU 匹配（降级方案，建议使用 update_from_ultralytics）。
 
         Args:
             detections: Detection 列表
@@ -139,7 +151,7 @@ class MultiTracker:
         for t in self._tracks.values():
             t.mark_missed()
 
-        # 匹配检测 → 已有 track
+        # 匹配检测 → 已有 track（贪心 IOU）
         matched_track_ids = set()
         matched_det_indices = set()
 
@@ -147,19 +159,13 @@ class MultiTracker:
             best_track_id = None
             best_iou = 0.0
 
-            # 计算 bbox 中心
-            det_cx = (det.bbox[0] + det.bbox[2]) / 2
-            det_cy = (det.bbox[1] + det.bbox[3]) / 2
-
             for tid, track in self._tracks.items():
                 if tid in matched_track_ids:
                     continue
                 if not track.bboxes:
                     continue
 
-                last_bbox = track.bboxes[-1]
-                iou = self._compute_iou(det.bbox, last_bbox)
-
+                iou = self._compute_iou(det.bbox, track.bboxes[-1])
                 if iou > best_iou:
                     best_iou = iou
                     best_track_id = tid
@@ -168,8 +174,11 @@ class MultiTracker:
                 matched_track_ids.add(best_track_id)
                 matched_det_indices.add(det_idx)
                 track = self._tracks[best_track_id]
-                track.add_point_2d(det_cx, det_cy, det.bbox, det.confidence, ts)
+                cx = (det.bbox[0] + det.bbox[2]) / 2
+                cy = (det.bbox[1] + det.bbox[3]) / 2
+                track.add_point_2d(cx, cy, det.bbox, det.confidence, ts)
                 track.class_name = det.class_name
+                track.class_id = det.class_id
                 track.is_active = True
 
         # 未匹配的检测 → 新 track
@@ -180,7 +189,7 @@ class MultiTracker:
             self._next_id += 1
             cx = (det.bbox[0] + det.bbox[2]) / 2
             cy = (det.bbox[1] + det.bbox[3]) / 2
-            track = Track(track_id=tid, class_name=det.class_name)
+            track = Track(track_id=tid, class_name=det.class_name, class_id=det.class_id)
             track.add_point_2d(cx, cy, det.bbox, det.confidence, ts)
             self._tracks[tid] = track
 
@@ -199,7 +208,7 @@ class MultiTracker:
         timestamp: Optional[float] = None,
     ):
         """
-        从 ultralytics track() 结果中提取跟踪数据。
+        从 ultralytics model.track() 结果中提取跟踪数据（推荐）。
 
         使用方式:
             results = model.track(frame, persist=True, tracker="bytetrack.yaml")
@@ -215,7 +224,23 @@ class MultiTracker:
 
         boxes = results[0].boxes
         if boxes.id is None:
-            return self.get_active_tracks()
+            # ultralytics track() 未分配 ID — 降级到 IOU 匹配
+            dets = []
+            cls_list = boxes.cls.int().tolist() if boxes.cls is not None else []
+            conf_list = boxes.conf.tolist() if boxes.conf is not None else []
+            xyxy_list = boxes.xyxy.tolist() if boxes.xyxy is not None else []
+            coco = YOLODetector.COCO_CLASSES
+            for i, xyxy in enumerate(xyxy_list):
+                cls_id = int(cls_list[i]) if i < len(cls_list) else 0
+                conf = float(conf_list[i]) if i < len(conf_list) else 1.0
+                cls_name = coco[cls_id] if cls_id < len(coco) else f"class_{cls_id}"
+                dets.append(Detection(
+                    bbox=[round(v, 1) for v in xyxy],
+                    confidence=round(conf, 4),
+                    class_id=cls_id,
+                    class_name=cls_name,
+                ))
+            return self.update(dets, frame_id, timestamp)
 
         track_ids = boxes.id.int().tolist()
         cls_list = boxes.cls.int().tolist() if boxes.cls is not None else [0] * len(track_ids)
@@ -224,7 +249,7 @@ class MultiTracker:
 
         for tid, cls_id, conf, xyxy in zip(track_ids, cls_list, conf_list, xyxy_list):
             if tid not in self._tracks:
-                self._tracks[tid] = Track(track_id=tid, class_name=f"class_{cls_id}")
+                self._tracks[tid] = Track(track_id=tid, class_name=f"class_{cls_id}", class_id=cls_id)
                 if tid >= self._next_id:
                     self._next_id = tid + 1
 
@@ -233,6 +258,7 @@ class MultiTracker:
             cy = (xyxy[1] + xyxy[3]) / 2
             track.add_point_2d(cx, cy, xyxy, conf, ts)
             track.class_name = f"class_{cls_id}"
+            track.class_id = cls_id
             track.is_active = True
 
         # 标记未出现的 track
@@ -245,10 +271,10 @@ class MultiTracker:
 
         return self.get_active_tracks()
 
-    def add_3d_point(self, track_id: int, x: float, y: float, z: float):
-        """为指定 track 添加三角测量后的 3D 坐标"""
+    def add_3d_point(self, track_id: int, x: float, y: float, z: float, ts: float = 0.0):
+        """为指定 track 添加三角测量后的 3D 坐标（含时间戳）"""
         if track_id in self._tracks:
-            self._tracks[track_id].add_point_3d(x, y, z)
+            self._tracks[track_id].add_point_3d(x, y, z, ts)
 
     def get_track(self, track_id: int) -> Optional[Track]:
         return self._tracks.get(track_id)

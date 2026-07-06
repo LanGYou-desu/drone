@@ -7,14 +7,14 @@ import os
 from flask import Blueprint, render_template, request, jsonify
 
 from trajectory_reconstruction.core.state import detection_methods, APP_VERSION, METHOD_ORDER
-from trajectory_reconstruction.core.config.config_manager import ensure_config, save_config
+from trajectory_reconstruction.core.config.config_manager import ensure_config, save_config, PROJECT_ROOT
 
 main_bp = Blueprint('main', __name__)
 
 def _page_context(active: str) -> dict:
     """构建页面公共上下文"""
     cfg = ensure_config()
-    self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
+    self_exists = os.path.isfile(os.path.join(PROJECT_ROOT, 'data', 'fact', 'self.dat'))
     # 按 METHOD_ORDER 固定顺序，再追加未曾枚举的平台
     ordered_ids = [mid for mid in METHOD_ORDER if mid in detection_methods]
     ordered_ids += [mid for mid in detection_methods if mid not in ordered_ids]

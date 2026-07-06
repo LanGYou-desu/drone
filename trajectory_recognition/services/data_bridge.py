@@ -25,6 +25,11 @@ PLATFORM_FACT_MAP = {
     "self":     "self.dat",
 }
 
+PLATFORM_NAMES = {
+    "visible": "可见光", "infrared": "红外",
+    "radar": "雷达", "self": "自选",
+}
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -42,7 +47,6 @@ def backup_existing_fact(
     格式: data/backup/{YYYYmmdd_HHMMSS}_{label}/
     """
     # label 用中文平台名，如 "可见光"
-    PLATFORM_NAMES = {"visible": "可见光", "infrared": "红外", "radar": "雷达", "self": "自选"}
     if platform_id and label == "auto":
         label = PLATFORM_NAMES.get(platform_id, platform_id)
     src = os.path.join(PROJECT_ROOT, source_dir)
@@ -67,7 +71,6 @@ def backup_existing_fact(
 
     # 写 manifest（与 trajectory_reconstruction 统一格式）
     # 从文件名推断平台名 + 统计点数
-    PLATFORM_NAMES = {"visible":"可见光","infrared":"红外","radar":"雷达","self":"自选"}
     methods = {}
     for f in dat_files:
         for pid, fname in PLATFORM_FACT_MAP.items():
@@ -125,12 +128,14 @@ def tracks_to_dat(
     fpath = os.path.join(out, filename)
 
     # 收集所有 track 的 (x, y, z, t) 点，按时序合并
+    # 使用 timestamps_3d 确保 3D 点与正确的时间戳对齐
+    # （timestamps_3d 与 positions 按索引一一对应，不受 2D 检测帧数影响）
     all_points = []  # [(t, x, y, z), ...]
     for track in tracks:
         if not track.positions:
             continue
         for i, pos in enumerate(track.positions):
-            ts = track.timestamps[i] if i < len(track.timestamps) else 0.0
+            ts = track.timestamps_3d[i] if i < len(track.timestamps_3d) else 0.0
             if len(pos) >= 3:
                 all_points.append((ts, pos[0], pos[1], pos[2]))
 

@@ -95,14 +95,12 @@ class YOLODetector:
         try:
             from ultralytics import YOLO
             # 自动检测 GPU
-            device = self.device
-            if device == "auto":
+            if self.device == "auto":
                 try:
                     import torch
-                    device = "0" if torch.cuda.is_available() else "cpu"
+                    self.device = "0" if torch.cuda.is_available() else "cpu"
                 except Exception:
-                    device = "cpu"
-                self.device = device
+                    self.device = "cpu"
             self._model = YOLO(self.model_path)
             print(f"[YOLO] 模型已加载: {self.model_path} on {self.device}")
         except ImportError:
@@ -167,6 +165,32 @@ class YOLODetector:
         detections.sort(key=lambda d: d.confidence, reverse=True)
         return detections
 
+    def track(self, frame: np.ndarray) -> list:
+        """
+        对单帧图像执行目标检测 + 跟踪（使用 ultralytics 内置 ByteTrack/BoT-SORT）。
+
+        相比 detect() 返回 Detection 列表，此方法返回 ultralytics 原生 Results 对象，
+        其中包含 boxes.id（跟踪 ID）。配合 MultiTracker.update_from_ultralytics() 使用。
+
+        Args:
+            frame: BGR 图像 (H, W, 3)，numpy 数组
+
+        Returns:
+            ultralytics Results 对象（含 boxes.id 跟踪 ID）
+        """
+        tracker_cfg = "bytetrack.yaml"  # 默认 ByteTrack
+        results = self.model.track(
+            frame,
+            conf=self.confidence,
+            iou=self.nms_threshold,
+            imgsz=self.input_size,
+            device=self.device,
+            persist=True,
+            tracker=tracker_cfg,
+            verbose=False,
+        )
+        return results
+
     def set_confidence(self, threshold: float) -> None:
         """动态调整置信度阈值"""
         self.confidence = max(0.0, min(1.0, threshold))
@@ -190,7 +214,6 @@ class YOLODetector:
             "confidence": self.confidence,
             "nms_threshold": self.nms_threshold,
             "target_classes": self.target_classes,
-            "total_classes": len(self.COCO_CLASSES),
         }
 
     @staticmethod

@@ -9,6 +9,9 @@ import os
 
 from flask import jsonify, request, send_file
 
+# 项目根目录（trajectory_recognition/views/ → trajectory_recognition/ → project/）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from trajectory_recognition.views import api_detection_bp
 from trajectory_recognition.services.detection_service import (
     create_session, start_detection, stop_detection,
@@ -23,7 +26,7 @@ from trajectory_recognition.services.data_bridge import (
 def _cleanup_uploads(upload_dir: str = None):
     """清理临时上传文件"""
     import glob
-    d = upload_dir or os.path.join(os.getcwd(), 'data', 'uploads')
+    d = upload_dir or os.path.join(_PROJECT_ROOT, 'data', 'uploads')
     if os.path.isdir(d):
         for f in glob.glob(os.path.join(d, 'temp_*')):
             try:
@@ -49,7 +52,7 @@ def start():
                 return jsonify({'success': False, 'error': '需要两个视频文件（video_a + video_b）'}), 400
 
             # 清理旧上传 + 保存临时文件
-            upload_dir = os.path.join(os.getcwd(), 'data', 'uploads')
+            upload_dir = os.path.join(_PROJECT_ROOT, 'data', 'uploads')
             _cleanup_uploads(upload_dir)
             os.makedirs(upload_dir, exist_ok=True)
             path_a = os.path.join(upload_dir, f"temp_a_{file_a.filename}")
@@ -171,7 +174,7 @@ def list_backups():
     """列出 data/backup/ 中的所有备份（统一 manifest 格式）"""
     try:
         import json as _json
-        backup_dir = os.path.join(os.getcwd(), 'data', 'backup')
+        backup_dir = os.path.join(_PROJECT_ROOT, 'data', 'backup')
         if not os.path.isdir(backup_dir):
             return jsonify({'success': True, 'backups': []})
 
@@ -229,7 +232,7 @@ def delete_file(filename: str):
         if not filename.endswith('.dat') or '..' in filename or '/' in filename:
             return jsonify({'success': False, 'error': '无效的文件名'}), 400
 
-        fpath = os.path.join(os.getcwd(), 'data', 'fact', filename)
+        fpath = os.path.join(_PROJECT_ROOT, 'data', 'fact', filename)
         if os.path.isfile(fpath):
             os.remove(fpath)
             return jsonify({'success': True, 'message': f'已删除 {filename}'})
@@ -244,7 +247,7 @@ def delete_file(filename: str):
 def save_config():
     try:
         data = request.get_json(silent=True) or {}
-        config_path = os.path.join(os.getcwd(), 'config.json')
+        config_path = os.path.join(_PROJECT_ROOT, 'config.json')
 
         current = {}
         if os.path.isfile(config_path):
@@ -256,7 +259,8 @@ def save_config():
             current['detection'] = {}
         det_keys = ['model', 'device', 'input_width', 'input_height',
                      'confidence_threshold', 'nms_threshold',
-                     'frame_interval', 'tracker', 'auto_save', 'target_classes']
+                     'frame_interval', 'tracker', 'auto_save', 'target_classes',
+                     'target_class_id']
         for k in det_keys:
             if k in data:
                 current['detection'][k] = data[k]
@@ -278,7 +282,7 @@ def save_config():
 @api_detection_bp.route('/config', methods=['GET'])
 def get_config():
     try:
-        config_path = os.path.join(os.getcwd(), 'config.json')
+        config_path = os.path.join(_PROJECT_ROOT, 'config.json')
         if os.path.isfile(config_path):
             with open(config_path, 'r', encoding='utf-8') as f:
                 return jsonify({'success': True, 'config': json.load(f)})
