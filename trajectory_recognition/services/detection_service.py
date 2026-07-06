@@ -191,9 +191,9 @@ def _to_world(pt3d, platform_pos):
     z2 = z * math.cos(yaw) - x * math.sin(yaw)
     x, z = x2, z2
 
-    # Pitch: 绕世界X(右)轴, 正=抬头
-    y2 = y * math.cos(pitch) - z * math.sin(pitch)
-    z2 = y * math.sin(pitch) + z * math.cos(pitch)
+    # Pitch: 绕世界X(右)轴, 正=抬头 → 前方(Z)贡献高度, 高度(Y)减少前方
+    y2 = y * math.cos(pitch) + z * math.sin(pitch)
+    z2 = z * math.cos(pitch) - y * math.sin(pitch)
     y, z = y2, z2
 
     # Roll: 绕世界Z(前)轴, 正=右滚
