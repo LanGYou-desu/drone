@@ -217,8 +217,8 @@ def _run_detection_pipeline(session: DetectionSession):
         plat_cfg = platforms.get(pid, platforms.get("visible", {})) if platforms else {}
 
         # 提取立体参数
-        stereo_keys = ["baseline", "fov_horizontal", "fov_vertical",
-                       "resolution_width", "resolution_height"]
+        stereo_keys = ["focal_length_px", "baseline", "fov_horizontal",
+                       "fov_vertical", "resolution_width", "resolution_height"]
         stereo_cfg = {k: plat_cfg[k] for k in stereo_keys if k in plat_cfg}
         session.stereo_params = stereo_cfg
 
