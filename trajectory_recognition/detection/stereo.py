@@ -16,12 +16,16 @@ from typing import Optional
 
 @dataclass
 class StereoParams:
-    """双目标定参数（朝向由 pitch/yaw/roll 统一处理）"""
+    """双目标定参数"""
     baseline: float = 1.0             # 基线距离（米）
-    fov_horizontal: float = 90.0      # 水平视场角（度）
+    focal_length_px: float = 0.0      # 像素焦距（0 = 从 FOV 自动推算）
+    fov_horizontal: float = 90.0      # 水平视场角（度），focal_length_px=0 时使用
     fov_vertical: float = 60.0        # 垂直视场角（度）
     resolution_width: int = 1920      # 图像宽度（像素）
     resolution_height: int = 1080     # 图像高度（像素）
+    pitch: float = 0.0                # 俯仰角（度）
+    yaw: float = 0.0                  # 偏航角（度）
+    roll: float = 0.0                 # 翻滚角（度）
 
 
 class StereoTriangulator:
@@ -46,14 +50,19 @@ class StereoTriangulator:
 
     @property
     def fx(self) -> float:
-        """水平像素焦距: fx = (W/2) / tan(FOV_h/2)"""
+        """水平像素焦距: 优先使用 focal_length_px，否则从 FOV 推算"""
+        if self.params.focal_length_px > 0:
+            return self.params.focal_length_px
         return (self.params.resolution_width / 2) / math.tan(
             math.radians(self.params.fov_horizontal / 2)
         )
 
     @property
     def fy(self) -> float:
-        """垂直像素焦距"""
+        """垂直像素焦距: fx 已指定则按宽高比推算，否则从 FOV 推算"""
+        if self.params.focal_length_px > 0:
+            # 假设正方形像素，fy ≈ fx
+            return self.params.focal_length_px
         return (self.params.resolution_height / 2) / math.tan(
             math.radians(self.params.fov_vertical / 2)
         )
