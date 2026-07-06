@@ -154,11 +154,10 @@ def preview():
     session = get_session(sid) if sid else get_active_session()
 
     if not session:
-        return jsonify({'success': False, 'error': '没有活跃的检测会话'}), 404
-
+        return '', 204  # 无会话，前端静默跳过
     frame = session._frame_a if channel == 'a' else session._frame_b
     if not frame:
-        return jsonify({'success': False, 'error': '暂无预览帧'}), 404
+        return '', 204  # 暂无帧，等待检测产出
 
     from flask import Response
     return Response(frame, mimetype='image/jpeg',
