@@ -168,34 +168,40 @@ def _draw_bboxes(image, detections):
 
 
 def _to_world(pt3d, platform_pos):
-    """将相机局部坐标转换为世界坐标（平台位置 + 朝向）
+    """将相机局部坐标转换为世界坐标
 
-    坐标系: X=右 Y=上 Z=前 (Three.js 原生)
-    旋转: Yaw(绕Y) → Pitch(绕X) → Roll(绕Z), 正=抬头/右转/右滚
+    输入: 相机坐标系 (X=右 Y=↓ Z=前, OpenCV标准)
+    输出: 世界坐标系 (X=右 Y=↑ Z=前)
+    步骤: Y轴翻转 → 平台旋转 → 平台平移
     """
     import math
     if not platform_pos:
         return pt3d
-    x, y, z = pt3d
+    x, y_down, z = pt3d
     pitch = math.radians(platform_pos.get("pitch", 0))
     yaw   = math.radians(platform_pos.get("yaw", 0))
     roll  = math.radians(platform_pos.get("roll", 0))
 
-    # Yaw: 绕 Y(上)轴, 正=右转 → Z轴偏向X
+    # 1. 摄像头坐标系 → 世界坐标系: Y轴翻转 (↓ → ↑)
+    y = -y_down
+
+    # 2. 旋转: 平台朝向
+    # Yaw: 绕世界Y(↑)轴, 正=右转
     x2 = x * math.cos(yaw) + z * math.sin(yaw)
     z2 = z * math.cos(yaw) - x * math.sin(yaw)
     x, z = x2, z2
 
-    # Pitch: 绕 X(右)轴, 正=抬头 → 前方(Z)向上(Y)偏转
-    y2 = y * math.cos(pitch) + z * math.sin(pitch)
-    z2 = z * math.cos(pitch) - y * math.sin(pitch)
+    # Pitch: 绕世界X(右)轴, 正=抬头
+    y2 = y * math.cos(pitch) - z * math.sin(pitch)
+    z2 = y * math.sin(pitch) + z * math.cos(pitch)
     y, z = y2, z2
 
-    # Roll: 绕 Z(前)轴, 正=右滚 → Y轴偏向X
+    # Roll: 绕世界Z(前)轴, 正=右滚
     x2 = x * math.cos(roll) - y * math.sin(roll)
     y2 = x * math.sin(roll) + y * math.cos(roll)
     x, y = x2, y2
 
+    # 3. 平移
     return [
         x + platform_pos.get("pos_x", 0),
         y + platform_pos.get("pos_y", 0),
