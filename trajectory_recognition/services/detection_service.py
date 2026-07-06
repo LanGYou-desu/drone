@@ -176,18 +176,20 @@ def _to_world(pt3d, platform_pos):
     pitch = math.radians(platform_pos.get("pitch", 0))
     yaw = math.radians(platform_pos.get("yaw", 0))
     roll = math.radians(platform_pos.get("roll", 0))
-    # 旋转（ZYX 顺序：Yaw → Pitch → Roll）
-    # Yaw: 绕 Y 轴旋转（水平朝向）
-    x2 = x * math.cos(yaw) - z * math.sin(yaw)
-    z2 = x * math.sin(yaw) + z * math.cos(yaw)
+    # 旋转（相机局部 → 世界坐标）
+    # 相机: X=右 Y=上(已翻转) Z=前, 正pitch=抬头, 正yaw=右转, 正roll=右滚
+    #
+    # Yaw: 绕 Y 轴, 正=右转 → X轴偏向Z方向
+    x2 = x * math.cos(yaw) + z * math.sin(yaw)
+    z2 = z * math.cos(yaw) - x * math.sin(yaw)
     x, z = x2, z2
-    # Pitch: 绕 X 轴旋转（俯仰）
-    y2 = y * math.cos(pitch) - z * math.sin(pitch)
-    z2 = y * math.sin(pitch) + z * math.cos(pitch)
+    # Pitch: 绕 X 轴, 正=抬头 → Z轴偏向上方(Y增大)
+    y2 = y * math.cos(pitch) + z * math.sin(pitch)
+    z2 = z * math.cos(pitch) - y * math.sin(pitch)
     y, z = y2, z2
-    # Roll: 绕 Z 轴旋转（翻滚）
-    x2 = x * math.cos(roll) - y * math.sin(roll)
-    y2 = x * math.sin(roll) + y * math.cos(roll)
+    # Roll: 绕 Z 轴, 正=右滚 → Y轴偏向X方向
+    x2 = x * math.cos(roll) + y * math.sin(roll)
+    y2 = y * math.cos(roll) - x * math.sin(roll)
     x, y = x2, y2
     # 平移
     return [
