@@ -29,10 +29,10 @@ config.json
 reports/
 
 # Models (large binary files, not tracked)
-models/*.pt
-models/*.onnx
-models/*.engine
-!models/README.md
+models/yolo/*.pt
+models/yolo/*.onnx
+models/yolo/*.engine
+!models/yolo/README.md
 
 # Ultralytics runs
 runs/

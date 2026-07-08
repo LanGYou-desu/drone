@@ -1,9 +1,11 @@
 # 无人机检测数据集
 
+位于 train/yolotrain/dataset/ — YOLO 训练专用数据集目录。
+
 ## 目录结构
 
 ```
-dataset/
+train/yolotrain/dataset/
 ├── data.yaml              # 数据集配置
 ├── train/
 │   ├── images/            # 训练图片 (.jpg, .png)
@@ -35,7 +37,7 @@ class_id x_center y_center width height
 3. 执行训练：
 
 ```bash
-python -m trajectory_recognition.train --data dataset/data.yaml --model models/yolov8n.pt --epochs 100
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model yolov8n.pt --epochs 100
 ```
 
 ## 标注工具推荐

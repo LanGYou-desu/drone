@@ -1,6 +1,6 @@
 # 模型文件目录
 
-存放 YOLO 模型权重文件 (.pt)。
+存放 YOLO 模型权重文件 (.pt)，位于 models/yolo/ 目录。
 
 ## 自动下载预训练模型
 
@@ -16,7 +16,7 @@ model = YOLO('yolov8n.pt')  # 自动下载 yolov8n.pt
 将训练好的 drone 检测模型复制到此目录：
 
 ```bash
-cp runs/detect/drone_detect/weights/best.pt models/drone_detect.pt
+cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
 ```
 
 然后在 `config.json` 中配置：
@@ -24,7 +24,7 @@ cp runs/detect/drone_detect/weights/best.pt models/drone_detect.pt
 ```json
 {
     "detection": {
-        "model": "models/drone_detect.pt"
+        "model": "models/yolo/drone_detect.pt"
     }
 }
 ```

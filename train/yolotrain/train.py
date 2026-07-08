@@ -1,11 +1,13 @@
 """
 YOLO 无人机检测模型 — 训练脚本
 
+位于 train/yolotrain/ 目录，独立于主项目代码。
+
 ======== 快速开始 ========
 
 1. 准备数据集（推荐 Roboflow 或自定义标注）:
 
-   dataset/
+   train/yolotrain/dataset/
    ├── data.yaml          # 数据集描述
    ├── train/
    │   ├── images/        # 训练图片
@@ -14,9 +16,9 @@ YOLO 无人机检测模型 — 训练脚本
        ├── images/        # 验证图片
        └── labels/        # 验证标注
 
-2. 编写 data.yaml:
+2. 编写 data.yaml（已预置）:
 
-   path: ./dataset
+   path: ./train/yolotrain/dataset
    train: train/images
    val: valid/images
    names:
@@ -24,10 +26,10 @@ YOLO 无人机检测模型 — 训练脚本
      # 1: bird            # 可选：区分飞鸟
      # 2: airplane        # 可选：区分飞机
 
-3. 开始训练:
+3. 开始训练（在项目根目录下运行）:
 
-   python -m trajectory_recognition.train \
-       --data dataset/data.yaml \
+   python train/yolotrain/train.py \
+       --data train/yolotrain/dataset/data.yaml \
        --model yolov8n.pt \
        --epochs 100 \
        --imgsz 640
@@ -88,21 +90,21 @@ def main():
         epilog="""
 示例:
   # 从头训练 drone 检测器
-  python -m trajectory_recognition.train --data dataset/data.yaml --model yolov8n.pt --epochs 100
+  python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model yolov8n.pt --epochs 100
 
   # 冻结 backbone 快速微调
-  python -m trajectory_recognition.train --data dataset/data.yaml --model yolov8n.pt --epochs 50 --freeze 10
+  python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model yolov8n.pt --epochs 50 --freeze 10
 
   # 继续上次训练
-  python -m trajectory_recognition.train --data dataset/data.yaml --model runs/detect/train/weights/last.pt --resume
+  python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model runs/detect/train/weights/last.pt --resume
 
   # 导出 ONNX 加速
-  python -m trajectory_recognition.train --export runs/detect/train/weights/best.pt --format onnx
+  python train/yolotrain/train.py --export runs/detect/train/weights/best.pt --format onnx
         """,
     )
 
     parser.add_argument(
-        "--data", type=str, default="dataset/data.yaml",
+        "--data", type=str, default="train/yolotrain/dataset/data.yaml",
         help="数据集描述文件路径 (data.yaml)",
     )
     parser.add_argument(
@@ -232,8 +234,8 @@ def main():
     print(f"\n训练完成！模型保存于: {save_dir}")
     print(f"最佳模型: {save_dir}/weights/best.pt")
     print(f"最终模型: {save_dir}/weights/last.pt")
-    print(f"\n复制到项目 models/ 目录:")
-    print(f"  cp {save_dir}/weights/best.pt models/drone_detect.pt")
+    print(f"\n复制到项目 models/yolo/ 目录:")
+    print(f"  cp {save_dir}/weights/best.pt models/yolo/drone_detect.pt")
 
     # 验证最佳模型
     print("\n在验证集上评估最佳模型...")

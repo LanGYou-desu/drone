@@ -63,9 +63,9 @@ python main.py recog         # 仅轨迹识别 → :5001
 
 ```bash
 # 准备数据集并训练自定义无人机检测模型
-python -m trajectory_recognition.train \
-    --data dataset/data.yaml \
-    --model models/yolov8n.pt \
+python train/yolotrain/train.py \
+    --data train/yolotrain/dataset/data.yaml \
+    --model yolov8n.pt \
     --epochs 100
 ```
 

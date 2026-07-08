@@ -757,7 +757,7 @@ data/fact/visible.dat           ← 落盘，供 trajectory_reconstruction 消�
 ```json
 {
     "detection": {
-        "model": "models/yolov8n.pt",
+        "model": "models/yolo/yolov8n.pt",
         "confidence_threshold": 0.5,
         "nms_threshold": 0.45,
         "frame_interval": 3,
@@ -804,7 +804,7 @@ data/fact/visible.dat           ← 落盘，供 trajectory_reconstruction 消�
 
 ```bash
 # 1. 准备数据集（YOLO 格式）
-dataset/
+train/yolotrain/dataset/
 ├── data.yaml              # 数据集描述文件
 ├── train/
 │   ├── images/            # 训练图片 (.jpg/.png)
@@ -814,7 +814,7 @@ dataset/
     └── labels/            # 验证标注
 
 # 2. 编写 data.yaml
-# path: ./dataset
+# path: ./train/yolotrain/dataset
 # train: train/images
 # val: valid/images
 # names:
@@ -823,21 +823,21 @@ dataset/
 #   2: airplane            # 可选：区分飞机
 
 # 3. 开始训练
-python -m trajectory_recognition.train \
-    --data dataset/data.yaml \
-    --model models/yolov8n.pt \
+python train/yolotrain/train.py \
+    --data train/yolotrain/dataset/data.yaml \
+    --model yolov8n.pt \
     --epochs 100 \
     --imgsz 640
 
-# 4. 训练完成后复制到 models/
-cp runs/detect/drone_detect/weights/best.pt models/drone_detect.pt
+# 4. 训练完成后复制到 models/yolo/
+cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
 ```
 
 #### 训练参数说明
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--data` | `dataset/data.yaml` | 数据集描述文件路径 |
+| `--data` | `train/yolotrain/dataset/data.yaml` | 数据集描述文件路径 |
 | `--model` | `yolov8n.pt` | 预训练权重（yolov8n/s/m/l/x 或 yolov11 系列） |
 | `--epochs` | `100` | 训练轮数，小数据集 50~100，大数据集 100~300 |
 | `--imgsz` | `640` | 输入尺寸，小目标（无人机）建议 1280 |
@@ -853,10 +853,10 @@ cp runs/detect/drone_detect/weights/best.pt models/drone_detect.pt
 
 ```bash
 # ONNX（通用加速，CPU 快 2~3x）
-python -m trajectory_recognition.train --export runs/detect/drone_detect/weights/best.pt --format onnx
+python train/yolotrain/train.py --export runs/detect/drone_detect/weights/best.pt --format onnx
 
 # TensorRT（NVIDIA GPU 快 3~5x）
-python -m trajectory_recognition.train --export best.pt --format engine
+python train/yolotrain/train.py --export best.pt --format engine
 
 # 支持格式: onnx / engine / tflite / openvino
 ```
@@ -864,7 +864,7 @@ python -m trajectory_recognition.train --export best.pt --format engine
 #### 仅验证（不训练）
 
 ```bash
-python -m trajectory_recognition.train --val --model models/drone_detect.pt --data dataset/data.yaml
+python train/yolotrain/train.py --val --model models/yolo/drone_detect.pt --data train/yolotrain/dataset/data.yaml
 # 输出: mAP@0.5, mAP@0.5:0.95, Precision, Recall
 ```
 
@@ -922,19 +922,19 @@ class_id x_center y_center width height
 
 **Phase 1 — 冻结微调（小数据集 < 1000 张）**
 ```bash
-python -m trajectory_recognition.train --data dataset/data.yaml --model yolov8n.pt --epochs 30 --freeze 10
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model yolov8n.pt --epochs 30 --freeze 10
 ```
 冻结 backbone 前 10 层，仅训练检测头，快速收敛。
 
 **Phase 2 — 全网络训练**
 ```bash
-python -m trajectory_recognition.train --data dataset/data.yaml --model runs/detect/drone_detect/weights/last.pt --epochs 100
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model runs/detect/drone_detect/weights/last.pt --epochs 100
 ```
 解冻全网络，精细调优。
 
 **Phase 3 — 大尺寸精调**
 ```bash
-python -m trajectory_recognition.train --data dataset/data.yaml --model runs/detect/drone_detect/weights/best.pt --epochs 30 --imgsz 1280 --batch 4
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model runs/detect/drone_detect/weights/best.pt --epochs 30 --imgsz 1280 --batch 4
 ```
 提高输入分辨率，增强小目标检测能力。
 

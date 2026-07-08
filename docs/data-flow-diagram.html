@@ -49,7 +49,7 @@ flowchart LR
     D1[(data/fact/\n轨迹.dat)]:::ds
     D4A[(config.json\n检测参数)]:::ds
     D6[(data/uploads/\n上传视频)]:::ds
-    D7[(models/\nYOLO权重)]:::ds
+    D7[(models/yolo/\nYOLO权重)]:::ds
 
     USER_A -->|上传双路视频| P1
     P1 -->|读取视频| D6
@@ -130,7 +130,7 @@ flowchart LR
     P16(1.6 数据桥接):::proc
     P2X(P2 轨迹重建):::proc_ext
     DS1[(config.json)]:::ds
-    DS2[(models/)]:::ds
+    DS2[(models/yolo/)]:::ds
     DS3[(data/uploads/)]:::ds
     DS4[(data/fact/)]:::ds
     DS5[(data/backup/)]:::ds

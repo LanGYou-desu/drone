@@ -24,7 +24,7 @@ drone/
 ├── main.py                              # 统一入口
 ├── config.json                          # 运行时配置
 ├── requirements.txt
-├── models/                              # YOLO 模型权重
+├── models/yolo/                         # YOLO 模型权重
 │
 ├── trajectory_reconstruction/           # 轨迹重建与分析 (:5000)
 │   ├── core/                            #   领域逻辑
@@ -94,9 +94,9 @@ drone/
 # 详见 DEVELOPER.md 第 16 节
 
 # 训练无人机检测模型
-python -m trajectory_recognition.train \
-    --data dataset/data.yaml \
-    --model models/yolov8n.pt \
+python train/yolotrain/train.py \
+    --data train/yolotrain/dataset/data.yaml \
+    --model yolov8n.pt \
     --epochs 100 --imgsz 640
 ```
 

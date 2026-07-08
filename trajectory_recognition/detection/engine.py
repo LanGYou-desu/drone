@@ -25,7 +25,7 @@ class YOLODetector:
     YOLO 模型封装，统一推理接口。
 
     使用示例:
-        detector = YOLODetector("models/yolov8n.pt", confidence=0.5, device="cuda:0")
+        detector = YOLODetector("models/yolo/yolov8n.pt", confidence=0.5, device="cuda:0")
         detections = detector.detect(frame)
 
     支持模型:
@@ -113,7 +113,7 @@ class YOLODetector:
                 "自动下载预训练模型:\n"
                 "  from ultralytics import YOLO\n"
                 "  model = YOLO('yolov8n.pt')  # 首次运行自动下载\n\n"
-                "或训练自定义 drone 模型: python -m trajectory_recognition.train"
+                "或训练自定义 drone 模型: python train/yolotrain/train.py"
             )
 
     def detect(self, frame: np.ndarray) -> list[Detection]:

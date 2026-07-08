@@ -260,7 +260,7 @@ def _run_detection_pipeline(session: DetectionSession):
 
         # 初始化组件
         detector = YOLODetector(
-            model_path=det_cfg.get("model", "models/yolov8n.pt"),
+            model_path=det_cfg.get("model", "models/yolo/yolov8n.pt"),
             confidence=det_cfg.get("confidence_threshold", 0.5),
             nms_threshold=det_cfg.get("nms_threshold", 0.45),
             device=det_cfg.get("device", "cpu"),
