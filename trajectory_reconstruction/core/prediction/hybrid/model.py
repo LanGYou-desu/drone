@@ -259,6 +259,14 @@ class PhyODEDiffusion(nn.Module):
 
         # 反标准化
         preds_raw = np.array(preds_norm) * p_std + p_mean
+        # NaN 保护：用最后一个有效值填充
+        valid_mask = ~np.isnan(preds_raw).any(axis=1)
+        if valid_mask.any() and not valid_mask.all():
+            last_valid = preds_raw[valid_mask][-1]
+            preds_raw[~valid_mask] = last_valid
+        elif not valid_mask.any():
+            # 全部 NaN，回退到线性外推的结果
+            preds_raw = np.tile(p_arr[-1:], (len(preds_norm), 1))
         pred_positions = preds_raw.tolist()
         pred_times_list = [round(t, 6) for t in preds_times]
 
