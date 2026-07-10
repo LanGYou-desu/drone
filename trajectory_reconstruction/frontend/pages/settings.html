@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}设置 — 鹰眼长空{% endblock %}
-{% from "icons.html" import icon_settings, icon_moon, icon_sun, icon_target, icon_predict %}
+{% from "icons.html" import icon_settings, icon_moon, icon_sun, icon_target, icon_predict, icon_brain %}
 {% block content %}
 
 <div class="page" style="max-width:640px;margin:0 auto;">
@@ -67,7 +67,7 @@
 
     <!-- 混合预测模型 -->
     <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><h3>混合预测模型 (Phy-ODE-Diffusion)</h3></div>
+        <div class="card-header"><h3>{{ icon_brain() }} 混合预测模型 (Phy-ODE-Diffusion)</h3></div>
         <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;">
             模型权重不存在时自动回退到线性外推
         </p>
