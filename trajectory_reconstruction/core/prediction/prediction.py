@@ -22,9 +22,29 @@ _model_device: str = "cpu"
 
 
 def _get_model_path() -> str:
-    """返回默认模型权重路径"""
-    return os.path.join(_PROJECT_ROOT, "models", "hybrid_predictor",
-                        "phy_ode_diffusion.pt")
+    """返回最新/最佳模型权重路径，优先查找带描述的最佳检查点"""
+    model_dir = os.path.join(_PROJECT_ROOT, "models", "hybrid_predictor")
+    if not os.path.isdir(model_dir):
+        return os.path.join(model_dir, "phy_ode_diffusion.pt")
+
+    # 优先查找最佳模型
+    best_files = sorted(
+        [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_best")],
+        reverse=True,
+    )
+    if best_files:
+        return os.path.join(model_dir, best_files[0])
+
+    # 次选最新带描述的检查点
+    all_files = sorted(
+        [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")],
+        reverse=True,
+    )
+    if all_files:
+        return os.path.join(model_dir, all_files[0])
+
+    # 回退到旧命名
+    return os.path.join(model_dir, "phy_ode_diffusion.pt")
 
 
 def _get_hybrid_config() -> dict:

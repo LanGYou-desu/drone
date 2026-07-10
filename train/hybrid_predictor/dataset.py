@@ -227,12 +227,13 @@ class TrajectoryDataset(Dataset):
 
         # 随机数据增强
         if self.augment:
-            # 检测垂直运动占比，爬升/下降为主的轨迹不进行 Y 轴旋转
-            # (绕Y轴旋转会改变水平方向但对高度无影响，对纯爬升无意义)
-            all_pos = np.concatenate([ctx_pos, tgt_pos], axis=0)
-            vertical_range = np.ptp(all_pos[:, 1])  # Y 轴跨度
-            horizontal_range = max(np.ptp(all_pos[:, 0]), np.ptp(all_pos[:, 2]), 1e-6)
-            is_mostly_horizontal = vertical_range < 3.0 * horizontal_range
+            # 用速度方向与水平面夹角（爬升角）判断是否适合Y轴旋转
+            # 绕Y轴旋转仅改变水平方向，对爬升为主的轨迹无意义
+            all_vel = np.concatenate([ctx_vel, tgt_vel], axis=0)
+            horizontal_speed = np.linalg.norm(all_vel[:, [0, 2]], axis=1).mean()  # XZ平面
+            vertical_speed = np.abs(all_vel[:, 1]).mean()
+            climb_angle = np.arctan2(vertical_speed, max(horizontal_speed, 1e-6))
+            is_mostly_horizontal = climb_angle < np.radians(30)  # 爬升角 < 30°
 
             if is_mostly_horizontal:
                 # 随机旋转（绕 Y 轴，仅在水平运动为主时有效）
@@ -251,10 +252,10 @@ class TrajectoryDataset(Dataset):
             ctx_vel *= scale
             tgt_vel *= scale
 
-            # 小幅随机加噪
-            noise_scale = 0.005 * np.std(all_pos, axis=0).clip(min=1e-3)
-            ctx_pos += np.random.randn(*ctx_pos.shape) * noise_scale
-            tgt_pos += np.random.randn(*tgt_pos.shape) * noise_scale
+            # 小幅随机加噪（幅度自适应数据标准差）
+            pos_std = np.std(np.concatenate([ctx_pos, tgt_pos], axis=0), axis=0).clip(min=1e-3)
+            ctx_pos += np.random.randn(*ctx_pos.shape) * pos_std * 0.005
+            tgt_pos += np.random.randn(*tgt_pos.shape) * pos_std * 0.005
 
         # 标准化：使用整条轨迹的统计量（与推理时一致，避免分布不匹配）
         if self.normalize:

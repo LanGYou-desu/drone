@@ -751,9 +751,10 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
         else:
             print(f"Epoch {epoch:3d}/{config['epochs_stage1']} | {status} | {epoch_time:.1f}s")
 
-    # 阶段一完成，保存检查点
+    # 阶段一完成，保存完整检查点
     out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
-    save_checkpoint(model, out_dir, 1, config["epochs_stage1"], best_val_loss, is_best=True)
+    save_checkpoint(model, out_dir, 1, config["epochs_stage1"], best_val_loss,
+                    is_best=True, optimizer=optimizer, scheduler=scheduler)
 
     for param in model.diffusion.parameters():
         param.requires_grad = True
@@ -879,7 +880,8 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
             print(f"Epoch {epoch:3d}/{config['epochs_stage2']} | {status} | {epoch_time:.1f}s")
 
     out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
-    save_checkpoint(model, out_dir, 2, config["epochs_stage2"], best_val_loss, is_best=True)
+    save_checkpoint(model, out_dir, 2, config["epochs_stage2"], best_val_loss,
+                    is_best=True, optimizer=optimizer, scheduler=scheduler)
 
     for param in model.parameters():
         param.requires_grad = True

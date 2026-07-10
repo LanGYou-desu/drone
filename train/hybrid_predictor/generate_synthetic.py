@@ -96,6 +96,11 @@ def generate_trajectory(
     mode_duration = 0
     current_mode = None
 
+    # 平滑过渡状态
+    transition_time = 0.0
+    prev_speed = speed
+    prev_direction = direction.copy()
+
     while i < N:
         # 选择机动模式
         if mode_duration <= 0:
@@ -112,6 +117,11 @@ def generate_trajectory(
             else:
                 current_mode = "accel"
                 mode_duration = np.random.uniform(2, 5)
+
+            # 记录切换前状态用于平滑过渡
+            prev_speed = speed
+            prev_direction = direction.copy()
+            transition_time = min(0.5, mode_duration * 0.1)  # 0.5秒过渡
 
             # 模式参数
             if current_mode == "turn":
@@ -160,6 +170,14 @@ def generate_trajectory(
             speed += a_val * t_now
             speed = np.clip(speed, 3, 30)
             pos = pos + direction * speed * t_now
+
+        # 平滑过渡：在模式切换后的短暂窗口内混合新旧状态
+        if transition_time > 0:
+            alpha = min(1.0, t_now / max(transition_time, 1e-6))
+            speed = prev_speed * (1 - alpha) + speed * alpha
+            direction = prev_direction * (1 - alpha) + direction * alpha
+            direction = direction / (np.linalg.norm(direction) + 1e-8)
+            transition_time -= t_now
 
         # 添加小幅随机扰动
         pos += np.random.randn(3) * 0.1

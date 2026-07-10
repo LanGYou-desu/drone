@@ -258,6 +258,8 @@ class GuidedDiffusion(nn.Module):
         dt: torch.Tensor,
         prev_p: torch.Tensor,
         n_steps: int = None,
+        p_mean: torch.Tensor = None,   # 反标准化统计量
+        p_std: torch.Tensor = None,
     ) -> torch.Tensor:
         """
         物理引导的 DDIM 采样，生成下一时刻位置。
@@ -288,9 +290,9 @@ class GuidedDiffusion(nn.Module):
 
             noise_pred = self.noise_net(x_t, tau_t, h_prior, dt)
 
-            # 物理引导梯度
+            # 物理引导: 若提供反标准化统计量则在原始空间计算
             guidance_grad = self._compute_guidance(
-                x_t, tau_t, h_prior, prev_p, dt,
+                x_t, tau_t, h_prior, prev_p, dt, p_mean, p_std,
             )
             guided_noise = noise_pred - guidance_grad
 
@@ -305,8 +307,10 @@ class GuidedDiffusion(nn.Module):
         h_prior: torch.Tensor,
         prev_p: torch.Tensor,
         dt: torch.Tensor,
+        p_mean: torch.Tensor = None,
+        p_std: torch.Tensor = None,
     ) -> torch.Tensor:
-        """计算物理约束对 x_τ 的梯度（需在 no_grad 外启用梯度追踪）"""
+        """物理约束梯度: 若提供 p_mean/p_std 则在原始空间计算"""
         with torch.enable_grad():
             x_tau_grad = x_tau.detach().requires_grad_(True)
             noise_pred_grad = self.noise_net(x_tau_grad, tau, h_prior, dt)
@@ -315,9 +319,16 @@ class GuidedDiffusion(nn.Module):
             sqrt_1ma = self.scheduler._gather(
                 self.scheduler.sqrt_one_minus_alphas_cumprod, tau,
             )
-            x0_pred = (x_tau_grad - sqrt_1ma * noise_pred_grad) / sqrt_a.clamp(min=1e-8)
+            x0_pred_norm = (x_tau_grad - sqrt_1ma * noise_pred_grad) / sqrt_a.clamp(min=1e-8)
 
-            cost = self._physics_cost(x0_pred, prev_p, dt)
+            if p_mean is not None and p_std is not None:
+                x0_pred = x0_pred_norm * p_std + p_mean
+                prev = prev_p * p_std + p_mean
+            else:
+                x0_pred = x0_pred_norm
+                prev = prev_p
+
+            cost = self._physics_cost(x0_pred, prev, dt)
             grad = torch.autograd.grad(cost.sum(), x_tau_grad)[0]
             scale = sqrt_1ma.detach()
             return self.guidance_eta * scale * grad.detach()

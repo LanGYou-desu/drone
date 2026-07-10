@@ -272,10 +272,13 @@ class PhyODEDiffusion(nn.Module):
                 torch.tensor([t_now], device=device_obj),
                 torch.tensor([t_next], device=device_obj))
 
-            # 扩散采样
+            # 扩散采样（传入归一化统计量用于物理引导反标准化）
+            p_mean_t = torch.from_numpy(p_mean).unsqueeze(0).float().to(device_obj)
+            p_std_t = torch.from_numpy(p_std).unsqueeze(0).float().to(device_obj)
             p_next_norm = self.diffusion.guided_sampling(
                 h_prior, dt_step, last_pos,
                 n_steps=self.diffusion.n_inference_steps,
+                p_mean=p_mean_t, p_std=p_std_t,
             )
 
             # 虚拟观测
