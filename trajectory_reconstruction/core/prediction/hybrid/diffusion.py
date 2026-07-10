@@ -48,9 +48,7 @@ class NoiseScheduler:
 
     def _gather(self, arr: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         gathered = arr[t.clamp(0, len(arr) - 1)]
-        while gathered.dim() < 2:
-            gathered = gathered.unsqueeze(-1)
-        return gathered
+        return gathered.view(*gathered.shape, *([1] * max(0, 2 - gathered.dim())))
 
     def to(self, device: torch.device):
         """将所有张量移到指定设备"""
@@ -104,8 +102,8 @@ class SinusoidalEmbedding(nn.Module):
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
         device = t.device
-        half_dim = self.dim // 2
-        emb_scale = math.log(10000) / (half_dim - 1)
+        half_dim = max(self.dim // 2, 1)
+        emb_scale = math.log(10000) / max(half_dim - 1, 1)
         emb = torch.exp(torch.arange(half_dim, device=device, dtype=torch.float32)
                         * -emb_scale)
         emb = t.float().unsqueeze(-1) * emb.unsqueeze(0)
@@ -279,7 +277,7 @@ class GuidedDiffusion(nn.Module):
 
             # 物理引导梯度
             guidance_grad = self._compute_guidance(
-                x_t, tau_t, noise_pred, h_prior, prev_p, dt,
+                x_t, tau_t, h_prior, prev_p, dt,
             )
             guided_noise = noise_pred - guidance_grad
 
@@ -291,7 +289,6 @@ class GuidedDiffusion(nn.Module):
         self,
         x_tau: torch.Tensor,
         tau: torch.Tensor,
-        noise_pred: torch.Tensor,
         h_prior: torch.Tensor,
         prev_p: torch.Tensor,
         dt: torch.Tensor,

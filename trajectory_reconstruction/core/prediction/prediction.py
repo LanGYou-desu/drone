@@ -62,6 +62,11 @@ def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
         print("[预测] 混合模型已禁用 (hybrid_model.enabled=false)，回退到线性外推")
         return None
 
+    # 设备回退：CUDA 不可用时自动使用 CPU
+    if device.startswith("cuda") and not torch.cuda.is_available():
+        print(f"[预测] CUDA 不可用，回退到 CPU")
+        device = "cpu"
+
     if _model_cache is not None and _model_device == device:
         return _model_cache
 

@@ -20,6 +20,12 @@ from trajectory_reconstruction.core.prediction.hybrid.ode_manager import ODEStat
 from trajectory_reconstruction.core.prediction.hybrid.diffusion import GuidedDiffusion
 
 
+def _estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarray:
+    """计算速度估计（延迟导入的本地副本，避免跨模块循环依赖）"""
+    from train.hybrid_predictor.dataset import estimate_velocity
+    return estimate_velocity(positions, timestamps)
+
+
 class PhyODEDiffusion(nn.Module):
     """
     Phy-ODE-Diffusion 混合轨迹预测模型。
@@ -198,8 +204,7 @@ class PhyODEDiffusion(nn.Module):
         # 计算 Δt 和估计速度（使用共享工具函数）
         dt_arr = np.zeros(N, dtype=np.float32)
         dt_arr[1:] = t_arr[1:] - t_arr[:-1]
-        from train.hybrid_predictor.dataset import estimate_velocity  # noqa: E402
-        v_arr = estimate_velocity(p_arr, t_arr)
+        v_arr = _estimate_velocity(p_arr, t_arr)
 
         # 标准化
         p_mean = p_arr.mean(axis=0)
@@ -218,20 +223,21 @@ class PhyODEDiffusion(nn.Module):
 
         # 初始化 ODE 状态
         h = self.state_manager.init_state(p_t[:, -1, :], v_t[:, -1, :], c)
-        t_now = t_t[:, -1:]  # (1, 1) → 后面会 squeeze
+        t_now = float(t_arr[-1])          # 标量
+        dt_step = torch.tensor([time_step], device=device_obj)
 
         last_pos = p_t[:, -1, :].clone()  # (1, 3)
         preds_norm = [last_pos.squeeze(0).cpu().numpy().tolist()]
-        preds_times = [float(t_arr[-1])]
+        preds_times = [t_now]
 
         # 自回归预测
         for _ in range(num_points):
-            t_next = t_now + time_step  # (1, 1)
-            dt_step = torch.full((1,), time_step, device=device_obj)
+            t_next = t_now + time_step
 
             # ODE 演化
-            h_prior = self.state_manager.evolve(h, t_now.squeeze(-1),
-                                                t_next.squeeze(-1))
+            h_prior = self.state_manager.evolve(h,
+                torch.tensor([t_now], device=device_obj),
+                torch.tensor([t_next], device=device_obj))
 
             # 扩散采样
             p_next_norm = self.diffusion.guided_sampling(
