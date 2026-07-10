@@ -668,7 +668,8 @@ def _check_nan(loss, stage, epoch):
 
 # ── 阶段一：编码器 + ODE + GRU ────────────────────────
 
-def train_stage1(model, train_loader, val_loader, config, device, logger: TrainingLogger):
+def train_stage1(model, train_loader, val_loader, config, device, logger: TrainingLogger,
+                  resume_ckpt=None):
     print("\n" + "=" * 60)
     print("  Stage 1: 训练 Transformer + ODE + GRU（无扩散）")
     print("=" * 60)
@@ -681,9 +682,19 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
         lr=config["lr_stage1"], weight_decay=config["weight_decay"],
     )
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs_stage1"])
-    best_val_loss = float('inf')
 
-    epoch_iter = range(1, config["epochs_stage1"] + 1)
+    # 恢复优化器/调度器状态
+    start_epoch = 1
+    if resume_ckpt is not None and resume_ckpt.get("stage") == 1:
+        if "optimizer_state_dict" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        if "scheduler_state_dict" in resume_ckpt:
+            scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+        start_epoch = resume_ckpt.get("epoch", 0) + 1
+        print(f"  [RESUME] 从 epoch {start_epoch} 继续训练")
+
+    best_val_loss = float('inf')
+    epoch_iter = range(start_epoch, config["epochs_stage1"] + 1)
     if HAS_TQDM:
         epoch_iter = _tqdm_import(epoch_iter, desc="Stage 1", unit="epoch",
                                   bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]')
@@ -798,7 +809,8 @@ def _validate_stage1(model, val_loader, device):
 
 # ── 阶段二：扩散模型 ──────────────────────────────────
 
-def train_stage2(model, train_loader, val_loader, config, device, logger: TrainingLogger):
+def train_stage2(model, train_loader, val_loader, config, device, logger: TrainingLogger,
+                  resume_ckpt=None):
     print("\n" + "=" * 60)
     print("  Stage 2: 训练扩散模型（固定 Transformer + ODE + GRU）")
     print("=" * 60)
@@ -811,9 +823,17 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
     optimizer = optim.AdamW(model.diffusion.parameters(),
                             lr=config["lr_stage2"], weight_decay=config["weight_decay"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs_stage2"])
-    best_val_loss = float('inf')
 
-    epoch_iter = range(1, config["epochs_stage2"] + 1)
+    start_epoch = 1
+    if resume_ckpt is not None and resume_ckpt.get("stage") == 2:
+        if "optimizer_state_dict" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        if "scheduler_state_dict" in resume_ckpt:
+            scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+        start_epoch = resume_ckpt.get("epoch", 0) + 1
+
+    best_val_loss = float('inf')
+    epoch_iter = range(start_epoch, config["epochs_stage2"] + 1)
     if HAS_TQDM:
         epoch_iter = _tqdm_import(epoch_iter, desc="Stage 2", unit="epoch",
                                   bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]')
@@ -916,7 +936,8 @@ def _validate_stage2(model, val_loader, device):
 
 # ── 阶段三：联合微调 ──────────────────────────────────
 
-def train_stage3(model, train_loader, val_loader, config, device, logger: TrainingLogger):
+def train_stage3(model, train_loader, val_loader, config, device, logger: TrainingLogger,
+                  resume_ckpt=None):
     print("\n" + "=" * 60)
     print("  Stage 3: 联合微调（计划采样）")
     print("=" * 60)
@@ -1008,9 +1029,10 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
         else:
             print(f"Epoch {epoch:3d}/{config['epochs_stage3']} | {status} | lr={lr:.2e} | {epoch_time:.1f}s")
 
-    # 阶段三完成（或提前终止），保存检查点
+    # 阶段三完成（或提前终止），保存完整检查点
     out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
-    save_checkpoint(model, out_dir, 3, epoch, best_val_loss, is_best=True)
+    save_checkpoint(model, out_dir, 3, epoch, best_val_loss,
+                    is_best=True, optimizer=optimizer, scheduler=scheduler)
 
 
 # ── 主入口 ────────────────────────────────────────────
@@ -1060,15 +1082,19 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     resumed_stage = 0
+    resume_ckpt = None
     if args.resume:
         print(f"[RESUME] 从 {args.resume} 恢复完整训练状态")
-        ckpt = torch.load(args.resume, map_location=device)
+        resume_ckpt = torch.load(args.resume, map_location=device)
         model = create_model(config, device)
-        model.load_state_dict(ckpt["model_state_dict"])
+        model.load_state_dict(resume_ckpt["model_state_dict"])
         model.diffusion.scheduler.to(device)
-        resumed_stage = ckpt.get("stage", 0)
-        print(f"[RESUME] 已完成阶段: {resumed_stage}, epoch: {ckpt.get('epoch', '?')}, "
-              f"val_loss: {ckpt.get('val_loss', '?'):.4f}")
+        resumed_stage = resume_ckpt.get("stage", 0)
+        resume_epoch = resume_ckpt.get("epoch", 0)
+        print(f"[RESUME] 已完成: stage={resumed_stage}, epoch={resume_epoch}, "
+              f"val_loss={resume_ckpt.get('val_loss', '?'):.4f}")
+        if "ADE" in resume_ckpt:
+            print(f"[RESUME] 历史指标: ADE={resume_ckpt['ADE']:.4f}, FDE={resume_ckpt['FDE']:.4f}")
     else:
         model = create_model(config, device)
 
@@ -1083,13 +1109,13 @@ def main():
     run_s3 = args.stage in ("3", "all") and resumed_stage < 3
 
     if run_s1:
-        train_stage1(model, train_loader, val_loader, config, device, logger)
+        train_stage1(model, train_loader, val_loader, config, device, logger, resume_ckpt)
 
     if run_s2:
-        train_stage2(model, train_loader, val_loader, config, device, logger)
+        train_stage2(model, train_loader, val_loader, config, device, logger, resume_ckpt)
 
     if run_s3:
-        train_stage3(model, train_loader, val_loader, config, device, logger)
+        train_stage3(model, train_loader, val_loader, config, device, logger, resume_ckpt)
 
     total_time = time.time() - t_total_start
     print(f"\n{'='*60}")
