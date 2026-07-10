@@ -627,22 +627,27 @@ def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:
     return model
 
 
-def save_final_model(model: PhyODEDiffusion, config: dict, stage: int,
-                     epoch: int, loss: float, logger: TrainingLogger):
-    """保存最终权重到 models/hybrid_predictor/（只保存一份最佳模型）"""
-    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False):
+    """保存中间检查点到 models/hybrid_predictor/"""
     os.makedirs(out_dir, exist_ok=True)
     ckpt = {
         "model_state_dict": model.state_dict(),
-        "stage": stage, "epoch": epoch, "loss": loss,
-        "model_info": model.get_model_info(), "config": config,
-        "best_val_loss": logger.best_val_loss,
-        "total_epochs": len(logger.history),
+        "stage": stage, "epoch": epoch, "val_loss": val_loss,
+        "model_info": model.get_model_info(),
     }
-    fpath = os.path.join(out_dir, "phy_ode_diffusion.pt")
-    torch.save(ckpt, fpath)
-    print(f"  → 最终模型已保存: {fpath}")
-    return fpath
+    fname = f"phy_ode_diffusion.pt"
+    torch.save(ckpt, os.path.join(out_dir, fname))
+    if is_best:
+        print(f"    -> 最佳模型已保存 (val_loss={val_loss:.4f})")
+    return os.path.join(out_dir, fname)
+
+
+def _check_nan(loss, stage, epoch):
+    """检测 NaN 损失，返回 True 表示需要跳过"""
+    if torch.isnan(loss) or torch.isinf(loss):
+        print(f"\n[警告] Stage {stage} Epoch {epoch}: loss 为 NaN/Inf，跳过此步")
+        return True
+    return False
 
 
 # ── 阶段一：编码器 + ODE + GRU ────────────────────────
@@ -705,7 +710,8 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            if not _check_nan(loss, 1, epoch):
+                optimizer.step()
             total_loss += loss.item()
 
             if HAS_TQDM:
@@ -727,6 +733,10 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
             epoch_iter.set_postfix_str(status + (" ★" if is_best else ""))
         else:
             print(f"Epoch {epoch:3d}/{config['epochs_stage1']} | {status} | {epoch_time:.1f}s")
+
+    # 阶段一完成，保存检查点
+    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    save_checkpoint(model, out_dir, 1, config["epochs_stage1"], best_val_loss, is_best=True)
 
     for param in model.diffusion.parameters():
         param.requires_grad = True
@@ -816,7 +826,8 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.diffusion.parameters(), 1.0)
-            optimizer.step()
+            if not _check_nan(loss, 2, epoch):
+                optimizer.step()
             total_loss += loss.item()
 
             if HAS_TQDM:
@@ -838,6 +849,9 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
             epoch_iter.set_postfix_str(status + (" ★" if is_best else ""))
         else:
             print(f"Epoch {epoch:3d}/{config['epochs_stage2']} | {status} | {epoch_time:.1f}s")
+
+    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    save_checkpoint(model, out_dir, 2, config["epochs_stage2"], best_val_loss, is_best=True)
 
     for param in model.parameters():
         param.requires_grad = True
@@ -935,7 +949,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            if not _check_nan(loss, 3, epoch):
+                optimizer.step()
             total_loss += loss.item()
 
             if HAS_TQDM:
@@ -943,6 +958,12 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
 
         scheduler.step()
         avg_train = total_loss / len(train_loader)
+
+        # 检测到 NaN 则提前终止阶段三
+        if avg_train != avg_train:  # NaN check
+            print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
+            break
+
         val_loss = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
@@ -959,7 +980,9 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
         else:
             print(f"Epoch {epoch:3d}/{config['epochs_stage3']} | {status} | lr={lr:.2e} | {epoch_time:.1f}s")
 
-        pass  # 最终模型统一在训练完成后保存
+    # 阶段三完成（或提前终止），保存检查点
+    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    save_checkpoint(model, out_dir, 3, epoch, best_val_loss, is_best=True)
 
 
 # ── 主入口 ────────────────────────────────────────────
@@ -1044,9 +1067,11 @@ def main():
     print(f"  训练完成！总耗时: {total_time/60:.1f} 分钟")
     print(f"{'='*60}")
 
-    # 只保存最终权重到 models/hybrid_predictor/
-    final_loss = logger.history[-1]["val_loss"] if logger.history else 0.0
-    save_final_model(model, config, 0, 0, final_loss, logger)
+    # 保存最终权重（各阶段已完成 checkpoint 保存，此处兜底）
+    if not os.path.exists(os.path.join(_PROJECT_ROOT, config["output_dir"], "phy_ode_diffusion.pt")):
+        out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+        final_loss = logger.history[-1]["val_loss"] if logger.history else 0.0
+        save_checkpoint(model, out_dir, 0, 0, final_loss, is_best=True)
 
     # ── 输出图表和日志到 train/hybrid_predictor/train_result/ ──
     results_dir = os.path.join(_RESULTS_DIR, f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
