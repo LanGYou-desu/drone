@@ -67,40 +67,70 @@
 
     <!-- 混合预测模型 -->
     <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><h3>{{ icon_brain() }} 混合预测模型 (Phy-ODE-Diffusion)</h3></div>
-        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;">
-            模型权重不存在时自动回退到线性外推
+        <div class="card-header"><h3>{{ icon_brain() }} 混合预测模型</h3></div>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:14px;">
+            Phy-ODE-Diffusion：Transformer + ODE + 扩散生成，物理约束自回归预测。权重文件缺失或禁用时自动回退线性外推。
         </p>
         {% set hc = hybrid_config or {} %}
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="font-size:0.85rem;width:80px;">启用模型</span>
-            <input type="checkbox" id="hybrid-enabled" {% if hc.enabled|default(true) %}checked{% endif %}>
+        {% set defs = {'v_max':30, 'a_max':30, 'z_min':0, 'guidance_eta':0.1, 'inference_steps':50} %}
+
+        <!-- 基本设置 -->
+        <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">基本设置</div>
+        <div class="theme-toggle" style="margin-bottom:10px;" id="hybridEnableRow">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;">
+                <div>
+                    <div style="font-weight:600;font-size:0.9rem;">启用混合模型</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);">需要训练完成的权重文件</div>
+                </div>
+            </div>
+            <div class="toggle-switch" id="hybridEnabledSwitch"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <span style="font-size:0.85rem;width:80px;">推理设备</span>
-            <select id="hybrid-device" style="flex:1;padding:4px 8px;">
+        <input type="checkbox" id="hybrid-enabled" style="display:none;" {% if hc.enabled|default(true) %}checked{% endif %}>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <span style="font-size:0.85rem;min-width:70px;">推理设备</span>
+            <select id="hybrid-device" style="flex:1;padding:6px 10px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:0.85rem;">
                 <option value="cpu" {% if hc.device|default('cpu')=='cpu' %}selected{% endif %}>CPU</option>
                 <option value="cuda:0" {% if hc.device=='cuda:0' %}selected{% endif %}>CUDA (GPU)</option>
             </select>
         </div>
-        {% for key, label, unit, minv, maxv, step in [
-            ('v_max','最大速度','m/s', 5, 60, 5),
-            ('a_max','最大加速度','m/s²', 5, 60, 5),
-            ('z_min','最小高度','m', 0, 100, 5),
-            ('guidance_eta','物理引导强度','', 0.01, 0.5, 0.01),
-            ('inference_steps','推理步数','步', 10, 200, 10),
-        ] %}
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <span style="font-size:0.85rem;width:80px;">{{ label }}</span>
-            <input type="range" min="{{ minv }}" max="{{ maxv }}" step="{{ step }}"
-                   value="{{ hc[key]|default({'v_max':30,'a_max':30,'z_min':0,'guidance_eta':0.1,'inference_steps':50}[key]) }}"
+
+        <!-- 物理约束 -->
+        <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">物理约束</div>
+        {% for key, label, unit in [('v_max','最大速度','m/s'), ('a_max','最大加速度','m/s²'), ('z_min','最低高度','m')] %}
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+            <span style="min-width:70px;font-size:0.85rem;">{{ label }}</span>
+            <input type="range" min="0" max="100" step="1"
+                   value="{{ hc[key]|default(defs[key]) }}"
                    data-key="{{ key }}" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="width:55px;text-align:right;font-size:0.85rem;">
-                {{ hc[key]|default({'v_max':30,'a_max':30,'z_min':0,'guidance_eta':0.1,'inference_steps':50}[key]) }}{{ ' '+unit if unit else '' }}
+            <span class="hybrid-val" style="min-width:52px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ hc[key]|default(defs[key]) }} {{ unit }}
             </span>
         </div>
         {% endfor %}
-        <button class="btn btn-primary btn-sm" onclick="saveHybridModel()" style="margin-top:8px;">保存预测模型设置</button>
+
+        <!-- 高级参数 -->
+        <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin:14px 0 8px;text-transform:uppercase;letter-spacing:0.5px;">高级参数</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+            <span style="min-width:70px;font-size:0.85rem;">引导强度</span>
+            <input type="range" min="1" max="50" step="1"
+                   value="{{ (hc.guidance_eta|default(defs.guidance_eta) * 100)|int }}"
+                   data-key="guidance_eta" class="hybrid-slider" style="flex:1;margin:0;">
+            <span class="hybrid-val" style="min-width:36px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ "%.2f"|format(hc.guidance_eta|default(defs.guidance_eta)) }}
+            </span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+            <span style="min-width:70px;font-size:0.85rem;">推理步数</span>
+            <input type="range" min="10" max="200" step="10"
+                   value="{{ hc.inference_steps|default(defs.inference_steps) }}"
+                   data-key="inference_steps" class="hybrid-slider" style="flex:1;margin:0;">
+            <span class="hybrid-val" style="min-width:36px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ hc.inference_steps|default(defs.inference_steps) }} 步
+            </span>
+        </div>
+
+        <button class="btn btn-primary btn-sm" onclick="saveHybridModel()" style="margin-top:14px;">保存预测模型设置</button>
     </div>
 
     <!-- 关于 -->
@@ -167,15 +197,34 @@
         if (r.success) { sessionStorage.clear(); location.reload(); } else alert('保存失败');
     }
 
-    // Hybrid model slider
-    document.querySelectorAll('.hybrid-slider').forEach(s => {
+    // Hybrid model toggle switch
+    (function(){
+        var cb = document.getElementById('hybrid-enabled');
+        var sw = document.getElementById('hybridEnabledSwitch');
+        function updateSwitch(){
+            sw.classList.toggle('active', cb.checked);
+        }
+        updateSwitch();
+        document.getElementById('hybridEnableRow').addEventListener('click', function(){
+            cb.checked = !cb.checked;
+            updateSwitch();
+        });
+    })();
+
+    // Hybrid model slider display
+    document.querySelectorAll('.hybrid-slider').forEach(function(s){
         s.addEventListener('input', function(){
-            var unit = this.dataset.key === 'guidance_eta' ? '' :
-                       this.dataset.key === 'inference_steps' ? ' 步' :
-                       this.dataset.key === 'v_max' ? ' m/s' :
-                       this.dataset.key === 'a_max' ? ' m/s²' :
-                       this.dataset.key === 'z_min' ? ' m' : '';
-            this.nextElementSibling.textContent = this.value + unit;
+            var val = this.value;
+            var display;
+            switch(this.dataset.key) {
+                case 'guidance_eta': display = (parseInt(val) / 100).toFixed(2); break;
+                case 'inference_steps': display = val + ' 步'; break;
+                case 'v_max': display = val + ' m/s'; break;
+                case 'a_max': display = val + ' m/s²'; break;
+                case 'z_min': display = val + ' m'; break;
+                default: display = val;
+            }
+            this.nextElementSibling.textContent = display;
         });
     });
 
@@ -183,8 +232,15 @@
         var data = {};
         data.enabled = document.getElementById('hybrid-enabled').checked;
         data.device = document.getElementById('hybrid-device').value;
-        document.querySelectorAll('.hybrid-slider').forEach(s => {
-            data[s.dataset.key] = s.dataset.key === 'inference_steps' ? parseInt(s.value) : parseFloat(s.value);
+        document.querySelectorAll('.hybrid-slider').forEach(function(s){
+            var key = s.dataset.key;
+            if (key === 'guidance_eta') {
+                data[key] = parseInt(s.value) / 100;
+            } else if (key === 'inference_steps') {
+                data[key] = parseInt(s.value);
+            } else {
+                data[key] = parseFloat(s.value);
+            }
         });
         var resp = await fetch('/api/hybrid_model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         var r = await resp.json();
