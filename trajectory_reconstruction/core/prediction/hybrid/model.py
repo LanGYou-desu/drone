@@ -198,7 +198,7 @@ class PhyODEDiffusion(nn.Module):
         # 计算 Δt 和估计速度（使用共享工具函数）
         dt_arr = np.zeros(N, dtype=np.float32)
         dt_arr[1:] = t_arr[1:] - t_arr[:-1]
-        from train.hybrid_predictor.dataset import estimate_velocity
+        from train.hybrid_predictor.dataset import estimate_velocity  # noqa: E402
         v_arr = estimate_velocity(p_arr, t_arr)
 
         # 标准化

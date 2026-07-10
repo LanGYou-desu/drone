@@ -35,10 +35,10 @@ for p in (_PROJECT_ROOT, _TRAIN_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from hybrid_predictor.dataset import (
+from train.hybrid_predictor.dataset import (
     load_all_trajectories, TrajectoryDataset, collate_fn,
 )
-from hybrid_predictor.generate_synthetic import generate_dataset
+from train.hybrid_predictor.generate_synthetic import generate_dataset
 from trajectory_reconstruction.core.prediction.hybrid import PhyODEDiffusion
 
 # 输出目录
