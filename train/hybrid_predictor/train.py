@@ -631,19 +631,30 @@ def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:
     return model
 
 
-def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False):
-    """保存中间检查点到 models/hybrid_predictor/"""
+def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
+                     optimizer=None, scheduler=None):
+    """保存完整检查点（含优化器/调度器状态），最佳模型单独保存不被覆盖"""
     os.makedirs(out_dir, exist_ok=True)
     ckpt = {
         "model_state_dict": model.state_dict(),
         "stage": stage, "epoch": epoch, "val_loss": val_loss,
         "model_info": model.get_model_info(),
     }
-    fname = f"phy_ode_diffusion.pt"
-    torch.save(ckpt, os.path.join(out_dir, fname))
+    if optimizer is not None:
+        ckpt["optimizer_state_dict"] = optimizer.state_dict()
+    if scheduler is not None:
+        ckpt["scheduler_state_dict"] = scheduler.state_dict()
+
+    # 最新检查点
+    latest_path = os.path.join(out_dir, "phy_ode_diffusion.pt")
+    torch.save(ckpt, latest_path)
+
+    # 最佳模型单独保存，不被覆盖
     if is_best:
-        print(f"    -> 最佳模型已保存 (val_loss={val_loss:.4f})")
-    return os.path.join(out_dir, fname)
+        best_path = os.path.join(out_dir, f"phy_ode_diffusion_best_s{stage}.pt")
+        torch.save(ckpt, best_path)
+        print(f"    -> 最佳模型 (val_loss={val_loss:.4f}): {best_path}")
+    return latest_path
 
 
 def _check_nan(loss, stage, epoch):
@@ -935,11 +946,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                     p_obs = b["tgt_pos"][:, j, :]
                     v_obs = b["tgt_vel"][:, j, :]
                 else:
-                    with torch.set_grad_enabled(True):
-                        p_gen = model.diffusion.guided_sampling(
-                            h_prior, dt_step, last_pos,
-                            n_steps=min(10, model.diffusion.n_inference_steps))
-                    p_obs = p_gen.detach()
+                    # 使用 ODE 先验位置（轻量），而非完整扩散采样（昂贵且不参与梯度）
+                    p_obs = h_prior[:, :3].detach()
                     v_obs = (p_obs - last_pos) / dt_step.clamp(min=1e-3).unsqueeze(-1)
 
                 loss_dict = model.diffusion.compute_loss(h_prior, dt_step, last_pos, p_obs)
@@ -968,7 +976,7 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss = _validate_stage2(model, val_loader, device)
+        val_loss = _validate_stage1(model, val_loader, device)  # 联合训练用位置MSE评估
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
@@ -1030,37 +1038,33 @@ def main():
     train_loader, val_loader = build_dataloaders(config)
 
     # 模型
+    # 日志器
+    logger = TrainingLogger()
+    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    os.makedirs(out_dir, exist_ok=True)
+
+    resumed_stage = 0
     if args.resume:
-        print(f"[RESUME] {args.resume}")
+        print(f"[RESUME] 从 {args.resume} 恢复完整训练状态")
         ckpt = torch.load(args.resume, map_location=device)
         model = create_model(config, device)
         model.load_state_dict(ckpt["model_state_dict"])
         model.diffusion.scheduler.to(device)
+        resumed_stage = ckpt.get("stage", 0)
+        print(f"[RESUME] 已完成阶段: {resumed_stage}, epoch: {ckpt.get('epoch', '?')}, "
+              f"val_loss: {ckpt.get('val_loss', '?'):.4f}")
     else:
         model = create_model(config, device)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"[MODEL] 总参数量: {total_params:,}")
 
-    # 日志器
-    logger = TrainingLogger()
-    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
-    os.makedirs(out_dir, exist_ok=True)
-
     t_total_start = time.time()
 
-    # --stage 语义: "1"=仅阶段一, "2"=阶段一→二, "3"=仅阶段三, "all"=全部
-    run_s1 = args.stage in ("1", "2", "all")
-    run_s2 = args.stage in ("2", "all")
-    run_s3 = args.stage in ("3", "all")
-
-    if args.resume:
-        # 恢复训练: 跳过已完成的阶段
-        ckpt_stage = torch.load(args.resume, map_location='cpu').get("stage", 0)
-        if ckpt_stage >= 1:
-            run_s1 = False
-        if ckpt_stage >= 2:
-            run_s2 = False
+    # --stage 语义: 恢复时自动跳过已完成的阶段
+    run_s1 = args.stage in ("1", "2", "all") and resumed_stage < 1
+    run_s2 = args.stage in ("2", "all") and resumed_stage < 2
+    run_s3 = args.stage in ("3", "all") and resumed_stage < 3
 
     if run_s1:
         train_stage1(model, train_loader, val_loader, config, device, logger)

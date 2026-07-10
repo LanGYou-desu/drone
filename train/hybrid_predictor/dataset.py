@@ -145,6 +145,11 @@ def sliding_window_sample(
     if N < min_len:
         return []
 
+    # 预计算整条轨迹的归一化统计量（与推理时一致，避免 train/inference 分布不匹配）
+    traj_pos = positions
+    traj_mean = traj_pos.mean(axis=0)
+    traj_std = traj_pos.std(axis=0).clip(min=1e-3)
+
     samples = []
     stride = max(1, min(ctx_len // 2, tgt_len // 2))
 
@@ -173,6 +178,8 @@ def sliding_window_sample(
             "tgt_pos": tgt_pos,
             "tgt_t": tgt_t,
             "tgt_vel": tgt_vel,
+            "traj_mean": traj_mean,
+            "traj_std": traj_std,
         })
 
     return samples
@@ -249,15 +256,14 @@ class TrajectoryDataset(Dataset):
             ctx_pos += np.random.randn(*ctx_pos.shape) * noise_scale
             tgt_pos += np.random.randn(*tgt_pos.shape) * noise_scale
 
-        # 标准化（零均值单位方差，基于上下文）
+        # 标准化：使用整条轨迹的统计量（与推理时一致，避免分布不匹配）
         if self.normalize:
-            p_mean = ctx_pos.mean(axis=0)
-            p_std = ctx_pos.std(axis=0).clip(min=1e-3)
+            p_mean = sample.get("traj_mean", ctx_pos.mean(axis=0))
+            p_std = sample.get("traj_std", ctx_pos.std(axis=0).clip(min=1e-3))
             ctx_pos = (ctx_pos - p_mean) / p_std
             tgt_pos = (tgt_pos - p_mean) / p_std
             ctx_vel = ctx_vel / p_std
             tgt_vel = tgt_vel / p_std
-            # 时间不变
 
         return {
             "ctx_pos": torch.from_numpy(ctx_pos).float(),

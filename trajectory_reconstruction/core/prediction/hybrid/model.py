@@ -20,10 +20,44 @@ from trajectory_reconstruction.core.prediction.hybrid.ode_manager import ODEStat
 from trajectory_reconstruction.core.prediction.hybrid.diffusion import GuidedDiffusion
 
 
-def _estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarray:
-    """计算速度估计（延迟导入的本地副本，避免跨模块循环依赖）"""
-    from train.hybrid_predictor.dataset import estimate_velocity
-    return estimate_velocity(positions, timestamps)
+def _estimate_kinematics(positions: np.ndarray, timestamps: np.ndarray):
+    """
+    计算速度和加速度估计（纯函数，避免跨模块依赖）。
+    返回 (velocity, acceleration)，端点用前向/后向差分。
+    """
+    N = len(positions)
+    vel = np.zeros((N, 3), dtype=np.float32)
+    acc = np.zeros((N, 3), dtype=np.float32)
+    if N < 2:
+        return vel, acc
+
+    if N >= 3:
+        for i in range(1, N - 1):
+            dt_span = timestamps[i + 1] - timestamps[i - 1]
+            if dt_span > 0:
+                vel[i] = (positions[i + 1] - positions[i - 1]) / dt_span
+        dt_fwd = timestamps[1] - timestamps[0]
+        if dt_fwd > 0:
+            vel[0] = (positions[1] - positions[0]) / dt_fwd
+        dt_bwd = timestamps[-1] - timestamps[-2]
+        if dt_bwd > 0:
+            vel[-1] = (positions[-1] - positions[-2]) / dt_bwd
+        # 加速度: 速度的差分
+        for i in range(1, N - 1):
+            dt_span = timestamps[i + 1] - timestamps[i - 1]
+            if dt_span > 0:
+                acc[i] = (vel[i + 1] - vel[i - 1]) / dt_span
+        if N >= 3:
+            dt_fwd = timestamps[1] - timestamps[0]
+            acc[0] = (vel[1] - vel[0]) / dt_fwd if dt_fwd > 0 else 0
+            dt_bwd = timestamps[-1] - timestamps[-2]
+            acc[-1] = (vel[-1] - vel[-2]) / dt_bwd if dt_bwd > 0 else 0
+    else:
+        dt_span = timestamps[1] - timestamps[0]
+        if dt_span > 0:
+            v = (positions[1] - positions[0]) / dt_span
+            vel[0] = vel[1] = v
+    return vel, acc
 
 
 class PhyODEDiffusion(nn.Module):
@@ -204,7 +238,7 @@ class PhyODEDiffusion(nn.Module):
         # 计算 Δt 和估计速度（使用共享工具函数）
         dt_arr = np.zeros(N, dtype=np.float32)
         dt_arr[1:] = t_arr[1:] - t_arr[:-1]
-        v_arr = _estimate_velocity(p_arr, t_arr)
+        v_arr, _ = _estimate_kinematics(p_arr, t_arr)
 
         # 标准化
         p_mean = p_arr.mean(axis=0)

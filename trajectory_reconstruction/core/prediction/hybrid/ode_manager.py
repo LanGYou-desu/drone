@@ -15,19 +15,21 @@ from trajectory_reconstruction.core.prediction.hybrid.physics_ode import (
 
 
 class ObservationEncoder(nn.Module):
-    """虚拟观测编码器: (Δt, p_obs, v_obs) → u"""
+    """虚拟观测编码器: (Δt, p, v, a) → u，包含加速度提供更丰富的运动信息"""
 
     def __init__(self, hidden_dim: int = 32):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(7, hidden_dim),  # Δt(1) + p(3) + v(3)
+            nn.Linear(10, hidden_dim),  # Δt(1) + p(3) + v(3) + a(3)
             nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
 
     def forward(self, dt: torch.Tensor, p_obs: torch.Tensor,
-                v_obs: torch.Tensor) -> torch.Tensor:
-        inp = torch.cat([dt.unsqueeze(-1), p_obs, v_obs], dim=-1)
+                v_obs: torch.Tensor, a_obs: torch.Tensor = None) -> torch.Tensor:
+        if a_obs is None:
+            a_obs = torch.zeros_like(v_obs)
+        inp = torch.cat([dt.unsqueeze(-1), p_obs, v_obs, a_obs], dim=-1)
         return self.net(inp)
 
 
