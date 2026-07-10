@@ -513,25 +513,30 @@ python train/hybrid_predictor/generate_synthetic.py 200
 # GPU 环境（推荐使用 conda drone 环境）
 conda activate drone
 
-# 阶段一: Transformer + ODE + GRU
-python train/hybrid_predictor/train.py --stage 1 --epochs 50 --batch 64 --device cuda:0
+# --stage 语义: 1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部三阶段
 
-# 阶段二: 扩散模型（推荐到此为止，稳定收敛）
+# 阶段一+二（推荐，稳定收敛）
 python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
 
-# 阶段三: 联合微调（可选，scheduled sampling 可能导致 NaN）
+# 阶段三联合微调（可选）
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
-# ========== 3. CPU 训练（较慢）==========
+# ========== 3. 恢复训练（完整恢复优化器/调度器/epoch） ==========
+python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+
+# ========== 4. CPU 训练（较慢）==========
 python train/hybrid_predictor/train.py --stage 2 --epochs 30 --batch 32 --device cpu
 
-# ========== 4. 恢复训练 ==========
-python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion.pt
+# ========== 检查点命名规则 ==========
+# phy_ode_diffusion_s{stage}_e{epoch}_v{val_loss}.pt   — 带描述的检查点
+# phy_ode_diffusion_best_s{stage}.pt                     — 最佳模型（不被覆盖）
+# 推理时自动查找: best_s* > s*_e* > 旧命名
 
 # ========== 注意事项 ==========
-# - 每阶段结束自动保存权重到 models/hybrid_predictor/
-# - NaN 异常自动跳过，阶段三检测到 NaN 会提前终止并保存
-# - 推荐使用 --stage 2 跳过阶段三获得稳定模型
+# - 每阶段结束自动保存完整检查点（含优化器/调度器状态）
+# - 评估指标: MSE + ADE (平均位移误差) + FDE (终点位移误差)
+# - NaN 异常自动跳过梯度更新，阶段三检测到 NaN 提前终止并保存
+# - 物理约束在推理时自动反标准化到原始 m/s 空间
 ```
 
 ---

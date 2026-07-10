@@ -63,7 +63,9 @@ Phy-ODE-Diffusion 混合轨迹预测模型的运行时参数。
 
 ### 权重文件
 
-训练脚本自动将最佳模型保存到 `models/hybrid_predictor/phy_ode_diffusion.pt`。
+训练每阶段结束保存带描述的检查点：`phy_ode_diffusion_s{stage}_e{epoch}_v{loss}.pt`。
+最佳模型单独保存：`phy_ode_diffusion_best_s{stage}.pt`，不被覆盖。
+推理时自动查找优先级：`best_s*` > `s*_e*` > 旧命名 `phy_ode_diffusion.pt`。
 训练方法详见 `docs/hybrid_prediction_model.md`。
 
 ---

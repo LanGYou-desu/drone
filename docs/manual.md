@@ -110,7 +110,10 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device
 # 3. 阶段三联合微调（可选）
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
-# 训练完成后权重自动保存到 models/hybrid_predictor/，重启服务即生效
+# 4. 恢复训练
+python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+
+# 训练完成后权重自动保存，重启服务即生效
 ```
 
 训练结果图表保存在 `train/hybrid_predictor/train_result/`，包含：
@@ -148,6 +151,14 @@ python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device
 - 设置页面可禁用混合模型或调整物理约束参数
 
 **训练时 loss 显示 NaN？**
-- 通常是阶段三 scheduled sampling 不稳定导致，阶段一+二训练即可获得可用模型
-- 训练脚本会自动跳过 NaN 梯度，阶段三检测到 NaN 会提前终止并保存检查点
-- 减少批次大小（`--batch 32`）或降低学习率可提升稳定性
+- 阶段三 scheduled sampling 可能导致梯度爆炸，阶段一+二训练即可获得可用模型
+- 训练脚本自动跳过 NaN 梯度更新，阶段三检测到 NaN 会提前终止并保存检查点
+- 减少批次大小或降低学习率可提升稳定性
+
+**如何恢复中断的训练？**
+- `--resume models/.../phy_ode_diffusion_best_s2.pt` 可恢复优化器/调度器/epoch 状态
+- 自动跳过已完成阶段，从断点继续训练
+
+**训练结果如何评估？**
+- 每 epoch 输出 MSE + ADE (平均位移误差) + FDE (终点位移误差)
+- 训练完成后运行图表生成脚本可视化所有指标

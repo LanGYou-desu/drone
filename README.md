@@ -136,21 +136,21 @@ python train/hybrid_predictor/generate_synthetic.py 200
 # 2. 阶段一+二训练（推荐，稳定收敛）
 python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
 
-# 3. 阶段三联合微调（可选，可能不稳定）
+# 3. 阶段三联合微调（可选）
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
+
+# 4. 恢复训练（自动跳过已完成阶段，恢复优化器/调度器状态）
+python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
 ```
 
-训练过程中每阶段结束时自动保存检查点到 `models/hybrid_predictor/phy_ode_diffusion.pt`。
-NaN 异常自动跳过，保护模型不被破坏。
+每阶段结束自动保存完整检查点（含优化器/调度器状态），命名格式 `phy_ode_diffusion_s{stage}_e{epoch}_v{loss}.pt`。
+最佳模型单独保存为 `phy_ode_diffusion_best_s{stage}.pt`，不被覆盖。
+NaN 异常自动跳过梯度更新，阶段三检测到 NaN 自动提前终止并保存。
 
-训练结果图表自动保存到 `train/hybrid_predictor/train_result/`，包含：
-- 损失分解曲线（train/val，对数尺度）
-- 收敛性分析（val/train 比、损失下降率、学习率衰减、耗时分布）
-- 阶段对比（柱状图 + 雷达图 + 箱线图）
-- 物理指标（速度/加速度/高度违反率）
-- 综合仪表盘（一页概览）
+训练评估指标：**MSE + ADE + FDE**，图表包含损失分解、收敛性分析、阶段对比（含雷达图）、综合仪表盘。
 
-预测服务启动时自动加载权重，`config.json` → `hybrid_model` 可调整运行时参数。
+预测服务自动查找最新/最佳权重文件（优先级：`best_s*` > `s*_e*` > 旧命名）。
+`config.json` → `hybrid_model` 可在设置页面直接调整物理约束参数。
 
 > 详细数学原理和训练方法见 [`docs/hybrid_prediction_model.md`](docs/hybrid_prediction_model.md)
 
