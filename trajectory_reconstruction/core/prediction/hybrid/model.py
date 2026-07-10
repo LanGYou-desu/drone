@@ -142,21 +142,18 @@ class PhyODEDiffusion(nn.Module):
 
     def forward(
         self,
-        ctx_t: torch.Tensor,          # (B, C) 历史时间戳
-        ctx_dt: torch.Tensor,         # (B, C) 历史时间间隔
-        ctx_pos: torch.Tensor,        # (B, C, 3) 历史位置
-        ctx_vel: torch.Tensor,        # (B, C, 3) 历史估计速度
-        tgt_t: torch.Tensor,          # (B, M) 目标时间戳
-        tgt_pos: torch.Tensor,        # (B, M, 3) 目标位置
-        tgt_vel: torch.Tensor = None, # (B, M, 3) 目标速度
-        mask: torch.Tensor = None,    # (B, C) padding mask
+        ctx_t: torch.Tensor,
+        ctx_dt: torch.Tensor,
+        ctx_pos: torch.Tensor,
+        ctx_vel: torch.Tensor,
+        tgt_t: torch.Tensor,
+        tgt_pos: torch.Tensor,
+        tgt_vel: torch.Tensor = None,
+        mask: torch.Tensor = None,
+        p_mean: torch.Tensor = None,   # (B, 3) 归一化统计量
+        p_std: torch.Tensor = None,    # (B, 3)
     ) -> dict:
-        """
-        训练前向传播（教师强制模式）。
-
-        Returns:
-            { "diff_loss": ..., "physics_loss": ..., "total_loss": ... }
-        """
+        """训练前向传播（教师强制模式）。"""
         # 1. Transformer 编码
         c = self.transformer(ctx_t, ctx_dt, ctx_pos, ctx_vel, mask)
 
@@ -180,10 +177,12 @@ class PhyODEDiffusion(nn.Module):
             # ODE 演化
             h_prior = self.state_manager.evolve(h, t_now, t_next)
 
-            # 扩散损失
+            # 扩散损失（含物理正则，使用原始空间统计量）
             loss_dict = self.diffusion.compute_loss(
-                h_prior, dt, ctx_pos[:, -1, :] if j == 0 else tgt_pos[:, j-1, :],
+                h_prior, dt,
+                ctx_pos[:, -1, :] if j == 0 else tgt_pos[:, j-1, :],
                 tgt_pos[:, j, :],
+                p_mean=p_mean, p_std=p_std,
             )
             total_diff_loss += loss_dict["diff_loss"]
             total_phy_loss += loss_dict["physics_loss"]

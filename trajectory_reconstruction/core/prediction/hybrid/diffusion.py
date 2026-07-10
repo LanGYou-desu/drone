@@ -220,13 +220,14 @@ class GuidedDiffusion(nn.Module):
         dt: torch.Tensor,
         prev_p: torch.Tensor,
         x0_gt: torch.Tensor,
+        p_mean: torch.Tensor = None,   # (B, 3) 归一化均值，用于反标准化物理约束
+        p_std: torch.Tensor = None,    # (B, 3) 归一化标准差
     ) -> dict:
         """
-        训练模式：仅计算扩散去噪损失。
+        训练模式：扩散去噪损失 + 可选的物理正则。
 
-        注：物理代价不在训练中计算，因为训练数据已标准化到单位方差，
-        v_max/a_max 的物理单位(m/s)与标准化空间不一致。
-        物理引导仅在推理时生效（此时可在原始坐标空间中计算）。
+        若提供 p_mean/p_std，物理代价在反标准化后的原始空间中计算，
+        梯度通过 1/p_std 缩放正确回传。
         """
         B = h_prior.shape[0]
         device = h_prior.device
@@ -237,7 +238,18 @@ class GuidedDiffusion(nn.Module):
         noise_pred = self.noise_net(x_tau, tau, h_prior, dt)
         diff_loss = F.mse_loss(noise_pred, noise)
 
-        return {"diff_loss": diff_loss, "physics_loss": 0.0}
+        # 物理正则：反标准化后在原始空间计算，梯度正确缩放
+        phy_loss = 0.0
+        if p_mean is not None and p_std is not None:
+            with torch.no_grad():
+                x0_pred_norm = self.scheduler.predict_x0(x_tau, tau, noise_pred)
+            # 反标准化到物理空间
+            x0_pred_phys = x0_pred_norm * p_std + p_mean
+            prev_p_phys = prev_p * p_std + p_mean
+            dt_phys = dt  # 时间不变
+            phy_loss = self._physics_cost(x0_pred_phys, prev_p_phys, dt_phys).mean()
+
+        return {"diff_loss": diff_loss, "physics_loss": phy_loss}
 
     @torch.no_grad()
     def guided_sampling(

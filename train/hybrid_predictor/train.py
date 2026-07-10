@@ -24,18 +24,16 @@ import json
 import argparse
 import time
 from datetime import datetime
+from pathlib import Path
 
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-# 路径设置
-_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-_TRAIN_DIR = os.path.dirname(_MODULE_DIR)
-_PROJECT_ROOT = os.path.dirname(_TRAIN_DIR)
-for p in (_PROJECT_ROOT, _TRAIN_DIR):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+# 路径（pathlib 绝对路径，无 sys.path 注入）
+_MODULE_DIR = Path(__file__).resolve().parent          # .../train/hybrid_predictor/
+_PROJECT_ROOT = _MODULE_DIR.parent.parent               # .../drone/
+sys.path.insert(0, str(_PROJECT_ROOT))
 
 from train.hybrid_predictor.dataset import (
     load_all_trajectories, TrajectoryDataset, collate_fn,
@@ -43,8 +41,7 @@ from train.hybrid_predictor.dataset import (
 from train.hybrid_predictor.generate_synthetic import generate_dataset
 from trajectory_reconstruction.core.prediction.hybrid import PhyODEDiffusion
 
-# 输出目录
-_RESULTS_DIR = os.path.join(_MODULE_DIR, "train_result")
+_RESULTS_DIR = _MODULE_DIR / "train_result"
 
 # 尝试导入 tqdm
 try:
@@ -632,8 +629,8 @@ def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:
 
 
 def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
-                     optimizer=None, scheduler=None):
-    """保存完整检查点（含优化器/调度器状态），最佳模型单独保存不被覆盖"""
+                     optimizer=None, scheduler=None, ade=None, fde=None):
+    """保存完整检查点：命名含 stage/epoch/loss，最佳模型单独保存"""
     os.makedirs(out_dir, exist_ok=True)
     ckpt = {
         "model_state_dict": model.state_dict(),
@@ -644,16 +641,20 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
         ckpt["optimizer_state_dict"] = optimizer.state_dict()
     if scheduler is not None:
         ckpt["scheduler_state_dict"] = scheduler.state_dict()
+    if ade is not None:
+        ckpt["ADE"] = ade
+    if fde is not None:
+        ckpt["FDE"] = fde
 
-    # 最新检查点
-    latest_path = os.path.join(out_dir, "phy_ode_diffusion.pt")
+    # 带描述的检查点文件名
+    fname = f"phy_ode_diffusion_s{stage}_e{epoch}_v{val_loss:.4f}.pt"
+    latest_path = os.path.join(out_dir, fname)
     torch.save(ckpt, latest_path)
 
-    # 最佳模型单独保存，不被覆盖
     if is_best:
         best_path = os.path.join(out_dir, f"phy_ode_diffusion_best_s{stage}.pt")
         torch.save(ckpt, best_path)
-        print(f"    -> 最佳模型 (val_loss={val_loss:.4f}): {best_path}")
+        print(f"    -> 最佳模型: {best_path}")
     return latest_path
 
 
@@ -734,11 +735,12 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
 
         scheduler.step()
         avg_train = total_loss / len(train_loader)
-        val_loss = _validate_stage1(model, val_loader, device)
+        val_loss, ade, fde = _validate_stage1(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
-        logger.log_epoch(1, epoch, avg_train, val_loss, lr, epoch_time)
+        logger.log_epoch(1, epoch, avg_train, val_loss, lr, epoch_time,
+                         extra={"ADE": ade, "FDE": fde})
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
@@ -758,8 +760,10 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
 
 
 def _validate_stage1(model, val_loader, device):
+    """返回 (MSE_loss, ADE, FDE) 三元组"""
     model.eval()
-    total_loss = 0.0
+    total_mse, total_ade, total_fde = 0.0, 0.0, 0.0
+    n_batches = 0
     with torch.no_grad():
         for batch in val_loader:
             b = _to_device(batch, device)
@@ -768,18 +772,27 @@ def _validate_stage1(model, val_loader, device):
                                                 b["ctx_vel"][:, -1, :], c)
             t_now = b["ctx_t"][:, -1]
             mse, count = 0.0, 0
+            preds, tgts = [], []
             for j in range(b["tgt_pos"].shape[1]):
                 t_next = b["tgt_t"][:, j]
                 dt_step = t_next - t_now
                 h_prior = model.state_manager.evolve(h, t_now, t_next)
-                mse += torch.nn.functional.mse_loss(h_prior[:, :3], b["tgt_pos"][:, j, :])
+                p_pred = h_prior[:, :3]
+                mse += torch.nn.functional.mse_loss(p_pred, b["tgt_pos"][:, j, :])
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
                 t_now = t_next
                 count += 1
-            total_loss += (mse / max(count, 1)).item()
+            total_mse += (mse / max(count, 1)).item()
+            if preds:
+                errs = torch.norm(torch.stack(preds, 1) - torch.stack(tgts, 1), dim=-1)
+                total_ade += errs.mean().item()
+                total_fde += errs[:, -1].mean().item()
+            n_batches += 1
     model.train()
-    return total_loss / len(val_loader)
+    n = max(n_batches, 1)
+    return total_mse / n, total_ade / n, total_fde / n
 
 
 # ── 阶段二：扩散模型 ──────────────────────────────────
@@ -976,12 +989,13 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss = _validate_stage1(model, val_loader, device)  # 联合训练用位置MSE评估
+        val_loss, ade, fde = _validate_stage1(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
         logger.log_epoch(3, epoch, avg_train, val_loss, lr, epoch_time,
-                         extra={"scheduled_sampling_prob": round(ss_prob, 3)})
+                         extra={"ADE": ade, "FDE": fde,
+                                "scheduled_sampling_prob": round(ss_prob, 3)})
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss

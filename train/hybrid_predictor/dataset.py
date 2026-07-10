@@ -273,6 +273,8 @@ class TrajectoryDataset(Dataset):
             "tgt_pos": torch.from_numpy(tgt_pos).float(),
             "tgt_t": torch.from_numpy(tgt_t).float(),
             "tgt_vel": torch.from_numpy(tgt_vel).float(),
+            "p_mean": torch.from_numpy(p_mean).float(),   # 归一化统计量(用于物理代价反标准化)
+            "p_std": torch.from_numpy(p_std).float(),
         }
 
 
