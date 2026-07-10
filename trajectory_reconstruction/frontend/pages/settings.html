@@ -65,6 +65,44 @@
         <button class="btn btn-primary btn-sm" onclick="saveCaptureWeights()" style="margin-top:8px;">保存捕捉权重</button>
     </div>
 
+    <!-- 混合预测模型 -->
+    <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><h3>🧠 混合预测模型 (Phy-ODE-Diffusion)</h3></div>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:12px;">
+            模型权重不存在时自动回退到线性外推
+        </p>
+        {% set hc = hybrid_config or {} %}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span style="font-size:0.85rem;width:80px;">启用模型</span>
+            <input type="checkbox" id="hybrid-enabled" {% if hc.enabled|default(true) %}checked{% endif %}>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <span style="font-size:0.85rem;width:80px;">推理设备</span>
+            <select id="hybrid-device" style="flex:1;padding:4px 8px;">
+                <option value="cpu" {% if hc.device|default('cpu')=='cpu' %}selected{% endif %}>CPU</option>
+                <option value="cuda:0" {% if hc.device=='cuda:0' %}selected{% endif %}>CUDA (GPU)</option>
+            </select>
+        </div>
+        {% for key, label, unit, minv, maxv, step in [
+            ('v_max','最大速度','m/s', 5, 60, 5),
+            ('a_max','最大加速度','m/s²', 5, 60, 5),
+            ('z_min','最小高度','m', 0, 100, 5),
+            ('guidance_eta','物理引导强度','', 0.01, 0.5, 0.01),
+            ('inference_steps','推理步数','步', 10, 200, 10),
+        ] %}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <span style="font-size:0.85rem;width:80px;">{{ label }}</span>
+            <input type="range" min="{{ minv }}" max="{{ maxv }}" step="{{ step }}"
+                   value="{{ hc[key]|default({'v_max':30,'a_max':30,'z_min':0,'guidance_eta':0.1,'inference_steps':50}[key]) }}"
+                   data-key="{{ key }}" class="hybrid-slider" style="flex:1;margin:0;">
+            <span class="hybrid-val" style="width:55px;text-align:right;font-size:0.85rem;">
+                {{ hc[key]|default({'v_max':30,'a_max':30,'z_min':0,'guidance_eta':0.1,'inference_steps':50}[key]) }}{{ ' '+unit if unit else '' }}
+            </span>
+        </div>
+        {% endfor %}
+        <button class="btn btn-primary btn-sm" onclick="saveHybridModel()" style="margin-top:8px;">保存预测模型设置</button>
+    </div>
+
     <!-- 关于 -->
     <div class="card">
         <div class="card-header"><h3>关于</h3></div>
@@ -127,6 +165,30 @@
         var resp = await fetch('/api/weights', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({capture_weights:weights})});
         var r = await resp.json();
         if (r.success) { sessionStorage.clear(); location.reload(); } else alert('保存失败');
+    }
+
+    // Hybrid model slider
+    document.querySelectorAll('.hybrid-slider').forEach(s => {
+        s.addEventListener('input', function(){
+            var unit = this.dataset.key === 'guidance_eta' ? '' :
+                       this.dataset.key === 'inference_steps' ? ' 步' :
+                       this.dataset.key === 'v_max' ? ' m/s' :
+                       this.dataset.key === 'a_max' ? ' m/s²' :
+                       this.dataset.key === 'z_min' ? ' m' : '';
+            this.nextElementSibling.textContent = this.value + unit;
+        });
+    });
+
+    async function saveHybridModel() {
+        var data = {};
+        data.enabled = document.getElementById('hybrid-enabled').checked;
+        data.device = document.getElementById('hybrid-device').value;
+        document.querySelectorAll('.hybrid-slider').forEach(s => {
+            data[s.dataset.key] = s.dataset.key === 'inference_steps' ? parseInt(s.value) : parseFloat(s.value);
+        });
+        var resp = await fetch('/api/hybrid_model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+        var r = await resp.json();
+        if (r.success) { alert('预测模型设置已保存'); } else { alert('保存失败'); }
     }
 
     updateThemeUI();

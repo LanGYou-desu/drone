@@ -33,6 +33,7 @@ def _page_context(active: str) -> dict:
         'theme': cfg.get('theme', 'dark'),
         'camera_speed': cfg.get('camera_speed', 0.12),
         'capture_weights': cfg.get('capture_weights', {}),
+        'hybrid_config': cfg.get('hybrid_model', {}),
         'app_version': APP_VERSION,
     }
 
@@ -140,6 +141,37 @@ def api_weights():
         save_config(cfg)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': '无有效更新'}), 400
+
+
+@main_bp.route('/api/hybrid_model', methods=['POST'])
+def api_hybrid_model():
+    """保存混合预测模型配置"""
+    cfg = ensure_config()
+    data = request.get_json(silent=True) or {}
+    if 'hybrid_model' not in cfg:
+        cfg['hybrid_model'] = {}
+
+    # 支持的字段及其类型
+    float_fields = ['v_max', 'a_max', 'z_min', 'guidance_eta']
+    int_fields = ['inference_steps']
+    bool_fields = ['enabled']
+    str_fields = ['device']
+
+    for key in float_fields:
+        if key in data:
+            cfg['hybrid_model'][key] = float(data[key])
+    for key in int_fields:
+        if key in data:
+            cfg['hybrid_model'][key] = int(data[key])
+    for key in bool_fields:
+        if key in data:
+            cfg['hybrid_model'][key] = bool(data[key])
+    for key in str_fields:
+        if key in data:
+            cfg['hybrid_model'][key] = str(data[key])
+
+    save_config(cfg)
+    return jsonify({'success': True, 'hybrid_model': cfg['hybrid_model']})
 
 
 @main_bp.route('/api/theme', methods=['GET', 'POST'])

@@ -27,21 +27,39 @@ def _get_model_path() -> str:
                         "phy_ode_diffusion.pt")
 
 
-def load_hybrid_model(device: str = "cpu") -> Optional["PhyODEDiffusion"]:
+def _get_hybrid_config() -> dict:
+    """从 config.json 读取混合模型配置，缺失字段用默认值填充"""
+    try:
+        from trajectory_reconstruction.core.config.config_manager import ensure_config
+        cfg = ensure_config()
+        return cfg.get("hybrid_model", {})
+    except Exception:
+        return {}
+
+
+def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
     """
     加载 Phy-ODE-Diffusion 模型（含缓存）。
 
-    Args:
-        device: 推理设备 ("cpu" / "cuda:0")
+    从 config.json → hybrid_model 读取配置参数。
+    若权重文件不存在，返回 None。
 
-    Returns:
-        模型实例，或 None（模型文件不存在时）
+    Args:
+        device: 推理设备，None 则从 config.json 读取
     """
     global _model_cache, _model_device
 
     model_path = _get_model_path()
     if not os.path.isfile(model_path):
         print(f"[预测] 混合模型权重不存在: {model_path}，回退到线性外推")
+        return None
+
+    # 从 config.json 读取配置
+    h_cfg = _get_hybrid_config()
+    if device is None:
+        device = h_cfg.get("device", "cpu")
+    if not h_cfg.get("enabled", True):
+        print("[预测] 混合模型已禁用 (hybrid_model.enabled=false)，回退到线性外推")
         return None
 
     if _model_cache is not None and _model_device == device:
@@ -53,7 +71,14 @@ def load_hybrid_model(device: str = "cpu") -> Optional["PhyODEDiffusion"]:
         device_obj = torch.device(device)
         ckpt = torch.load(model_path, map_location=device_obj, weights_only=False)
 
-        model = PhyODEDiffusion()
+        # 用 config.json 的参数创建模型（物理约束、引导强度等）
+        model = PhyODEDiffusion(
+            v_max=h_cfg.get("v_max", 30.0),
+            a_max=h_cfg.get("a_max", 30.0),
+            z_min=h_cfg.get("z_min", 0.0),
+            guidance_eta=h_cfg.get("guidance_eta", 0.1),
+            n_inference_steps=h_cfg.get("inference_steps", 50),
+        )
         model.load_state_dict(ckpt["model_state_dict"])
         model.to(device_obj)
         model.eval()
@@ -62,7 +87,8 @@ def load_hybrid_model(device: str = "cpu") -> Optional["PhyODEDiffusion"]:
         _model_cache = model
         _model_device = device
         print(f"[预测] 已加载混合模型: {model_path} "
-              f"({model.get_model_info()['total_params']:,} 参数)")
+              f"({model.get_model_info()['total_params']:,} 参数, "
+              f"device={device}, v_max={model.v_max})")
         return model
 
     except ImportError:
