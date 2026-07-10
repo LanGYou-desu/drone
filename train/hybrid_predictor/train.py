@@ -1,9 +1,11 @@
 """
 Phy-ODE-Diffusion 分阶段训练脚本（含进度条、图表输出和详细日志）
 
-输出目录: train/hybrid_predictor/results/
-  - loss_curves.png         训练/验证损失曲线
-  - stage_comparison.png    各阶段对比图
+输出目录: train/hybrid_predictor/train_result/
+  - 01_loss_breakdown.png    损失分解曲线
+  - 02_convergence_analysis.png  收敛性分析
+  - 03_stage_comparison.png      阶段对比（含雷达图）
+  - 05_dashboard.png             综合仪表盘
   - training_history.json   详细训练日志
   - training_summary.json   训练摘要
 

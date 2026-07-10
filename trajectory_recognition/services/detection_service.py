@@ -6,6 +6,7 @@
 """
 
 import json
+import math
 import os
 import threading
 import time
@@ -191,7 +192,6 @@ def _to_world(pt3d, platform_pos):
     输出: 世界坐标系 (X=右 Y=↑ Z=前)
     步骤: Y轴翻转 → 平台旋转(extrinsic Yaw→Pitch→Roll) → 平台平移
     """
-    import math
     if not platform_pos:
         return pt3d
     x, y_down, z = pt3d

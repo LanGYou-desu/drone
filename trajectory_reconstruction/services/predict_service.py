@@ -65,8 +65,10 @@ def predict_single(method_id: str, num_points: int = 6,
 
     # 优先使用混合模型（仅对非 synthetic 平台）
     if method_id != 'synthetic' and is_hybrid_model_available():
+        cfg = ensure_config()
+        device = cfg.get('hybrid_model', {}).get('device', 'cpu')
         pred_points, pred_times = generate_prediction_hybrid(
-            points, timestamps, num_points, time_step,
+            points, timestamps, num_points, time_step, device=device,
         )
     else:
         pred_points, pred_times = generate_prediction(
@@ -174,9 +176,6 @@ def _synthesize_predictions(results, num_points, time_step):
             ref_times = result.get('pred_times', [])[:max_pred_len]
 
     if max_pred_len < 2 or not ref_times:
-        return [], []
-
-    if not ref_times:
         return [], []
 
     sorted_ts = ref_times

@@ -3,9 +3,8 @@
 
 支持:
   - 从 .dat 文件加载真实轨迹
-  - 从 .npy 文件加载合成轨迹
+  - 从 .npz 文件加载合成轨迹
   - 滑动窗口采样 (context, target) 对
-  - 按轨迹 ID 划分 train/val
 """
 
 import os
