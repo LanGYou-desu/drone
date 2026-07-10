@@ -339,7 +339,8 @@ def _make_stage_comparison_chart(logger: TrainingLogger, output_dir: str):
             stability,
         ]
 
-    angles = [n * 2 * _plt.pi / len(metrics) for n in range(len(metrics))]
+    import numpy as np
+    angles = [n * 2 * np.pi / len(metrics) for n in range(len(metrics))]
     angles += angles[:1]  # 闭合
 
     for s, values in scores.items():
@@ -356,8 +357,9 @@ def _make_stage_comparison_chart(logger: TrainingLogger, output_dir: str):
     # (右) 箱线图: 损失分布
     ax = fig.add_subplot(1, 3, 3)
     box_data = [[e["val_loss"] for e in logger.history if e["stage"] == s] for s in stages]
-    bp = ax.boxplot(box_data, labels=stage_labels, patch_artist=True, showmeans=True,
+    bp = ax.boxplot(box_data, patch_artist=True, showmeans=True,
                     meanprops=dict(marker='D', markerfacecolor='red', markersize=6))
+    ax.set_xticklabels(stage_labels)
     for i, (patch, s) in enumerate(zip(bp['boxes'], stages)):
         patch.set_facecolor(_COLORS.get(f'stage{s}', '#333'))
         patch.set_alpha(0.6)
