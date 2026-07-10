@@ -54,6 +54,9 @@ python main.py recog         # 仅轨迹识别 → :5001
 | `detection_methods.<id>.weight` | 综合轨迹合成权重（默认 1.0） |
 | `hybrid_model.enabled` | 是否启用混合预测模型 |
 | `hybrid_model.v_max` / `a_max` / `z_min` | 物理约束参数（速度/加速度/高度） |
+| `hybrid_model.guidance_eta` | 物理引导强度（0.01-0.50） |
+| `hybrid_model.inference_steps` | DDIM 推理步数（10-200） |
+| `hybrid_model.device` | 推理设备（cpu / cuda:0） |
 | `capture_weights` | 捕捉时机评分权重 |
 | `camera_speed` | WASD 移动速度（默认 0.12） |
 | `theme` | 默认主题（dark / light） |
@@ -101,11 +104,13 @@ python train/yolotrain/train.py \
 # 1. 生成合成训练数据
 python train/hybrid_predictor/generate_synthetic.py 200
 
-# 2. 训练（三阶段自动执行）
-python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32
+# 2. 阶段一+二训练（推荐）
+python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
 
-# 3. 训练完成后，权重自动保存到 models/hybrid_predictor/
-#    重启服务即可使用混合模型进行预测
+# 3. 阶段三联合微调（可选）
+python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
+
+# 训练完成后权重自动保存到 models/hybrid_predictor/，重启服务即生效
 ```
 
 训练结果图表保存在 `train/hybrid_predictor/train_result/`，包含：
@@ -140,3 +145,9 @@ python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32
 - 检查 `models/hybrid_predictor/phy_ode_diffusion.pt` 是否存在
 - 查看控制台 `[预测]` 日志了解回退原因
 - 历史点不足 10 个时自动回退到线性外推
+- 设置页面可禁用混合模型或调整物理约束参数
+
+**训练时 loss 显示 NaN？**
+- 通常是阶段三 scheduled sampling 不稳定导致，阶段一+二训练即可获得可用模型
+- 训练脚本会自动跳过 NaN 梯度，阶段三检测到 NaN 会提前终止并保存检查点
+- 减少批次大小（`--batch 32`）或降低学习率可提升稳定性

@@ -510,23 +510,28 @@ python train/hybrid_predictor/generate_synthetic.py 200
 
 # ========== 2. 分阶段训练 ==========
 
+# GPU 环境（推荐使用 conda drone 环境）
+conda activate drone
+
 # 阶段一: Transformer + ODE + GRU
-python train/hybrid_predictor/train.py --stage 1 --epochs 50 --batch 32
+python train/hybrid_predictor/train.py --stage 1 --epochs 50 --batch 64 --device cuda:0
 
-# 阶段二: 扩散模型
-python train/hybrid_predictor/train.py --stage 2 --epochs 100 --batch 32
+# 阶段二: 扩散模型（推荐到此为止，稳定收敛）
+python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
 
-# 阶段三: 联合微调
-python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 16
+# 阶段三: 联合微调（可选，scheduled sampling 可能导致 NaN）
+python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
-# ========== 3. 一键完整训练 ==========
-python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32 --device cpu
+# ========== 3. CPU 训练（较慢）==========
+python train/hybrid_predictor/train.py --stage 2 --epochs 30 --batch 32 --device cpu
 
-# ========== 4. GPU 训练 ==========
-python train/hybrid_predictor/train.py --stage all --epochs 100 --batch 64 --device cuda:0
-
-# ========== 5. 恢复训练 ==========
+# ========== 4. 恢复训练 ==========
 python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion.pt
+
+# ========== 注意事项 ==========
+# - 每阶段结束自动保存权重到 models/hybrid_predictor/
+# - NaN 异常自动跳过，阶段三检测到 NaN 会提前终止并保存
+# - 推荐使用 --stage 2 跳过阶段三获得稳定模型
 ```
 
 ---

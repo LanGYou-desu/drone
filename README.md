@@ -7,8 +7,13 @@
 ## 快速开始
 
 ```bash
+# CPU 版 PyTorch
 pip install -r requirements.txt
 
+# GPU 版 PyTorch（CUDA 12.4）
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+
+# 启动
 python main.py               # 默认同时启动两个模块（桌面窗口）
 python main.py --headless    # 纯 HTTP 模式
 python main.py recon         # 仅重建分析 → :5000
@@ -128,14 +133,24 @@ python train/yolotrain/train.py \
 # 1. 生成合成训练数据（或放入 .dat 格式真实数据到 dataset/train/）
 python train/hybrid_predictor/generate_synthetic.py 200
 
-# 2. 三阶段训练
-python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32
+# 2. 阶段一+二训练（推荐，稳定收敛）
+python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
+
+# 3. 阶段三联合微调（可选，可能不稳定）
+python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 ```
 
-训练结果图表自动保存到 `train/hybrid_predictor/train_result/`，包含：
-- 损失分解、收敛性分析、阶段对比（含雷达图）、物理指标、综合仪表盘
+训练过程中每阶段结束时自动保存检查点到 `models/hybrid_predictor/phy_ode_diffusion.pt`。
+NaN 异常自动跳过，保护模型不被破坏。
 
-训练完成后权重自动保存到 `models/hybrid_predictor/phy_ode_diffusion.pt`，预测服务启动时自动加载。
+训练结果图表自动保存到 `train/hybrid_predictor/train_result/`，包含：
+- 损失分解曲线（train/val，对数尺度）
+- 收敛性分析（val/train 比、损失下降率、学习率衰减、耗时分布）
+- 阶段对比（柱状图 + 雷达图 + 箱线图）
+- 物理指标（速度/加速度/高度违反率）
+- 综合仪表盘（一页概览）
+
+预测服务启动时自动加载权重，`config.json` → `hybrid_model` 可调整运行时参数。
 
 > 详细数学原理和训练方法见 [`docs/hybrid_prediction_model.md`](docs/hybrid_prediction_model.md)
 
