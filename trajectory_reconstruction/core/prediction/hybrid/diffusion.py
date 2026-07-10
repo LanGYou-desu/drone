@@ -221,7 +221,13 @@ class GuidedDiffusion(nn.Module):
         prev_p: torch.Tensor,
         x0_gt: torch.Tensor,
     ) -> dict:
-        """训练模式：计算扩散去噪损失 + 物理惩罚"""
+        """
+        训练模式：仅计算扩散去噪损失。
+
+        注：物理代价不在训练中计算，因为训练数据已标准化到单位方差，
+        v_max/a_max 的物理单位(m/s)与标准化空间不一致。
+        物理引导仅在推理时生效（此时可在原始坐标空间中计算）。
+        """
         B = h_prior.shape[0]
         device = h_prior.device
 
@@ -231,12 +237,7 @@ class GuidedDiffusion(nn.Module):
         noise_pred = self.noise_net(x_tau, tau, h_prior, dt)
         diff_loss = F.mse_loss(noise_pred, noise)
 
-        # 预测 x̂₀ 的物理惩罚
-        with torch.no_grad():
-            x0_pred = self.scheduler.predict_x0(x_tau, tau, noise_pred)
-        phy_loss = self._physics_cost(x0_pred, prev_p, dt).mean()
-
-        return {"diff_loss": diff_loss, "physics_loss": phy_loss}
+        return {"diff_loss": diff_loss, "physics_loss": 0.0}
 
     @torch.no_grad()
     def guided_sampling(

@@ -15,7 +15,10 @@ from torch.utils.data import Dataset
 
 def estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarray:
     """
-    用中心差分估计各点的速度向量。
+    用中心差分 + 端点前向/后向差分估计各点的速度向量。
+
+    内部点用中心差分（O(Δt²) 精度），端点用单侧差分（O(Δt) 精度），
+    避免简单复制相邻值导致的边界速度失真。
 
     Args:
         positions: (N, 3) 位置序列
@@ -28,13 +31,21 @@ def estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarr
     vel = np.zeros((N, 3), dtype=np.float32)
     if N < 2:
         return vel
+
     if N >= 3:
+        # 内部点: 中心差分
         for i in range(1, N - 1):
             dt_span = timestamps[i + 1] - timestamps[i - 1]
             if dt_span > 0:
                 vel[i] = (positions[i + 1] - positions[i - 1]) / dt_span
-        vel[0] = vel[1]
-        vel[-1] = vel[-2]
+        # 起点: 前向差分
+        dt_fwd = timestamps[1] - timestamps[0]
+        if dt_fwd > 0:
+            vel[0] = (positions[1] - positions[0]) / dt_fwd
+        # 终点: 后向差分
+        dt_bwd = timestamps[-1] - timestamps[-2]
+        if dt_bwd > 0:
+            vel[-1] = (positions[-1] - positions[-2]) / dt_bwd
     else:  # N == 2
         dt_span = timestamps[1] - timestamps[0]
         if dt_span > 0:
@@ -209,14 +220,22 @@ class TrajectoryDataset(Dataset):
 
         # 随机数据增强
         if self.augment:
-            # 随机旋转（绕 Y 轴，即高度轴）
-            angle = np.random.uniform(0, 2 * np.pi)
-            cos_a, sin_a = np.cos(angle), np.sin(angle)
-            R = np.array([[cos_a, 0, sin_a], [0, 1, 0], [-sin_a, 0, cos_a]])
-            ctx_pos = ctx_pos @ R.T
-            ctx_vel = ctx_vel @ R.T
-            tgt_pos = tgt_pos @ R.T
-            tgt_vel = tgt_vel @ R.T
+            # 检测垂直运动占比，爬升/下降为主的轨迹不进行 Y 轴旋转
+            # (绕Y轴旋转会改变水平方向但对高度无影响，对纯爬升无意义)
+            all_pos = np.concatenate([ctx_pos, tgt_pos], axis=0)
+            vertical_range = np.ptp(all_pos[:, 1])  # Y 轴跨度
+            horizontal_range = max(np.ptp(all_pos[:, 0]), np.ptp(all_pos[:, 2]), 1e-6)
+            is_mostly_horizontal = vertical_range < 3.0 * horizontal_range
+
+            if is_mostly_horizontal:
+                # 随机旋转（绕 Y 轴，仅在水平运动为主时有效）
+                angle = np.random.uniform(0, 2 * np.pi)
+                cos_a, sin_a = np.cos(angle), np.sin(angle)
+                R = np.array([[cos_a, 0, sin_a], [0, 1, 0], [-sin_a, 0, cos_a]])
+                ctx_pos = ctx_pos @ R.T
+                ctx_vel = ctx_vel @ R.T
+                tgt_pos = tgt_pos @ R.T
+                tgt_vel = tgt_vel @ R.T
 
             # 随机缩放（±10%）
             scale = np.random.uniform(0.9, 1.1)
@@ -225,9 +244,10 @@ class TrajectoryDataset(Dataset):
             ctx_vel *= scale
             tgt_vel *= scale
 
-            # 随机加噪
-            ctx_pos += np.random.randn(*ctx_pos.shape) * 0.01
-            tgt_pos += np.random.randn(*tgt_pos.shape) * 0.01
+            # 小幅随机加噪
+            noise_scale = 0.005 * np.std(all_pos, axis=0).clip(min=1e-3)
+            ctx_pos += np.random.randn(*ctx_pos.shape) * noise_scale
+            tgt_pos += np.random.randn(*tgt_pos.shape) * noise_scale
 
         # 标准化（零均值单位方差，基于上下文）
         if self.normalize:
