@@ -990,7 +990,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
 def main():
     parser = argparse.ArgumentParser(description="Phy-ODE-Diffusion 训练")
     parser.add_argument("--stage", type=str, default="all",
-                        choices=["1", "2", "3", "all"])
+                        choices=["1", "2", "3", "all"],
+                        help="1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch", type=int, default=32)
     parser.add_argument("--device", type=str, default="cpu")
@@ -1044,22 +1045,26 @@ def main():
 
     t_total_start = time.time()
 
-    # ── 阶段训练 ──
-    if args.stage in ("1", "all"):
-        if not args.resume:
-            train_stage1(model, train_loader, val_loader, config, device, logger)
+    # --stage 语义: "1"=仅阶段一, "2"=阶段一→二, "3"=仅阶段三, "all"=全部
+    run_s1 = args.stage in ("1", "2", "all")
+    run_s2 = args.stage in ("2", "all")
+    run_s3 = args.stage in ("3", "all")
 
-    if args.stage in ("2", "all"):
-        if args.stage == "2" and not args.resume:
-            s1_path = os.path.join(out_dir, "phy_ode_diffusion.pt")
-            if os.path.exists(s1_path):
-                print(f"[LOAD] 加载阶段一最佳权重: {s1_path}")
-                ckpt = torch.load(s1_path, map_location=device)
-                model.load_state_dict(ckpt["model_state_dict"])
-                model.diffusion.scheduler.to(device)
+    if args.resume:
+        # 恢复训练: 跳过已完成的阶段
+        ckpt_stage = torch.load(args.resume, map_location='cpu').get("stage", 0)
+        if ckpt_stage >= 1:
+            run_s1 = False
+        if ckpt_stage >= 2:
+            run_s2 = False
+
+    if run_s1:
+        train_stage1(model, train_loader, val_loader, config, device, logger)
+
+    if run_s2:
         train_stage2(model, train_loader, val_loader, config, device, logger)
 
-    if args.stage in ("3", "all"):
+    if run_s3:
         train_stage3(model, train_loader, val_loader, config, device, logger)
 
     total_time = time.time() - t_total_start
