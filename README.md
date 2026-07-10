@@ -2,7 +2,7 @@
 
 基于多平台协同的低空无人机智能监测系统。融合可见光、红外、雷达三种传感平台的轨迹数据，提供双目立体视觉（YOLO + 三角测量）无人机检测、3D 可视化、加权合成、轨迹预测、捕捉时机分析和 AI 策略生成。
 
-**技术栈：** Python Flask · pywebview · Three.js · ECharts · YOLO (ultralytics) · OpenCV · 双目立体视觉 · OpenAI 兼容 AI 接口
+**技术栈：** Python Flask · pywebview · Three.js · ECharts · YOLO (ultralytics) · OpenCV · PyTorch · 双目立体视觉 · OpenAI 兼容 AI 接口
 
 ## 快速开始
 
@@ -15,7 +15,7 @@ python main.py recon         # 仅重建分析 → :5000
 python main.py recog         # 仅轨迹识别 → :5001
 ```
 
-首次启动识别模块时会自动下载 YOLO 模型。编辑 `config.json` 可切换模型、配置双目参数等。
+首次启动识别模块时会自动下载 YOLO 模型。编辑 `config.json` 可切换模型、配置双目参数、AI 接口和预测模型参数。
 
 ## 项目结构
 
@@ -24,13 +24,17 @@ drone/
 ├── main.py                              # 统一入口
 ├── config.json                          # 运行时配置
 ├── requirements.txt
-├── models/yolo/                         # YOLO 模型权重
+├── models/                              # 模型权重文件
+│   ├── yolo/                            # YOLO 模型权重 (.pt)
+│   └── hybrid_predictor/                # 轨迹预测模型权重 (.pt)
 │
 ├── trajectory_reconstruction/           # 轨迹重建与分析 (:5000)
 │   ├── core/                            #   领域逻辑
 │   │   ├── config/                      #   配置管理
 │   │   ├── io/                          #   数据 I/O
 │   │   ├── prediction/                  #   预测算法
+│   │   │   ├── prediction.py            #     预测入口（线性外推 + 混合模型）
+│   │   │   └── hybrid/                  #     Phy-ODE-Diffusion 模型定义
 │   │   ├── ai/                          #   AI 策略
 │   │   ├── state.py                     #   全局状态
 │   │   └── math_utils.py                #   数学工具
@@ -51,8 +55,19 @@ drone/
 │   │   ├── detection_service.py         #   检测会话管理 + 世界坐标变换
 │   │   └── data_bridge.py               #   轨迹数据桥接 → data/fact/
 │   ├── views/                           #   HTTP 接口 + 页面路由
-│   ├── train.py                         #   YOLO 训练脚本
 │   └── frontend/                        #   页面模板 + JS
+│
+├── train/                               # 模型训练
+│   ├── yolotrain/                       # YOLO 无人机检测训练
+│   │   ├── dataset/                     #   训练/验证数据
+│   │   ├── train.py                     #   训练脚本（含图表输出）
+│   │   └── train_result/                #   训练结果图表和日志
+│   └── hybrid_predictor/                # 轨迹预测模型训练
+│       ├── dataset/                     #   训练/验证数据 (.npz/.dat)
+│       ├── dataset.py                   #   数据加载 + 滑动窗口采样
+│       ├── generate_synthetic.py        #   合成轨迹生成器
+│       ├── train.py                     #   分阶段训练脚本（含图表输出）
+│       └── train_result/                #   训练结果图表和日志
 │
 ├── templates/                           # 共享前端资源
 │   ├── frontend/shared/                 #   base.html + icons.html
@@ -74,8 +89,10 @@ drone/
 ### 轨迹重建与分析 (:5000)
 - 3D 轨迹可视化（Three.js）
 - 多平台加权合成
-- 轨迹预测（线性外推）
-- 运动学分析图表（ECharts）
+- **轨迹预测 — 双模式**:
+  - **Phy-ODE-Diffusion 混合模型**: Transformer + 物理 ODE + 扩散生成，物理约束自回归预测
+  - **线性外推**: 快速兜底方案，模型不可用时自动回退
+- 运动学分析图表（ECharts）— 高度/速度/加速度/曲率
 - 最佳捕捉时机评分
 - AI 反制策略生成
 - 数据备份/恢复
@@ -89,9 +106,11 @@ drone/
 
 ## 模型训练
 
+### YOLO 无人机检测模型
+
 ```bash
 # 准备数据集（YOLO 格式标注）
-# 详见 DEVELOPER.md 第 16 节
+# 详见 DEVELOPER.md
 
 # 训练无人机检测模型
 python train/yolotrain/train.py \
@@ -100,9 +119,31 @@ python train/yolotrain/train.py \
     --epochs 100 --imgsz 640
 ```
 
+训练结果图表自动保存到 `train/yolotrain/train_result/`，包含：
+- 损失分解曲线、验证指标曲线、收敛性分析、综合仪表盘
+
+### 轨迹预测模型 (Phy-ODE-Diffusion)
+
+```bash
+# 1. 生成合成训练数据（或放入 .dat 格式真实数据到 dataset/train/）
+python train/hybrid_predictor/generate_synthetic.py 200
+
+# 2. 三阶段训练
+python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32
+```
+
+训练结果图表自动保存到 `train/hybrid_predictor/train_result/`，包含：
+- 损失分解、收敛性分析、阶段对比（含雷达图）、物理指标、综合仪表盘
+
+训练完成后权重自动保存到 `models/hybrid_predictor/phy_ode_diffusion.pt`，预测服务启动时自动加载。
+
+> 详细数学原理和训练方法见 [`docs/hybrid_prediction_model.md`](docs/hybrid_prediction_model.md)
+
 ## 文档
 
 | 文档 | 说明 |
 |------|------|
 | [使用手册](docs/manual.md) | 用户操作指南 |
+| [配置说明](docs/CONFIG.md) | config.json 完整参数说明 |
+| [混合预测模型](docs/hybrid_prediction_model.md) | Phy-ODE-Diffusion 数学模型、架构、训练方法 |
 | [开发文档](docs/DEVELOPER.md) | 架构、API、开发指南 |

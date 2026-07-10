@@ -24,7 +24,11 @@ python main.py recog         # 仅轨迹识别 → :5001
 
 **操作：** 鼠标左键旋转 · 滚轮缩放 · 右键平移 · WASD 飞行 · QE 升降 · Space 播放 · 悬停轨迹点查看坐标和时间
 
-**预测** — 选择平台，调整点数/步长，点击「开始预测」。所有平台预测时间自动对齐。
+**预测** — 选择平台，调整点数/步长，点击「开始预测」。系统自动选择最优预测引擎：
+- **Phy-ODE-Diffusion 混合模型**：基于深度学习的物理约束预测（需训练权重）
+- **线性外推**：兜底方案（始终可用）
+
+所有平台预测时间自动对齐，综合轨迹由各平台预测加权合成。
 
 **分析** — 高度/速度/加速度/曲率四张图表，原始+预测拼接显示。底部卡片给出最佳捕捉时机（需先预测）。
 
@@ -48,6 +52,8 @@ python main.py recog         # 仅轨迹识别 → :5001
 |------|------|
 | `ai.api_key` | AI 接口密钥 |
 | `detection_methods.<id>.weight` | 综合轨迹合成权重（默认 1.0） |
+| `hybrid_model.enabled` | 是否启用混合预测模型 |
+| `hybrid_model.v_max` / `a_max` / `z_min` | 物理约束参数（速度/加速度/高度） |
 | `capture_weights` | 捕捉时机评分权重 |
 | `camera_speed` | WASD 移动速度（默认 0.12） |
 | `theme` | 默认主题（dark / light） |
@@ -55,23 +61,68 @@ python main.py recog         # 仅轨迹识别 → :5001
 | `detection.confidence_threshold` | 检测置信度阈值 |
 | `stereo.baseline` | 双目基线距离（米） |
 
+完整配置说明见 [`docs/CONFIG.md`](CONFIG.md)
+
 ## 数据格式
 
 `.dat` 文件，每行空格分隔 `x y z t`（坐标 + 秒）。
 
+示例：
+```
+12.3456 -3.2100 150.0000 0.0000
+12.5120 -3.1850 150.1230 0.3000
+12.6890 -3.1420 150.2450 0.6000
+```
+
+此格式同时用于：
+- 运行时轨迹数据（`data/fact/*.dat`）
+- 训练数据导入（放入 `train/hybrid_predictor/dataset/train/` 或 `valid/`）
+
 ## 模型训练
 
+### YOLO 无人机检测模型
+
 ```bash
-# 准备数据集并训练自定义无人机检测模型
+# 训练
 python train/yolotrain/train.py \
     --data train/yolotrain/dataset/data.yaml \
     --model yolov8n.pt \
     --epochs 100
+
+# 查看训练结果
+# 图表保存在 train/yolotrain/train_result/ 中
 ```
 
-详见开发文档第 16 节。
+详见开发文档。
+
+### 轨迹预测模型 (Phy-ODE-Diffusion)
+
+```bash
+# 1. 生成合成训练数据
+python train/hybrid_predictor/generate_synthetic.py 200
+
+# 2. 训练（三阶段自动执行）
+python train/hybrid_predictor/train.py --stage all --epochs 30 --batch 32
+
+# 3. 训练完成后，权重自动保存到 models/hybrid_predictor/
+#    重启服务即可使用混合模型进行预测
+```
+
+训练结果图表保存在 `train/hybrid_predictor/train_result/`，包含：
+- 损失分解曲线（train/val，对数尺度）
+- 收敛性分析（val/train 比、损失下降率、学习率衰减、耗时分布）
+- 阶段对比（柱状图 + 雷达图 + 箱线图）
+- 物理指标（速度/加速度/高度违反率）
+- 综合仪表盘（一页概览）
+
+详细原理见 [`docs/hybrid_prediction_model.md`](hybrid_prediction_model.md)
 
 ## 常见问题
+
+**预测不准？** 
+- 检查是否启用了混合模型（`hybrid_model.enabled`），模型权重是否存在
+- 无权重时自动回退到线性外推，精度有限
+- 使用更多训练数据（真实 `.dat` 轨迹放入 `train/hybrid_predictor/dataset/train/`）可提升精度
 
 **检测不到无人机？** COCO 预训练模型无 drone 类，需训练自定义模型或使用 airplane/bird 代理。配置中 `target_classes` 设为 `[4, 14]` 可检测飞行器和飞鸟。
 
@@ -84,3 +135,8 @@ python train/yolotrain/train.py \
 **切换主题？** 设置页面点击切换，自动保存到 localStorage。
 
 **检测历史显示"空"？** 旧格式备份已自动迁移，新检测备份正常显示平台名。
+
+**混合模型未加载？**
+- 检查 `models/hybrid_predictor/phy_ode_diffusion.pt` 是否存在
+- 查看控制台 `[预测]` 日志了解回退原因
+- 历史点不足 10 个时自动回退到线性外推

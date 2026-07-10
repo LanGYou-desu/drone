@@ -1,9 +1,15 @@
 """
 预测编排服务 — 参数校验 + 调用预测算法 + 结果持久化
+
+优先使用 Phy-ODE-Diffusion 混合模型，不可用时回退到线性外推。
 """
 from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.config.config_manager import ensure_config
-from trajectory_reconstruction.core.prediction.prediction import generate_prediction
+from trajectory_reconstruction.core.prediction.prediction import (
+    generate_prediction,
+    generate_prediction_hybrid,
+    is_hybrid_model_available,
+)
 from trajectory_reconstruction.core.io.data_loader import save_predict_data
 from trajectory_reconstruction.core.math_utils import lerp_3d_extrapolate, smooth_points_3d
 
@@ -45,7 +51,9 @@ def predict_single(method_id: str, num_points: int = 6,
                    time_step: float | None = None) -> dict | None:
     """
     对指定平台进行预测，返回 { prediction: [[x,y,z],...], pred_times: [t,...] }
-    若条件不满足返回 None
+
+    优先使用 Phy-ODE-Diffusion 混合模型（若权重文件存在），
+    否则回退到线性外推。综合轨迹(synthetic)不参与预测。
     """
     data = detection_methods.get(method_id)
     if not data or not data.get('enabled', True) or len(data.get('points', [])) < 2:
@@ -54,7 +62,16 @@ def predict_single(method_id: str, num_points: int = 6,
     num_points, time_step = clamp_params(num_points, time_step)
     points = data['points']
     timestamps = data.get('timestamps', [])
-    pred_points, pred_times = generate_prediction(points, timestamps, num_points, time_step)
+
+    # 优先使用混合模型（仅对非 synthetic 平台）
+    if method_id != 'synthetic' and is_hybrid_model_available():
+        pred_points, pred_times = generate_prediction_hybrid(
+            points, timestamps, num_points, time_step,
+        )
+    else:
+        pred_points, pred_times = generate_prediction(
+            points, timestamps, num_points, time_step,
+        )
 
     return {
         'prediction': pred_points,
