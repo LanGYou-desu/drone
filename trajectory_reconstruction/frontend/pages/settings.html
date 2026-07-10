@@ -89,7 +89,7 @@
 
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
             <span style="font-size:0.85rem;min-width:70px;">推理设备</span>
-            <select id="hybrid-device" style="flex:1;padding:6px 10px;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:0.85rem;">
+            <select id="hybrid-device" style="flex:1;padding:4px 8px;">
                 <option value="cpu" {% if hc.device|default('cpu')=='cpu' %}selected{% endif %}>CPU</option>
                 <option value="cuda:0" {% if hc.device=='cuda:0' %}selected{% endif %}>CUDA (GPU)</option>
             </select>
@@ -103,8 +103,8 @@
             <input type="range" min="0" max="100" step="1"
                    value="{{ hc[key]|default(defs[key]) }}"
                    data-key="{{ key }}" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:52px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ hc[key]|default(defs[key]) }} {{ unit }}
+            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ hc[key]|default(defs[key]) }}
             </span>
         </div>
         {% endfor %}
@@ -116,7 +116,7 @@
             <input type="range" min="1" max="50" step="1"
                    value="{{ (hc.guidance_eta|default(defs.guidance_eta) * 100)|int }}"
                    data-key="guidance_eta" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:36px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
                 {{ "%.2f"|format(hc.guidance_eta|default(defs.guidance_eta)) }}
             </span>
         </div>
@@ -125,8 +125,8 @@
             <input type="range" min="10" max="200" step="10"
                    value="{{ hc.inference_steps|default(defs.inference_steps) }}"
                    data-key="inference_steps" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:36px;text-align:right;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ hc.inference_steps|default(defs.inference_steps) }} 步
+            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ hc.inference_steps|default(defs.inference_steps) }}
             </span>
         </div>
 
@@ -215,16 +215,8 @@
     document.querySelectorAll('.hybrid-slider').forEach(function(s){
         s.addEventListener('input', function(){
             var val = this.value;
-            var display;
-            switch(this.dataset.key) {
-                case 'guidance_eta': display = (parseInt(val) / 100).toFixed(2); break;
-                case 'inference_steps': display = val + ' 步'; break;
-                case 'v_max': display = val + ' m/s'; break;
-                case 'a_max': display = val + ' m/s²'; break;
-                case 'z_min': display = val + ' m'; break;
-                default: display = val;
-            }
-            this.nextElementSibling.textContent = display;
+            this.nextElementSibling.textContent = this.dataset.key === 'guidance_eta'
+                ? (parseInt(val) / 100).toFixed(2) : val;
         });
     });
 
