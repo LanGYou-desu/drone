@@ -659,7 +659,7 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
     valid_dir = os.path.join(dataset_root, "valid")
 
     train_exists = os.path.isdir(train_dir) and \
-        any(f.endswith('.dat') for f in os.listdir(train_dir))
+        any(f.endswith(('.npz', '.dat')) for f in os.listdir(train_dir))
     if not train_exists:
         print("[INFO] 训练数据不存在，自动生成 200 条轨迹...")
         generate_dataset(output_dir=dataset_root, n_trajectories=200)

@@ -214,21 +214,10 @@ def _apply_dynamics_constraints(
         h_speed = np.linalg.norm(h_disp) / dt
         v_speed = v_disp / dt
 
-        # 水平速度约束
+        # 水平速度约束：若超上限则等比缩放
         if h_speed > dyn["v_h_max"]:
             scale = dyn["v_h_max"] / h_speed
             h_disp *= scale
-            # 同时限制倾斜产生的加速度
-            a_h = (h_speed - (np.linalg.norm(
-                corrected[max(0, i-2)] - prev if i >= 2 else [0, 0, 0]
-            )[:2] / max(timestamps[i-1] - timestamps[max(0, i-2)], 1e-3)).sum()) / dt
-            # 简化: 确保水平加速度 ≤ g*tan(max_tilt)
-            max_a_h = dyn["g"] * np.tan(max_tilt_rad)
-            if abs(a_h) > max_a_h:
-                scale_acc = max_a_h / (abs(a_h) + 1e-8)
-                h_disp = prev[:2] * dt + 0.5 * (a_h * scale_acc) * dt**2
-                # 取简化处理
-                h_disp = h_disp * (dyn["v_h_max"] / h_speed)
 
         # 垂直速度约束
         if v_speed > dyn["v_v_up"]:
@@ -238,8 +227,8 @@ def _apply_dynamics_constraints(
 
         # 重组位移
         new_pos = prev.copy()
-        new_pos[0] += h_disp[0] if isinstance(h_disp, np.ndarray) else h_disp
-        new_pos[2] += h_disp[2] if len(h_disp) > 2 else (h_disp[2] if isinstance(h_disp, np.ndarray) else 0)
+        new_pos[0] += h_disp[0]
+        new_pos[2] += h_disp[2]
         new_pos[1] = prev[1] + v_disp
 
         # 高度约束
@@ -362,11 +351,9 @@ def generate_dataset(
         )
 
         subdir = valid_dir if idx in valid_indices else train_dir
-        fname = f"traj_{idx:04d}.dat"
-        with open(os.path.join(subdir, fname), 'w', encoding='utf-8') as f:
-            for i in range(len(positions)):
-                f.write(f"{positions[i,0]:.6f} {positions[i,1]:.6f} "
-                        f"{positions[i,2]:.6f} {timestamps[i]:.6f}\n")
+        fname = f"traj_{idx:04d}.npz"
+        np.savez(os.path.join(subdir, fname),
+                 positions=positions, timestamps=timestamps)
 
         if (idx + 1) % 50 == 0:
             print(f"  已生成 {idx + 1}/{n_trajectories} 条...")
