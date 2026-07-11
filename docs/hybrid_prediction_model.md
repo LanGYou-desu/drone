@@ -87,7 +87,7 @@ $$\mathbf{e}_i = \text{TimeEmbedding}(t_i) = \big[\sin(\omega_1 t_i), \cos(\omeg
 
 #### Transformer Encoder
 
-输入 token 为 $\mathbf{f}_i + \mathbf{e}_i$，前置可学习的 CLS token，通过 3 层 Transformer Encoder（4 头注意力，GELU 激活，LayerNorm 前置，batch_first），取 CLS token 输出经 Tanh 投影：
+采用 **Pre-LN (Pre-Layer Normalization)** 架构：输入 token 为 $\mathbf{f}_i + \mathbf{e}_i$，前置可学习的 CLS token，通过 3 层 Transformer Encoder（4 头注意力，GELU 激活，Pre-LN 结构，batch_first）。Pre-LN 比 Post-LN 训练更稳定，梯度从顶层直通底层。取 CLS token 输出经 Tanh 投影：
 
 $$\mathbf{c} = \text{MLP}_{\text{ctx}}\big(\text{Transformer}(\text{CLS}, \mathbf{f}_1+\mathbf{e}_1, \dots, \mathbf{f}_N+\mathbf{e}_N)_{\text{CLS}}\big) \in \mathbb{R}^{d_c}$$
 
@@ -332,10 +332,11 @@ $$\mathcal{C}(\mathbf{p}) = \lambda_v \max(0, \|\mathbf{v}\|-v_{\max})^2 + \lamb
 | 训练模块 | Transformer Encoder、Physics ODE、GRU |
 | 冻结模块 | Diffusion（全部参数） |
 | 损失函数 | $\mathcal{L} = \text{MSE}(\mathbf{h}^-[:3], \mathbf{p}_{\text{gt}}) + 0.1 \cdot \mathcal{L}_{\text{phy}}$ |
-| 学习率 | $1 \times 10^{-3}$，Cosine 退火 |
+| 标签平滑 | 对目标位置添加自适应高斯噪声（σ = `label_smoothing` × p_std），正则化防过拟合 |
+| 学习率 | Warmup(5 epochs, 起始 0.1×) + Cosine 退火 |
 | 优化器 | AdamW，weight_decay=$1 \times 10^{-4}$ |
 | 梯度裁剪 | max_norm=1.0 |
-| 验证指标 | MSE + ADE + FDE |
+| 验证指标 | MSE + ADE + FDE + Speed/Accel/Height 违反率 |
 
 阶段一完成后自动保存完整检查点（含优化器/调度器状态）。
 
@@ -346,8 +347,9 @@ $$\mathcal{C}(\mathbf{p}) = \lambda_v \max(0, \|\mathbf{v}\|-v_{\max})^2 + \lamb
 | 训练模块 | Diffusion（NoisePredictionNet） |
 | 冻结模块 | Transformer、Physics ODE、GRU（全部参数） |
 | 损失函数 | $\mathcal{L}_{\text{diff}} = \text{MSE}(\mathbf{\epsilon}_{\text{pred}}, \mathbf{\epsilon}_{\text{true}}) + \lambda_{\text{phy}} \cdot \mathcal{C}(\mathbf{p}_{\text{phys}})$ |
-| 物理正则 | 传入 `p_mean/p_std` 在原始物理空间计算，梯度正确缩放 |
-| 学习率 | $1 \times 10^{-3}$，Cosine 退火 |
+| 标签平滑 | 对 x0_gt 添加自适应高斯噪声 |
+| 物理正则 | 传入 `p_mean/p_std` 在原始物理空间计算，梯度通过 1/p_std 正确缩放 |
+| 学习率 | Warmup(3 epochs, 起始 0.1×) + Cosine 退火 |
 
 阶段二完成后自动保存完整检查点。
 
@@ -527,6 +529,7 @@ models/hybrid_predictor/
 | `warmup_epochs_s2` | 3 | 阶段二 warmup 轮数 |
 | `warmup_epochs_s3` | 2 | 阶段三 warmup 轮数 |
 | `warmup_start_factor` | 0.1 | warmup 起始 LR = base_lr × factor |
+| `label_smoothing` | 0.005 | 标签平滑噪声系数（0=关闭） |
 
 ### 模型超参（`PhyODEDiffusion.__init__`）
 
@@ -637,15 +640,16 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 
 ### 训练输出目录 `train/hybrid_predictor/train_result/run_YYYYmmdd_HHMMSS/`
 
-| 文件 | 内容 |
-|------|------|
-| `01_loss_breakdown.png` | 每阶段 train/val 损失曲线 + 对数尺度 |
-| `02_convergence_analysis.png` | 全局损失、val/train比、损失下降率、LR衰减、耗时分布 |
-| `03_stage_comparison.png` | 柱状图对比 + 雷达图 + 箱线图 |
-| `04_physics_metrics.png` | 速度/加速度/高度违反率（需训练中记录） |
-| `05_dashboard.png` | 综合仪表盘：全景损失、LR、时间饼图、损失直方图 |
-| `training_history.json` | 每 epoch 的 train_loss/val_loss/ADE/FDE/lr/time |
-| `training_summary.json` | 各阶段最优指标、总参数、总耗时 |
+| 文件 | 内容 | 对应指标 |
+|------|------|----------|
+| `01_loss_breakdown.png` | 每阶段 train/val 损失曲线 + 对数尺度 | MSE |
+| `02_convergence_analysis.png` | 全局损失、val/train 比、损失下降率、LR 衰减、累积耗时 | 过拟合检测 |
+| `03_stage_comparison.png` | 柱状图对比 + 雷达图 + 箱线图 | 阶段综合 |
+| `04_ade_fde.png` | ADE/FDE 分阶段曲线、ADE vs FDE 散点图、ADE 改进率 | ADE、FDE |
+| `05_physics_metrics.png` | 速度/加速度/高度违反率趋势 + 综合物理得分 | Speed/Accel/Height Violation |
+| `06_dashboard.png` | 全景仪表盘：损失总览、LR 调度、时间饼图、损失直方图 | 综合概览 |
+| `training_history.json` | 每 epoch 的 train_loss/val_loss/ADE/FDE/lr/time + 物理违反率 | 全部指标 |
+| `training_summary.json` | 各阶段最优指标、总参数、总耗时 | 摘要 |
 
 ### 模型权重目录 `models/hybrid_predictor/`
 
@@ -714,6 +718,30 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 **问题**: 机动模式切换时速度和方向突变，轨迹不够真实。
 
 **方案**: 切换后 0.5 秒内线性插值混合新旧 `(speed, direction)`。
+
+### Pre-LN Transformer
+
+**问题**: Post-LN（`norm_first=False`）残差路径上有两个 LayerNorm，深层梯度衰减明显。
+
+**方案**: 采用 Pre-LN（`norm_first=True`），残差路径上无 LayerNorm，梯度从顶层直通底层，训练更稳定收敛更快。
+
+### 标签平滑（回归正则化）
+
+**问题**: 回归任务没有分类任务中的标签平滑机制，模型可能过拟合精确坐标。
+
+**方案**: 对目标位置添加自适应高斯噪声（σ = `label_smoothing` × p_std），噪声幅度与数据尺度匹配，在所有阶段的目标上应用。
+
+### Warmup 学习率调度
+
+**问题**: 训练初期 LR 直接从峰值开始，梯度震荡大，不利于复杂多模块系统收敛。
+
+**方案**: 三阶段独立 warmup：阶段一 5 epoch（Transformer+ODE 需稳定初始化），阶段二 3 epoch（扩散模型对 LR 敏感），阶段三 2 epoch（微调已有基础）。warmup 后接 Cosine 退火。
+
+### 验证指标全量图表化
+
+**问题**: ADE/FDE 和物理违反率仅在日志中记录，未可视化。
+
+**方案**: 验证时反标准化后在原始空间计算物理违反率，全部 6 项指标（MSE/ADE/FDE/Speed/Accel/Height）通过 6 张图表可视化。
 
 ---
 
