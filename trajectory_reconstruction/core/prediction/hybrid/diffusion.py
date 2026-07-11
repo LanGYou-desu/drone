@@ -6,6 +6,7 @@
 """
 
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -191,6 +192,11 @@ class GuidedDiffusion(nn.Module):
         v_max: float = 30.0,
         a_max: float = 30.0,
         z_min: float = 0.0,
+        z_max: float = 120.0,      # 最大高度（四旋翼法规限制）
+        v_v_up: float = 5.0,       # 最大垂直上升速度
+        v_v_down: float = 3.0,     # 最大垂直下降速度
+        max_tilt: float = 35.0,    # 最大倾斜角 (deg)
+        g: float = 9.81,           # 重力加速度
     ):
         super().__init__()
         self.n_diffusion_steps = n_diffusion_steps
@@ -199,6 +205,11 @@ class GuidedDiffusion(nn.Module):
         self.v_max = v_max
         self.a_max = a_max
         self.z_min = z_min
+        self.z_max = z_max
+        self.v_v_up = v_v_up
+        self.v_v_down = v_v_down
+        self.max_tilt = max_tilt
+        self.g = g
         self.state_dim = state_dim
 
         self.scheduler = NoiseScheduler(n_steps=n_diffusion_steps, schedule="cosine")
@@ -209,10 +220,11 @@ class GuidedDiffusion(nn.Module):
             hidden_dim=hidden_dim,
         )
 
-        # 物理约束权重（不可训练，通过配置调整）
+        # 物理约束权重
         self.register_buffer('lambda_v', torch.tensor(1.0))
         self.register_buffer('lambda_a', torch.tensor(1.0))
         self.register_buffer('lambda_z', torch.tensor(1.0))
+        self.register_buffer('lambda_zmax', torch.tensor(1.0))
 
     def compute_loss(
         self,
@@ -340,24 +352,38 @@ class GuidedDiffusion(nn.Module):
         dt: torch.Tensor,
     ) -> torch.Tensor:
         """
-        物理约束违反代价 C(p)：
-          - 速度 ≤ v_max
-          - 加速度 ≤ a_max（基于当前位置速度的变化率）
-          - 高度 ≥ z_min
+        四旋翼物理约束违反代价 C(p):
+          水平速度 ≤ v_max
+          垂直上升速度 ≤ v_v_up, 下降速度 ≤ v_v_down
+          水平加速度 ≤ g·tan(max_tilt)（倾斜约束）
+          高度 ∈ [z_min, z_max]
         """
         dt_safe = dt.clamp(min=1e-3).unsqueeze(-1)
 
-        # 速度违反
         v = (p - prev_p) / dt_safe
-        v_norm = torch.norm(v, dim=-1)
-        cost = self.lambda_v * F.relu(v_norm - self.v_max) ** 2
+        # 水平速度 (XZ 平面)
+        v_h = torch.norm(v[:, [0, 2]], dim=-1)
+        # 垂直速度 (Y)
+        v_y = v[:, 1]
 
-        # 加速度违反：|v| / dt 作为加速度上界估计
-        # 保守估计：从零到当前速度所需的最小加速度
-        a_norm = v_norm / dt_safe.squeeze(-1)
-        cost = cost + self.lambda_a * F.relu(a_norm - self.a_max) ** 2
+        cost = torch.zeros(p.shape[0], device=p.device)
 
-        # 高度违反（y < z_min）
+        # 水平速度违反
+        cost = cost + self.lambda_v * F.relu(v_h - self.v_max) ** 2
+
+        # 垂直上升速度违反
+        cost = cost + self.lambda_v * F.relu(v_y - self.v_v_up) ** 2
+
+        # 垂直下降速度违反
+        cost = cost + self.lambda_v * F.relu(-v_y - self.v_v_down) ** 2
+
+        # 水平加速度违反: a_h ≤ g·tan(max_tilt)
+        max_a_h = self.g * np.tan(np.radians(self.max_tilt))
+        a_h = v_h / dt_safe.squeeze(-1)
+        cost = cost + self.lambda_a * F.relu(a_h - max_a_h) ** 2
+
+        # 高度约束: z_min ≤ y ≤ z_max
         cost = cost + self.lambda_z * F.relu(self.z_min - p[:, 1]) ** 2
+        cost = cost + self.lambda_zmax * F.relu(p[:, 1] - self.z_max) ** 2
 
         return cost

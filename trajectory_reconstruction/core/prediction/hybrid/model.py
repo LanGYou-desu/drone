@@ -96,6 +96,11 @@ class PhyODEDiffusion(nn.Module):
         guidance_eta: float = 0.1,
         v_max: float = 30.0,
         z_min: float = 0.0,
+        z_max: float = 120.0,      # 四旋翼最大高度
+        v_v_up: float = 5.0,       # 最大垂直上升速度
+        v_v_down: float = 3.0,     # 最大垂直下降速度
+        max_tilt: float = 35.0,    # 最大倾斜角
+        g: float = 9.81,           # 重力加速度
         # GRU
         obs_hidden_dim: int = 32,
     ):
@@ -106,6 +111,11 @@ class PhyODEDiffusion(nn.Module):
         self.v_max = v_max
         self.a_max = a_max
         self.z_min = z_min
+        self.z_max = z_max
+        self.v_v_up = v_v_up
+        self.v_v_down = v_v_down
+        self.max_tilt = max_tilt
+        self.g = g
 
         # 子模块
         self.transformer = TransformerEncoder(
@@ -133,9 +143,10 @@ class PhyODEDiffusion(nn.Module):
             dt_emb_dim=dt_emb_dim,
             hidden_dim=diff_hidden_dim,
             guidance_eta=guidance_eta,
-            v_max=v_max,
-            a_max=a_max,
-            z_min=z_min,
+            v_max=v_max, a_max=a_max,
+            z_min=z_min, z_max=z_max,
+            v_v_up=v_v_up, v_v_down=v_v_down,
+            max_tilt=max_tilt, g=g,
         )
 
     # ── 训练接口 ──────────────────────────────────────

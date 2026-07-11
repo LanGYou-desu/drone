@@ -82,7 +82,7 @@ def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
         print("[预测] 混合模型已禁用 (hybrid_model.enabled=false)，回退到线性外推")
         return None
 
-    # 设备回退：CUDA 不可用时自动使用 CPU
+    # 设备回退
     if device.startswith("cuda") and not torch.cuda.is_available():
         print(f"[预测] CUDA 不可用，回退到 CPU")
         device = "cpu"
@@ -96,11 +96,22 @@ def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
         device_obj = torch.device(device)
         ckpt = torch.load(model_path, map_location=device_obj, weights_only=False)
 
-        # 用 config.json 的参数创建模型（物理约束、引导强度等）
+        # 读取四旋翼动力学参数
+        try:
+            from trajectory_reconstruction.core.config.config_manager import ensure_config
+            dyn_cfg = ensure_config().get("drone_dynamics", {})
+        except Exception:
+            dyn_cfg = {}
+
         model = PhyODEDiffusion(
-            v_max=h_cfg.get("v_max", 30.0),
+            v_max=h_cfg.get("v_max", dyn_cfg.get("v_h_max", 30.0)),
             a_max=h_cfg.get("a_max", 30.0),
-            z_min=h_cfg.get("z_min", 0.0),
+            z_min=h_cfg.get("z_min", dyn_cfg.get("min_alt", 0.0)),
+            z_max=h_cfg.get("z_max", dyn_cfg.get("max_alt", 120.0)),
+            v_v_up=dyn_cfg.get("v_v_up", 5.0),
+            v_v_down=dyn_cfg.get("v_v_down", 3.0),
+            max_tilt=dyn_cfg.get("max_tilt", 35.0),
+            g=dyn_cfg.get("g", 9.81),
             guidance_eta=h_cfg.get("guidance_eta", 0.1),
             n_inference_steps=h_cfg.get("inference_steps", 50),
         )
