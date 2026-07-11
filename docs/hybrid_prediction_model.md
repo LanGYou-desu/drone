@@ -193,14 +193,19 @@ $$v_{y,\max}^{\text{up}} = 5\ \text{m/s},\quad v_{y,\max}^{\text{down}} = 3\ \te
 
 #### 物理约束函数（原始物理空间，四旋翼扩展版）
 
-$$\begin{aligned}
-\mathcal{C}(\mathbf{p}) = &\lambda_v \max(0, \|\mathbf{v}_{xz}\|-v_{h,\max})^2 &\text{水平速度} \\
-+ &\lambda_v \max(0, v_y - v_{v,\text{up}})^2 &\text{上升速度} \\
-+ &\lambda_v \max(0, -v_y - v_{v,\text{down}})^2 &\text{下降速度} \\
-+ &\lambda_a \max(0, \|\mathbf{a}_{xz}\| - g \cdot \tan(\phi_{\max}))^2 &\text{水平加速度（倾斜约束）} \\
-+ &\lambda_z \max(0, z_{\min} - y)^2 &\text{最低高度} \\
-+ &\lambda_{z,\max} \max(0, y - z_{\max})^2 &\text{最高高度}
-\end{aligned}$$
+$$\mathcal{C}(\mathbf{p}) = \mathcal{C}_v + \mathcal{C}_a + \mathcal{C}_z$$
+
+**速度约束** $\mathcal{C}_v$（水平 + 上升 + 下降分离）：
+
+$$\mathcal{C}_v = \lambda_v \max(0, \|\mathbf{v}_{xz}\|-v_{h,\max})^2 + \lambda_v \max(0, v_y - v_{v,\text{up}})^2 + \lambda_v \max(0, -v_y - v_{v,\text{down}})^2$$
+
+**加速度约束** $\mathcal{C}_a$（水平加速度受倾斜角限制）：
+
+$$\mathcal{C}_a = \lambda_a \max(0, \|\mathbf{a}_{xz}\| - g \cdot \tan(\phi_{\max}))^2$$
+
+**高度约束** $\mathcal{C}_z$（上下界）：
+
+$$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y - z_{\max})^2$$
 
 - 参数从 `config.json` → `drone_dynamics` 和 `hybrid_model` 读取
 - 速度 $\mathbf{v} \approx (\mathbf{p} - \mathbf{p}_t) / \Delta t$
