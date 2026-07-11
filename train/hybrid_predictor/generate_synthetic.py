@@ -4,7 +4,7 @@
 生成具有真实飞行特征的无人机轨迹数据用于训练。
 特征包括：巡航、转弯、上升/下降、悬停、加速等机动模式。
 
-输出格式：每个轨迹保存为 .npz 文件 (positions + timestamps)
+输出格式：每个轨迹保存为 .dat 文本文件（x y z t 空格分隔）
 """
 
 import os
@@ -202,7 +202,7 @@ def generate_dataset(
     seed: int = 42,
 ) -> str:
     """
-    生成合成训练数据集，仿照 YOLO 结构分 train/valid 两个子目录。
+    生成合成训练数据集，按 YOLO 风格分 train/valid 两个子目录。
 
     Args:
         output_dir:   输出根目录（生成 train/ 和 valid/ 子目录）
@@ -241,12 +241,10 @@ def generate_dataset(
         )
 
         subdir = valid_dir if idx in valid_indices else train_dir
-        fname = f"traj_{idx:04d}.npz"
-        np.savez(
-            os.path.join(subdir, fname),
-            positions=positions,
-            timestamps=timestamps,
-        )
+        fname = f"traj_{idx:04d}.dat"                     # ← 改为 .dat
+        with open(os.path.join(subdir, fname), 'w') as f:
+            for i in range(len(positions)):
+                f.write(f"{positions[i,0]:.6f} {positions[i,1]:.6f} {positions[i,2]:.6f} {timestamps[i]:.6f}\n")
 
         if (idx + 1) % 50 == 0:
             print(f"  已生成 {idx + 1}/{n_trajectories} 条...")

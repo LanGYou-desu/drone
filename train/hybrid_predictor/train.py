@@ -73,6 +73,11 @@ DEFAULT_CONFIG = {
     "epochs_stage1": 50,
     "epochs_stage2": 100,
     "epochs_stage3": 20,
+    # Warmup 策略（各阶段独立配置，0=跳过 warmup）
+    "warmup_epochs_s1": 5,       # 阶段一: Transformer+ODE 需稳定初始化
+    "warmup_epochs_s2": 3,       # 阶段二: 扩散模型对初始 LR 敏感
+    "warmup_epochs_s3": 2,       # 阶段三: 微调已有基础，短 warmup
+    "warmup_start_factor": 0.1,  # warmup 起始 LR = base_lr × factor
     "dataset_dir": "train/hybrid_predictor/dataset",
     "output_dir": "models/hybrid_predictor",
     "device": "cuda:0",
@@ -658,6 +663,30 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
     return latest_path
 
 
+def _build_scheduler(optimizer, total_epochs, warmup_epochs, start_factor):
+    """
+    构建 warmup + cosine 退火复合调度器。
+
+    策略: 前 warmup_epochs 轮 LR 从 start_factor×base_lr 线性增长到 base_lr，
+         之后按 CosineAnnealingLR 衰减到 0。
+    若 warmup_epochs=0 则仅使用 Cosine 退火。
+    """
+    if warmup_epochs <= 0 or warmup_epochs >= total_epochs:
+        return optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_epochs)
+
+    warmup = optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=start_factor, end_factor=1.0,
+        total_iters=warmup_epochs,
+    )
+    cosine = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=total_epochs - warmup_epochs,
+    )
+    return optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup, cosine],
+        milestones=[warmup_epochs],
+    )
+
+
 def _check_nan(loss, stage, epoch):
     """检测 NaN 损失，返回 True 表示需要跳过"""
     if torch.isnan(loss) or torch.isinf(loss):
@@ -681,7 +710,8 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=config["lr_stage1"], weight_decay=config["weight_decay"],
     )
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs_stage1"])
+    scheduler = _build_scheduler(optimizer, config["epochs_stage1"],
+                                  config["warmup_epochs_s1"], config["warmup_start_factor"])
 
     # 恢复优化器/调度器状态
     start_epoch = 1
@@ -822,7 +852,8 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
     optimizer = optim.AdamW(model.diffusion.parameters(),
                             lr=config["lr_stage2"], weight_decay=config["weight_decay"])
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs_stage2"])
+    scheduler = _build_scheduler(optimizer, config["epochs_stage2"],
+                                  config["warmup_epochs_s2"], config["warmup_start_factor"])
 
     start_epoch = 1
     if resume_ckpt is not None and resume_ckpt.get("stage") == 2:
@@ -944,7 +975,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
 
     optimizer = optim.AdamW(model.parameters(),
                             lr=config["lr_stage3"], weight_decay=config["weight_decay"])
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs_stage3"])
+    scheduler = _build_scheduler(optimizer, config["epochs_stage3"],
+                                  config["warmup_epochs_s3"], config["warmup_start_factor"])
     best_val_loss = float('inf')
 
     epoch_iter = range(1, config["epochs_stage3"] + 1)
@@ -1049,6 +1081,10 @@ def main():
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--ctx-len", type=int, default=20)
     parser.add_argument("--tgt-len", type=int, default=10)
+    parser.add_argument("--warmup-s1", type=int, default=None, help="阶段一 warmup 轮数")
+    parser.add_argument("--warmup-s2", type=int, default=None, help="阶段二 warmup 轮数")
+    parser.add_argument("--warmup-s3", type=int, default=None, help="阶段三 warmup 轮数")
+    parser.add_argument("--warmup-factor", type=float, default=None, help="warmup 起始 LR 因子")
     parser.add_argument("--no-charts", action="store_true", help="跳过图表生成")
     args = parser.parse_args()
 
@@ -1066,6 +1102,14 @@ def main():
         config["lr_stage1"] = args.lr
         config["lr_stage2"] = args.lr
         config["lr_stage3"] = args.lr * 0.1
+    if args.warmup_s1 is not None:
+        config["warmup_epochs_s1"] = args.warmup_s1
+    if args.warmup_s2 is not None:
+        config["warmup_epochs_s2"] = args.warmup_s2
+    if args.warmup_s3 is not None:
+        config["warmup_epochs_s3"] = args.warmup_s3
+    if args.warmup_factor is not None:
+        config["warmup_start_factor"] = args.warmup_factor
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(f"[DEVICE] {device}")

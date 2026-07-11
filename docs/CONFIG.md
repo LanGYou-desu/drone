@@ -70,7 +70,30 @@ Phy-ODE-Diffusion 混合轨迹预测模型的运行时参数。
 
 ---
 
-## 五、检测 UI 与采集
+## 五、training — 训练超参配置
+
+Phy-ODE-Diffusion 模型训练时的 warmup 学习率策略参数。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `warmup_epochs_s1` | int | 5 | 阶段一 warmup 轮数（Transformer+ODE 需稳定初始化） |
+| `warmup_epochs_s2` | int | 3 | 阶段二 warmup 轮数（扩散模型对初始 LR 敏感） |
+| `warmup_epochs_s3` | int | 2 | 阶段三 warmup 轮数（微调已有基础，短 warmup） |
+| `warmup_start_factor` | float | 0.1 | warmup 起始 LR 因子（base_lr × factor） |
+
+### Warmup 策略说明
+
+每阶段前 N 轮学习率从 `factor × base_lr` 线性增长到 `base_lr`，之后按 Cosine 退火衰减。
+
+- 阶段一（5 轮 warmup）: 冻结扩散模块，仅训练编码器+ODE+GRU，LR 从低开始避免初期震荡
+- 阶段二（3 轮 warmup）: 固定其他模块，训练扩散模型，扩散对 LR 较敏感
+- 阶段三（2 轮 warmup）: 全参数微调，已有良好基础，短 warmup 即可
+
+设置 `warmup_epochs_* = 0` 可跳过对应阶段的 warmup（等同于直接 Cosine 退火）。
+
+---
+
+## 六、检测 UI 与采集
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|

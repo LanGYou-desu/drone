@@ -364,7 +364,31 @@ $$\mathcal{C}(\mathbf{p}) = \lambda_v \max(0, \|\mathbf{v}\|-v_{\max})^2 + \lamb
 
 > **注意**: 阶段三使用 ODE 先验位置（`h_prior[:, :3]`）而非扩散采样作为计划采样的生成样本，因为扩散采样在训练中不参与梯度回传却消耗大量计算。
 
-### 4.3 验证指标
+### 4.3 Warmup 学习率策略
+
+三个阶段采用独立的 warmup + cosine 退火策略，避免训练初期梯度震荡：
+
+| 阶段 | warmup 轮数 | 起始 LR 因子 | 说明 |
+|------|-------------|-------------|------|
+| 阶段一 | 5 | 0.1 | Transformer + ODE 需稳定初始化，LR 从 $0.1\times 10^{-3}$ 线性增长到 $10^{-3}$ |
+| 阶段二 | 3 | 0.1 | 扩散模型对初始 LR 敏感，短 warmup 后进入 Cosine 退火 |
+| 阶段三 | 2 | 0.1 | 全参数微调已有良好基础，短 warmup 即可 |
+
+**调度曲线**：
+
+```
+LR
+│  warmup (线性增长)     cosine 退火
+│  ╱                     ╲
+│ ╱                       ╲
+│╱                         ╲___
+├────────────────────────────── epochs
+│← warmup →←─── T_max ──────→
+```
+
+CLI 参数：`--warmup-s1 5 --warmup-s2 3 --warmup-s3 2 --warmup-factor 0.1`
+
+### 4.4 验证指标
 
 训练时每 epoch 输出：
 
@@ -377,7 +401,7 @@ $$\mathcal{C}(\mathbf{p}) = \lambda_v \max(0, \|\mathbf{v}\|-v_{\max})^2 + \lamb
 | **Accel Violation** | $\max(0, \|\mathbf{a}\| - a_{\max})$ | 加速度约束违反 |
 | **Height Violation** | $\max(0, z_{\min} - z)$ | 高度约束违反 |
 
-### 4.4 恢复训练
+### 4.5 恢复训练
 
 `--resume` 参数支持完整恢复：
 
@@ -485,20 +509,24 @@ models/hybrid_predictor/
 | `inference_steps` | int | 50 | 10–200 | DDIM 推理步数 |
 | `device` | str | `"cpu"` | cpu/cuda:0 | 推理设备 |
 
-### 训练配置（`train.py` → `DEFAULT_CONFIG`）
+### 训练配置（`train.py` → `DEFAULT_CONFIG` / `config.json` → `training`）
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `ctx_len` | 20 | Transformer 上下文长度 |
 | `tgt_len` | 10 | 目标预测长度 |
 | `batch_size` | 32 | 批次大小 |
-| `lr_stage1` | 1e-3 | 阶段一学习率 |
-| `lr_stage2` | 1e-3 | 阶段二学习率 |
-| `lr_stage3` | 1e-4 | 阶段三学习率 |
+| `lr_stage1` | 1e-3 | 阶段一学习率（warmup 峰值） |
+| `lr_stage2` | 1e-3 | 阶段二学习率（warmup 峰值） |
+| `lr_stage3` | 1e-4 | 阶段三学习率（warmup 峰值） |
 | `weight_decay` | 1e-4 | AdamW 权重衰减 |
 | `epochs_stage1` | 50 | 阶段一轮数 |
 | `epochs_stage2` | 100 | 阶段二轮数 |
 | `epochs_stage3` | 20 | 阶段三轮数 |
+| `warmup_epochs_s1` | 5 | 阶段一 warmup 轮数 |
+| `warmup_epochs_s2` | 3 | 阶段二 warmup 轮数 |
+| `warmup_epochs_s3` | 2 | 阶段三 warmup 轮数 |
+| `warmup_start_factor` | 0.1 | warmup 起始 LR = base_lr × factor |
 
 ### 模型超参（`PhyODEDiffusion.__init__`）
 
