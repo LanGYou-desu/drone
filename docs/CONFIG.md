@@ -72,24 +72,64 @@ Phy-ODE-Diffusion 混合轨迹预测模型的运行时参数。
 
 ## 五、training — 训练超参配置
 
-Phy-ODE-Diffusion 模型训练时的 warmup 学习率策略参数。
+Phy-ODE-Diffusion 模型训练的完整参数。训练脚本启动时优先从 `config.json` 读取，命令行 `--*` 参数可覆盖。
+
+### 数据与批次
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `ctx_len` | int | 20 | Transformer 上下文长度（历史轨迹点数） |
+| `tgt_len` | int | 10 | 目标预测长度（每窗口预测步数） |
+| `batch_size` | int | 32 | 批次大小（GPU 内存不足时减小） |
+
+### 学习率与优化器
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `lr_stage1` | float | 0.001 | 阶段一学习率（Transformer + ODE + GRU） |
+| `lr_stage2` | float | 0.001 | 阶段二学习率（扩散模型） |
+| `lr_stage3` | float | 0.0001 | 阶段三学习率（联合微调，较小） |
+| `weight_decay` | float | 0.0001 | AdamW 权重衰减系数 |
+
+### 训练轮数
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `epochs_stage1` | int | 50 | 阶段一训练轮数 |
+| `epochs_stage2` | int | 100 | 阶段二训练轮数 |
+| `epochs_stage3` | int | 20 | 阶段三训练轮数 |
+
+### Warmup 策略
+
+每阶段前 N 轮学习率从 `factor × base_lr` 线性增长到 `base_lr`，之后按 Cosine 退火衰减。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `warmup_epochs_s1` | int | 5 | 阶段一 warmup 轮数（Transformer+ODE 需稳定初始化） |
 | `warmup_epochs_s2` | int | 3 | 阶段二 warmup 轮数（扩散模型对初始 LR 敏感） |
-| `warmup_epochs_s3` | int | 2 | 阶段三 warmup 轮数（微调已有基础，短 warmup） |
+| `warmup_epochs_s3` | int | 2 | 阶段三 warmup 轮数（微调已有基础） |
 | `warmup_start_factor` | float | 0.1 | warmup 起始 LR 因子（base_lr × factor） |
 
-### Warmup 策略说明
+设置 `warmup_epochs_* = 0` 可跳过对应阶段的 warmup。
 
-每阶段前 N 轮学习率从 `factor × base_lr` 线性增长到 `base_lr`，之后按 Cosine 退火衰减。
+### 正则化
 
-- 阶段一（5 轮 warmup）: 冻结扩散模块，仅训练编码器+ODE+GRU，LR 从低开始避免初期震荡
-- 阶段二（3 轮 warmup）: 固定其他模块，训练扩散模型，扩散对 LR 较敏感
-- 阶段三（2 轮 warmup）: 全参数微调，已有良好基础，短 warmup 即可
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `label_smoothing` | float | 0.005 | 标签平滑噪声系数（0=关闭）。对目标位置添加 `N(0, σ²)` 噪声，其中 `σ = smoothing × p_std` |
 
-设置 `warmup_epochs_* = 0` 可跳过对应阶段的 warmup（等同于直接 Cosine 退火）。
+### 训练命令示例
+
+```bash
+# 使用 config.json 中所有默认值
+python train/hybrid_predictor/train.py --stage 2 --device cuda:0
+
+# 命令行覆盖特定参数
+python train/hybrid_predictor/train.py --stage 2 --epochs 30 --batch 16 --device cuda:0
+
+# 关闭 label_smoothing 和 warmup
+python train/hybrid_predictor/train.py --stage 2 --warmup-s1 0 --warmup-s2 0 --label-smoothing 0
+```
 
 ---
 

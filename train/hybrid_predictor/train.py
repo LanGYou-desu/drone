@@ -1101,6 +1101,21 @@ def main():
     args = parser.parse_args()
 
     config = DEFAULT_CONFIG.copy()
+
+    # 从 config.json 合并 training 参数（命令行可覆盖）
+    try:
+        import json as _json
+        _cfg_path = os.path.join(_PROJECT_ROOT, "config.json")
+        if os.path.isfile(_cfg_path):
+            with open(_cfg_path, 'r', encoding='utf-8') as _f:
+                _train_cfg = _json.load(_f).get("training", {})
+            for _k in DEFAULT_CONFIG:
+                if _k in _train_cfg:
+                    config[_k] = _train_cfg[_k]
+            print("[CONFIG] 已从 config.json 读取训练参数")
+    except Exception:
+        pass
+
     config["ctx_len"] = args.ctx_len
     config["tgt_len"] = args.tgt_len
     config["batch_size"] = args.batch
