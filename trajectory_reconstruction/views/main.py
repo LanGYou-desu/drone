@@ -152,7 +152,8 @@ def api_hybrid_model():
         cfg['hybrid_model'] = {}
 
     # 支持的字段及其类型
-    float_fields = ['v_max', 'a_max', 'z_min', 'guidance_eta']
+    float_fields = ['v_max', 'a_max', 'z_min', 'z_max', 'v_v_up', 'v_v_down',
+                    'max_tilt', 'guidance_eta']
     int_fields = ['inference_steps']
     bool_fields = ['enabled']
     str_fields = ['device']

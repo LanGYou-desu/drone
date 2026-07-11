@@ -44,13 +44,17 @@ Phy-ODE-Diffusion 混合轨迹预测模型的运行时参数。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `enabled` | bool | `true` | 是否启用混合模型（权重不存在时自动回退线性外推） |
-| `v_max` | float | 30 | 最大速度约束 (m/s)，范围 0-100 |
-| `a_max` | float | 30 | 最大加速度约束 (m/s²)，范围 0-100 |
-| `z_min` | float | 0 | 最小高度约束 (m)，范围 0-100 |
-| `guidance_eta` | float | 0.1 | 物理引导强度（0.01-0.50，越大约束越硬） |
-| `inference_steps` | int | 50 | DDIM 推理采样步数（10-200，越多越精细越慢） |
-| `device` | string | `"cpu"` | 推理设备 (`"cpu"` / `"cuda:0"`) |
+| `enabled` | bool | `true` | 是否启用混合模型 |
+| `v_max` | float | 30 | 最大水平速度 (m/s)，范围 5-40 |
+| `v_v_up` | float | 5.0 | 最大垂直上升速度 (m/s) |
+| `v_v_down` | float | 3.0 | 最大垂直下降速度 (m/s) |
+| `a_max` | float | 30 | 最大加速度 (m/s²)，范围 5-50 |
+| `max_tilt` | float | 35 | 最大倾斜角 (deg)，限制 a_h ≤ g·tan(max_tilt) |
+| `z_min` | float | 0 | 最低高度 (m) |
+| `z_max` | float | 120 | 最高高度 (m)，法规限制 |
+| `guidance_eta` | float | 0.1 | 物理引导强度（0.01-0.50） |
+| `inference_steps` | int | 50 | DDIM 推理步数（10-200） |
+| `device` | string | `"cpu"` | 推理设备 (`cpu` / `cuda:0`) |
 
 ### 预测模式说明
 

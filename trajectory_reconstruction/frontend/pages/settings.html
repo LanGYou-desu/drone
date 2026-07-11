@@ -97,14 +97,22 @@
 
         <!-- 物理约束 -->
         <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">物理约束</div>
-        {% for key, label, unit in [('v_max','最大速度','m/s'), ('a_max','最大加速度','m/s²'), ('z_min','最低高度','m')] %}
+        {% for key, label, minv, maxv, step in [
+            ('v_max','最大水平速度', 5, 40, 1),
+            ('v_v_up','最大上升速度', 1, 10, 0.5),
+            ('v_v_down','最大下降速度', 1, 10, 0.5),
+            ('a_max','最大加速度', 5, 50, 1),
+            ('max_tilt','最大倾斜角', 10, 60, 5),
+            ('z_min','最低高度', 0, 30, 1),
+            ('z_max','最高高度', 30, 250, 10),
+        ] %}
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
             <span style="min-width:70px;font-size:0.85rem;">{{ label }}</span>
-            <input type="range" min="0" max="100" step="1"
-                   value="{{ hc[key]|default(defs[key]) }}"
+            <input type="range" min="{{ minv }}" max="{{ maxv }}" step="{{ step }}"
+                   value="{{ hc[key]|default({'v_max':30,'v_v_up':5,'v_v_down':3,'a_max':30,'max_tilt':35,'z_min':0,'z_max':120}[key]) }}"
                    data-key="{{ key }}" class="hybrid-slider" style="flex:1;margin:0;">
             <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ hc[key]|default(defs[key]) }}
+                {{ hc[key]|default({'v_max':30,'v_v_up':5,'v_v_down':3,'a_max':30,'max_tilt':35,'z_min':0,'z_max':120}[key]) }}
             </span>
         </div>
         {% endfor %}

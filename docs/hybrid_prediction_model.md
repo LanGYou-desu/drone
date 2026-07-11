@@ -530,9 +530,13 @@ models/hybrid_predictor/
 | 参数 | 类型 | 默认值 | 范围 | 说明 |
 |------|------|--------|------|------|
 | `enabled` | bool | `true` | — | 是否启用混合模型（权重不存在时自动回退） |
-| `v_max` | float | 30 | 0–100 | 最大速度约束 (m/s) |
-| `a_max` | float | 30 | 0–100 | 最大加速度约束 (m/s²) |
-| `z_min` | float | 0 | 0–100 | 最小高度约束 (m) |
+| `v_max` | float | 30 | 5–40 | 最大水平速度 (m/s) |
+| `v_v_up` | float | 5.0 | 1–10 | 最大垂直上升速度 (m/s) |
+| `v_v_down` | float | 3.0 | 1–10 | 最大垂直下降速度 (m/s) |
+| `a_max` | float | 30 | 5–50 | 最大加速度 (m/s²) |
+| `max_tilt` | float | 35 | 10–60 | 最大倾斜角 (deg) |
+| `z_min` | float | 0 | 0–30 | 最低高度 (m) |
+| `z_max` | float | 120 | 30–250 | 最高高度 (m) |
 | `guidance_eta` | float | 0.1 | 0.01–0.50 | 物理引导强度 |
 | `inference_steps` | int | 50 | 10–200 | DDIM 推理步数 |
 | `device` | str | `"cpu"` | cpu/cuda:0 | 推理设备 |
