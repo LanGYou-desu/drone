@@ -379,16 +379,85 @@ def _make_stage_comparison_chart(logger: TrainingLogger, output_dir: str):
     print(f"[图表3] 阶段对比: {path}")
 
 
-def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
-    """图4: 物理指标 — 速度/加速度/高度违反率（如果训练中记录了）"""
-    # 检查是否记录了物理指标
-    has_physics = any("speed_violation" in e for e in logger.history)
-    if not has_physics:
-        print("[图表4] 无物理指标数据，跳过")
+def _make_ade_fde_chart(logger: TrainingLogger, output_dir: str):
+    """图4: ADE/FDE 验证指标曲线"""
+    has_ade = any("ADE" in e for e in logger.history)
+    if not has_ade:
+        print("[图表4] 无 ADE/FDE 数据，跳过")
         return
 
     fig, axes = _plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('Physics Constraint Metrics', fontsize=14, fontweight='bold')
+    fig.suptitle('Prediction Accuracy Metrics (ADE / FDE)', fontsize=14, fontweight='bold')
+
+    # 按阶段分组
+    for stage in sorted(set(e["stage"] for e in logger.history)):
+        s_data = [e for e in logger.history if e["stage"] == stage
+                  and "ADE" in e and "FDE" in e]
+        if not s_data:
+            continue
+        epochs = [e["epoch"] for e in s_data]
+        color = _COLORS.get(f'stage{stage}', '#333')
+
+        # ADE
+        ax = axes[0, 0]
+        ade_vals = [e["ADE"] for e in s_data]
+        ax.plot(epochs, ade_vals, 'o-', color=color, markersize=3, linewidth=1.5,
+                label=f'Stage {stage}')
+        ax.set_title('ADE (Average Displacement Error)')
+        ax.set_xlabel('Epoch'); ax.set_ylabel('ADE')
+        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+        if ade_vals:
+            best_i = ade_vals.index(min(ade_vals))
+            ax.annotate(f'{ade_vals[best_i]:.3f}', xy=(epochs[best_i], ade_vals[best_i]),
+                        fontsize=8, color='darkred')
+
+        # FDE
+        ax = axes[0, 1]
+        fde_vals = [e["FDE"] for e in s_data]
+        ax.plot(epochs, fde_vals, 's--', color=color, markersize=3, linewidth=1.5,
+                label=f'Stage {stage}')
+        ax.set_title('FDE (Final Displacement Error)')
+        ax.set_xlabel('Epoch'); ax.set_ylabel('FDE')
+        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+        if fde_vals:
+            best_i = fde_vals.index(min(fde_vals))
+            ax.annotate(f'{fde_vals[best_i]:.3f}', xy=(epochs[best_i], fde_vals[best_i]),
+                        fontsize=8, color='darkred')
+
+        # ADE vs FDE 对比
+        ax = axes[1, 0]
+        ax.scatter(ade_vals, fde_vals, c=epochs, cmap='viridis', s=25, alpha=0.7, label=f'S{stage}')
+        ax.set_title('ADE vs FDE (color=epoch)')
+        ax.set_xlabel('ADE'); ax.set_ylabel('FDE')
+        ax.grid(True, alpha=0.3)
+
+        # ADE 改进率
+        ax = axes[1, 1]
+        if len(ade_vals) > 1:
+            imp = [(ade_vals[0] - v) / max(ade_vals[0], 1e-8) * 100 for v in ade_vals]
+            ax.plot(epochs, imp, '-', color=color, linewidth=1.5, label=f'Stage {stage}')
+    ax = axes[1, 1]
+    ax.set_title('ADE Improvement Over Initial (%)')
+    ax.set_xlabel('Epoch'); ax.set_ylabel('Improvement %')
+    ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
+    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    _plt.tight_layout()
+    path = os.path.join(output_dir, "04_ade_fde.png")
+    _plt.savefig(path, dpi=150, bbox_inches='tight')
+    _plt.close()
+    print(f"[图表4] ADE/FDE: {path}")
+
+
+def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
+    """图5: 物理指标 — 速度/加速度/高度违反率"""
+    has_physics = any("speed_violation" in e for e in logger.history)
+    if not has_physics:
+        print("[图表5] 无物理指标数据，跳过")
+        return
+
+    fig, axes = _plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle('Physics Constraint Violations', fontsize=14, fontweight='bold')
 
     all_epochs = list(range(1, len(logger.history) + 1))
 
@@ -406,13 +475,11 @@ def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
             ax.set_title(title, fontsize=12, fontweight='bold')
             ax.set_xlabel('Global Epoch'); ax.set_ylabel('Rate')
             ax.grid(True, alpha=0.3)
-            # 标注最小违反
             if vals:
                 best_i = vals.index(min(vals))
                 ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i + 1, vals[best_i]),
                             fontsize=9, color='darkred', fontweight='bold')
 
-    # 综合物理得分
     ax = axes[1, 1]
     if all(k in logger.history[0] for k in ["speed_violation", "accel_violation", "height_violation"]):
         phys_scores = []
@@ -425,15 +492,12 @@ def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
         ax.set_title('Composite Physics Score (↑ better)', fontsize=12, fontweight='bold')
         ax.set_xlabel('Global Epoch'); ax.set_ylabel('Score'); ax.set_ylim(0, 1.05)
         ax.grid(True, alpha=0.3)
-    else:
-        ax.text(0.5, 0.5, 'No physics data', ha='center', va='center', transform=ax.transAxes)
-        ax.set_title('Composite Physics Score')
 
     _plt.tight_layout()
-    path = os.path.join(output_dir, "04_physics_metrics.png")
+    path = os.path.join(output_dir, "05_physics_metrics.png")
     _plt.savefig(path, dpi=150, bbox_inches='tight')
     _plt.close()
-    print(f"[图表4] 物理指标: {path}")
+    print(f"[图表5] 物理指标: {path}")
 
 
 def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
@@ -531,14 +595,14 @@ def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3, axis='y')
 
     _plt.tight_layout()
-    path = os.path.join(output_dir, "05_dashboard.png")
+    path = os.path.join(output_dir, "06_dashboard.png")
     _plt.savefig(path, dpi=150, bbox_inches='tight')
     _plt.close()
-    print(f"[图表5] 综合仪表盘: {path}")
+    print(f"[图表6] 综合仪表盘: {path}")
 
 
 def _plot_all_charts(logger: TrainingLogger, output_dir: str):
-    """生成全部图表"""
+    """生成全部 6 张图表"""
     if not HAS_MPL:
         print("[跳过] matplotlib 未安装")
         return
@@ -547,11 +611,12 @@ def _plot_all_charts(logger: TrainingLogger, output_dir: str):
         return
 
     os.makedirs(output_dir, exist_ok=True)
-    _make_loss_breakdown_chart(logger, output_dir)
-    _make_convergence_chart(logger, output_dir)
-    _make_stage_comparison_chart(logger, output_dir)
-    _make_physics_metrics_chart(logger, output_dir)
-    _make_training_summary_dashboard(logger, output_dir)
+    _make_loss_breakdown_chart(logger, output_dir)       # 01: 损失分解
+    _make_convergence_chart(logger, output_dir)            # 02: 收敛性分析
+    _make_stage_comparison_chart(logger, output_dir)       # 03: 阶段对比
+    _make_ade_fde_chart(logger, output_dir)                # 04: ADE/FDE
+    _make_physics_metrics_chart(logger, output_dir)        # 05: 物理指标
+    _make_training_summary_dashboard(logger, output_dir)   # 06: 综合仪表盘
 
 
 def _save_training_summary(logger: TrainingLogger, config: dict, output_dir: str):
