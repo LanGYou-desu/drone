@@ -142,12 +142,6 @@ def load_self_data(points: list, timestamps: list) -> dict:
     }
 
 
-def _save_fact_file(filename: str, points: list, timestamps: list):
-    """保存轨迹到 data/fact/ — 委托给 save_trajectory_file"""
-    path = os.path.join(_fact_dir(), filename.replace('.dat', '').replace('.npz', ''))
-    save_trajectory_file(path, points, timestamps)
-
-
 def _clear_predict_files():
     """清除所有预测文件及综合轨迹内存数据"""
     pred_dir = _predict_dir()

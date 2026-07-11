@@ -64,7 +64,7 @@ def backup_existing_fact(
     fact_dst = os.path.join(backup_path, "fact")
     os.makedirs(fact_dst, exist_ok=True)
 
-    # 复制 .dat 文件
+    # 复制轨迹文件
     for f in dat_files:
         shutil.copy2(os.path.join(src, f), os.path.join(fact_dst, f))
 
@@ -77,8 +77,11 @@ def backup_existing_fact(
                 cnt = 0
                 fpath = os.path.join(src, f)
                 try:
-                    with open(fpath, 'r') as fh:
-                        cnt = sum(1 for _ in fh)
+                    if f.endswith('.npz'):
+                        cnt = len(np.load(fpath)['positions'])
+                    else:
+                        with open(fpath, 'r') as fh:
+                            cnt = sum(1 for _ in fh)
                 except Exception:
                     pass
                 methods[pid] = {"name": PLATFORM_NAMES.get(pid, pid), "point_count": cnt}

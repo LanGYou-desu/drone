@@ -98,9 +98,12 @@ def create_backup(label: str = 'manual') -> str:
                 if not fname.endswith(('.npz', '.dat')):
                     continue
                 for mid, data in detection_methods.items():
-                    fmap = {'visible': 'visible.npz', 'infrared': 'infrared.npz',
-                            'radar': 'radar.npz', 'self': 'self.npz'}
-                    if fmap.get(mid) == fname and data.get('points'):
+                    # 匹配 .npz 或 .dat
+                    matched = False
+                    for ext in ('.npz', '.dat'):
+                        if fname == f'{mid}{ext}':
+                            matched = True; break
+                    if matched and data.get('points'):
                         active_platforms.append(data.get('name', mid))
         if active_platforms:
             label = '+'.join(active_platforms)

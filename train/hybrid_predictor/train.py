@@ -652,9 +652,44 @@ def _save_training_summary(logger: TrainingLogger, config: dict, output_dir: str
 
 # ── 数据加载 ──────────────────────────────────────────
 
+def _make_loaders(train_trajs, valid_trajs, config):
+    train_set = TrajectoryDataset(train_trajs, ctx_len=config["ctx_len"],
+                                  tgt_len=config["tgt_len"], augment=True)
+    val_set = TrajectoryDataset(
+        valid_trajs if valid_trajs else train_trajs[:max(1, int(len(train_trajs) * 0.1))],
+        ctx_len=config["ctx_len"], tgt_len=config["tgt_len"], augment=False,
+    )
+    return (
+        DataLoader(train_set, batch_size=config["batch_size"], shuffle=True,
+                   collate_fn=collate_fn, drop_last=True),
+        DataLoader(val_set, batch_size=config["batch_size"], shuffle=False,
+                   collate_fn=collate_fn, drop_last=False),
+    )
+
+
 def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
-    """构建训练/验证数据加载器 — 仅从 train/hybrid_predictor/dataset/ 加载"""
+    """构建训练/验证数据加载器。优先级: data/ > train/|valid/ > 自动生成"""
+    from numpy.random import RandomState
+
     dataset_root = os.path.join(_PROJECT_ROOT, config["dataset_dir"])
+
+    # 优先 data/ 目录
+    data_dir = os.path.join(dataset_root, "data")
+    if os.path.isdir(data_dir) and any(
+        f.endswith(('.npz', '.dat')) for f in os.listdir(data_dir)
+    ):
+        all_trajs = load_all_trajectories(synthetic_dir=data_dir)
+        if all_trajs:
+            rng = RandomState(42)
+            indices = list(range(len(all_trajs)))
+            rng.shuffle(indices)
+            n_val = max(1, int(len(all_trajs) * config.get("val_split", 0.15)))
+            train_trajs = [all_trajs[i] for i in indices[n_val:]]
+            valid_trajs = [all_trajs[i] for i in indices[:n_val]]
+            print(f"[数据] data/ → train: {len(train_trajs)}, valid: {len(valid_trajs)}")
+            return _make_loaders(train_trajs, valid_trajs, config)
+
+    # 回退 train/ | valid/ 目录
     train_dir = os.path.join(dataset_root, "train")
     valid_dir = os.path.join(dataset_root, "valid")
 
@@ -670,21 +705,8 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
 
     if len(train_trajs) == 0:
         raise RuntimeError("没有可用的训练数据！")
-
     print(f"[数据] train: {len(train_trajs)} 条轨迹, valid: {len(valid_trajs)} 条轨迹")
-
-    train_set = TrajectoryDataset(train_trajs, ctx_len=config["ctx_len"],
-                                  tgt_len=config["tgt_len"], augment=True)
-    val_set = TrajectoryDataset(
-        valid_trajs if valid_trajs else train_trajs[:max(1, int(len(train_trajs) * 0.1))],
-        ctx_len=config["ctx_len"], tgt_len=config["tgt_len"], augment=False,
-    )
-
-    train_loader = DataLoader(train_set, batch_size=config["batch_size"],
-                              shuffle=True, collate_fn=collate_fn, drop_last=True)
-    val_loader = DataLoader(val_set, batch_size=config["batch_size"],
-                            shuffle=False, collate_fn=collate_fn, drop_last=False)
-    return train_loader, val_loader
+    return _make_loaders(train_trajs, valid_trajs, config)
 
 
 def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:

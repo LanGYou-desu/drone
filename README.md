@@ -68,10 +68,11 @@ drone/
 │   │   ├── train.py                     #   训练脚本（含图表输出）
 │   │   └── train_result/                #   训练结果图表和日志
 │   └── hybrid_predictor/                # 轨迹预测模型训练
-│       ├── dataset/                     #   训练/验证数据 (.npz/.dat)
+│       ├── dataset/                     #   数据集目录
+│       │   └── data/                    #   统一数据目录（.npz 优先级）
 │       ├── dataset.py                   #   数据加载 + 滑动窗口采样
-│       ├── generate_synthetic.py        #   合成轨迹生成器
-│       ├── train.py                     #   分阶段训练脚本（含图表输出）
+│       ├── generate_synthetic.py        #   四旋翼动力学轨迹生成器
+│       ├── train.py                     #   分阶段训练脚本（含进度条+6张图表）
 │       └── train_result/                #   训练结果图表和日志
 │
 ├── templates/                           # 共享前端资源
@@ -80,8 +81,8 @@ drone/
 │   └── config_template.json
 │
 ├── data/                                # 运行时数据
-│   ├── fact/                            #   轨迹数据 (.dat)
-│   ├── predict/                         #   预测结果
+│   ├── fact/                            #   轨迹数据 (.npz 默认, .dat 兼容)
+│   ├── predict/                         #   预测结果 (.npz)
 │   ├── backup/                          #   快照备份
 │   └── uploads/                         #   临时视频上传
 │
