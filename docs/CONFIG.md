@@ -70,7 +70,25 @@ Phy-ODE-Diffusion 混合轨迹预测模型的运行时参数。
 
 ---
 
-## 五、training — 训练超参配置
+## 五、drone_dynamics — 四旋翼动力学参数
+
+合成轨迹生成器和物理约束使用的无人机动力学参数。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `g` | float | 9.81 | 重力加速度 (m/s²) |
+| `v_h_max` | float | 20.0 | 最大水平速度 (m/s) |
+| `v_v_up` | float | 5.0 | 最大垂直上升速度 (m/s) |
+| `v_v_down` | float | 3.0 | 最大垂直下降速度 (m/s) |
+| `max_tilt` | float | 35.0 | 最大倾斜角 (deg)，限制水平加速度 a_h ≤ g·tan(max_tilt) |
+| `max_alt` | float | 120.0 | 最大飞行高度 (m)，法规限制 |
+| `min_alt` | float | 1.0 | 最低飞行高度 (m)，地面约束 |
+| `thrust_max` | float | 25.0 | 最大推力加速度 (m/s²)，约 2.5g |
+| `thrust_hover` | float | 9.81 | 悬停推力加速度 = g |
+
+---
+
+## 六、training — 训练超参配置
 
 Phy-ODE-Diffusion 模型训练的完整参数。训练脚本启动时优先从 `config.json` 读取，命令行 `--*` 参数可覆盖。
 

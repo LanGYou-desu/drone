@@ -172,13 +172,39 @@ $$\tilde{\mathbf{\epsilon}}_\tau = \mathbf{\epsilon}_\phi(\mathbf{x}_\tau, \tau,
 
 其中 $\hat{\mathbf{p}}^{(0)}_{\text{phys}} = \hat{\mathbf{p}}^{(0)}_{\text{norm}} \cdot \mathbf{p}_{\text{std}} + \mathbf{p}_{\text{mean}}$
 
-#### 物理约束函数（原始物理空间）
+#### 四旋翼动力学约束
 
-$$\mathcal{C}(\mathbf{p}) = \lambda_v \max(0, \|\mathbf{v}\|-v_{\max})^2 + \lambda_a \max(0, \|\mathbf{a}\|-a_{\max})^2 + \lambda_z \max(0, z_{\min}-z)^2$$
+物理约束基于四旋翼飞行器的简化刚体动力学模型。四旋翼通过倾斜机体产生水平加速度：
 
-- $v_{\max}$ / $a_{\max}$ / $z_{\min}$ 从 `config.json` → `hybrid_model` 读取，可在设置页面实时调整
+$$\begin{aligned}
+\dot{\mathbf{p}} &= \mathbf{v} \\
+\dot{\mathbf{v}} &= \frac{T}{m} \cdot R(\phi,\theta) \cdot \mathbf{e}_{\text{up}} - g \cdot \mathbf{e}_{\text{up}}
+\end{aligned}$$
+
+其中 $T$ 为推力，$m$ 为质量，$R$ 为旋转矩阵（roll $\phi$, pitch $\theta$），$g$ 为重力加速度。
+
+**水平运动**：倾斜机体使推力产生水平分量，最大水平加速度受倾斜角限制：
+$$a_{h,\max} = g \cdot \tan(\phi_{\max}) \approx g \cdot \tan(35°) \approx 6.9\ \text{m/s}^2$$
+
+**垂直运动**：推力与重力之差驱动升降，上下行速度不对称（受空气动力学和法规限制）：
+$$v_{y,\max}^{\text{up}} = 5\ \text{m/s},\quad v_{y,\max}^{\text{down}} = 3\ \text{m/s}$$
+
+**高度限制**：法规上限 120m，地面约束 1m。
+
+#### 物理约束函数（原始物理空间，四旋翼扩展版）
+
+$$\begin{aligned}
+\mathcal{C}(\mathbf{p}) = &\lambda_v \max(0, \|\mathbf{v}_{xz}\|-v_{h,\max})^2 &\text{水平速度} \\
++ &\lambda_v \max(0, v_y - v_{v,\text{up}})^2 &\text{上升速度} \\
++ &\lambda_v \max(0, -v_y - v_{v,\text{down}})^2 &\text{下降速度} \\
++ &\lambda_a \max(0, \|\mathbf{a}_{xz}\| - g \cdot \tan(\phi_{\max}))^2 &\text{水平加速度（倾斜约束）} \\
++ &\lambda_z \max(0, z_{\min} - y)^2 &\text{最低高度} \\
++ &\lambda_{z,\max} \max(0, y - z_{\max})^2 &\text{最高高度}
+\end{aligned}$$
+
+- 参数从 `config.json` → `drone_dynamics` 和 `hybrid_model` 读取
 - 速度 $\mathbf{v} \approx (\mathbf{p} - \mathbf{p}_t) / \Delta t$
-- 引导强度 $\eta$ 默认 0.1，范围 0.01-0.50
+- 推理时反标准化到物理空间后计算，引导强度 $\eta$ 默认 0.1
 
 #### DDIM 加速采样
 
@@ -510,6 +536,20 @@ models/hybrid_predictor/
 | `guidance_eta` | float | 0.1 | 0.01–0.50 | 物理引导强度 |
 | `inference_steps` | int | 50 | 10–200 | DDIM 推理步数 |
 | `device` | str | `"cpu"` | cpu/cuda:0 | 推理设备 |
+
+### 四旋翼动力学配置（`config.json` → `drone_dynamics`）
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `g` | 9.81 | 重力加速度 (m/s²) |
+| `v_h_max` | 20.0 | 最大水平速度 (m/s) |
+| `v_v_up` | 5.0 | 最大垂直上升速度 (m/s) |
+| `v_v_down` | 3.0 | 最大垂直下降速度 (m/s) |
+| `max_tilt` | 35.0 | 最大倾斜角 (deg)，限制 a_h ≤ g·tan(max_tilt) |
+| `max_alt` | 120.0 | 最大飞行高度 (m) |
+| `min_alt` | 1.0 | 最低飞行高度 (m) |
+| `thrust_max` | 25.0 | 最大推力加速度 (m/s²) |
+| `thrust_hover` | 9.81 | 悬停推力加速度 = g |
 
 ### 训练配置（`train.py` → `DEFAULT_CONFIG` / `config.json` → `training`）
 
