@@ -20,6 +20,9 @@ try:
 except ImportError:
     cv2 = None
 
+# 项目根目录
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 class SessionStatus(str, Enum):
     IDLE = "idle"
@@ -92,9 +95,14 @@ _active_session_id: Optional[str] = None
 def _load_config():
     """加载全局配置"""
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
+        config_path = os.path.join(_PROJECT_ROOT, "config.json")
+        with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        print(f"[WARN] 配置文件不存在: {config_path}")
+        return {}
+    except Exception as e:
+        print(f"[ERR] 加载配置失败: {e}")
         return {}
 
 
@@ -129,6 +137,12 @@ def start_detection(session_id: str) -> DetectionSession:
     session = _sessions.get(session_id)
     if session is None:
         raise ValueError(f"会话不存在: {session_id}")
+
+    # 防止重复启动
+    if session.status == SessionStatus.RUNNING:
+        raise RuntimeError(f"会话已在运行中: {session_id}")
+    if session._thread is not None and session._thread.is_alive():
+        raise RuntimeError(f"会话的后台线程仍在运行: {session_id}")
 
     global _active_session_id
     _active_session_id = session_id
@@ -168,21 +182,9 @@ def _draw_bboxes(image, detections):
         cv2.putText(image, label, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
 
-def _compute_iou(box_a: list, box_b: list) -> float:
-    """计算两个 bbox 的 IoU"""
-    xa = max(box_a[0], box_b[0])
-    ya = max(box_a[1], box_b[1])
-    xb = min(box_a[2], box_b[2])
-    yb = min(box_a[3], box_b[3])
-    inter_w = max(0, xb - xa)
-    inter_h = max(0, yb - ya)
-    inter_area = inter_w * inter_h
-    if inter_area == 0:
-        return 0.0
-    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
-    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
-    union = area_a + area_b - inter_area
-    return inter_area / union if union > 0 else 0.0
+# IoU 计算统一使用 tracker 中的实现
+from trajectory_recognition.detection.tracker import MultiTracker
+_compute_iou = MultiTracker._compute_iou
 
 
 def _to_world(pt3d, platform_pos):
@@ -256,7 +258,12 @@ def _run_detection_pipeline(session: DetectionSession):
         platform_pos = {k: plat_cfg.get(k, 0) for k in ["pos_x", "pos_y", "pos_z", "pitch", "yaw", "roll"]}
 
         # 目标类别 ID（用于双目匹配时的类别约束）
+        # 优先取显式配置，否则取 target_classes 的第一个值
         target_class_id = det_cfg.get("target_class_id", None)
+        if target_class_id is None:
+            tc = det_cfg.get("target_classes", None)
+            if tc and len(tc) > 0:
+                target_class_id = tc[0]
 
         # 初始化组件
         detector = YOLODetector(
@@ -381,7 +388,14 @@ def _run_detection_pipeline(session: DetectionSession):
     except Exception as e:
         session.status = SessionStatus.ERROR
         session.error_message = str(e)
+        print(f"[ERR] 检测流水线异常: {e}")
     finally:
+        # 确保视频资源释放
+        for gen in (gen_a, gen_b):
+            try:
+                gen.close()
+            except Exception:
+                pass
         session.finished_at = time.time()
         session._thread = None
 

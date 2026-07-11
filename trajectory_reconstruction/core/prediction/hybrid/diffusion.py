@@ -14,9 +14,10 @@ import torch.nn.functional as F
 
 # ── 噪声调度器 ──────────────────────────────────────────
 
-class NoiseScheduler:
+class NoiseScheduler(nn.Module):
     """
     扩散噪声调度器 — 支持 Cosine / Linear 调度，DDPM / DDIM 采样。
+    继承 nn.Module 以便 model.to(device) 自动移动所有张量。
     """
 
     def __init__(
@@ -25,6 +26,7 @@ class NoiseScheduler:
         beta_end: float = 0.02,
         schedule: str = "cosine",
     ):
+        super().__init__()
         self.n_steps = n_steps
 
         if schedule == "cosine":
@@ -35,9 +37,9 @@ class NoiseScheduler:
         alphas = 1.0 - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
 
-        self.alphas_cumprod = alphas_cumprod
-        self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - alphas_cumprod)
+        self.register_buffer('alphas_cumprod', alphas_cumprod)
+        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
+        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1.0 - alphas_cumprod))
 
     @staticmethod
     def _cosine_schedule(n_steps: int, max_beta: float = 0.999) -> torch.Tensor:
@@ -50,14 +52,6 @@ class NoiseScheduler:
     def _gather(self, arr: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         gathered = arr[t.clamp(0, len(arr) - 1)]
         return gathered.view(*gathered.shape, *([1] * max(0, 2 - gathered.dim())))
-
-    def to(self, device: torch.device):
-        """将所有张量移到指定设备"""
-        for key in list(self.__dict__.keys()):
-            val = getattr(self, key)
-            if isinstance(val, torch.Tensor):
-                setattr(self, key, val.to(device))
-        return self
 
     def q_sample(self, x0: torch.Tensor, t: torch.Tensor,
                  noise: torch.Tensor = None) -> torch.Tensor:

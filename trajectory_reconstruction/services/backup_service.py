@@ -176,10 +176,8 @@ def _clear_all():
         detection_methods[mid]['points'] = []
         detection_methods[mid]['timestamps'] = []
     # 删除自选和综合平台（恢复后会重新合成）
-    if 'self' in detection_methods:
-        del detection_methods['self']
-    if 'synthetic' in detection_methods:
-        del detection_methods['synthetic']
+    detection_methods.pop('self', None)
+    detection_methods.pop('synthetic', None)
     # 清空磁盘文件
     for d in (FACT_DIR, PREDICT_DIR):
         if os.path.isdir(d):
@@ -236,6 +234,15 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
             if os.path.isfile(src_fp):
                 shutil.copy2(src_fp, os.path.join(predict_dst, fname))
                 restored_count += 1
+
+    # 清理目标中被恢复 .dat 文件"影子覆盖"的 .npz（优先加载 .npz 会导致恢复不生效）
+    if os.path.isdir(fact_dst):
+        for fname in os.listdir(fact_dst):
+            if fname.endswith('.dat'):
+                npz_path = os.path.join(fact_dst, fname[:-4] + '.npz')
+                if os.path.isfile(npz_path):
+                    os.remove(npz_path)
+                    print(f'[restore] 移除被旧 .dat 覆盖的 {npz_path}')
 
     # 从磁盘重新加载 fact 文件到内存，重新合成（保留 self 数据）
     refresh_fact_data(keep_self=True)

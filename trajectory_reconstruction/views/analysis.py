@@ -77,8 +77,8 @@ def analysis_page():
 @analysis_bp.route('/data')
 def get_analysis_data():
     """返回各检测手段的运动学分析数据（fact + predict 拼接后统一计算）"""
-    self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.npz')) or \
-                  os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
+    self_exists = os.path.isfile(os.path.join(PROJECT_ROOT, 'data', 'fact', 'self.npz')) or \
+                  os.path.isfile(os.path.join(PROJECT_ROOT, 'data', 'fact', 'self.dat'))
     result = {}
     for mid in METHOD_ORDER:
         if mid not in detection_methods:

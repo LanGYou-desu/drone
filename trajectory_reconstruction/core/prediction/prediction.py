@@ -94,7 +94,7 @@ def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
         from trajectory_reconstruction.core.prediction.hybrid import PhyODEDiffusion
 
         device_obj = torch.device(device)
-        ckpt = torch.load(model_path, map_location=device_obj, weights_only=False)
+        ckpt = torch.load(model_path, map_location=device_obj, weights_only=True)
 
         # 读取四旋翼动力学参数
         try:

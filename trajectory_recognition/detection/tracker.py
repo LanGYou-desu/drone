@@ -248,8 +248,10 @@ class MultiTracker:
         xyxy_list = boxes.xyxy.tolist()
 
         for tid, cls_id, conf, xyxy in zip(track_ids, cls_list, conf_list, xyxy_list):
+            coco = YOLODetector.COCO_CLASSES
+            cls_name = coco[cls_id] if cls_id < len(coco) else f"class_{cls_id}"
             if tid not in self._tracks:
-                self._tracks[tid] = Track(track_id=tid, class_name=f"class_{cls_id}", class_id=cls_id)
+                self._tracks[tid] = Track(track_id=tid, class_name=cls_name, class_id=cls_id)
                 if tid >= self._next_id:
                     self._next_id = tid + 1
 
@@ -257,7 +259,7 @@ class MultiTracker:
             cx = (xyxy[0] + xyxy[2]) / 2
             cy = (xyxy[1] + xyxy[3]) / 2
             track.add_point_2d(cx, cy, xyxy, conf, ts)
-            track.class_name = f"class_{cls_id}"
+            track.class_name = cls_name
             track.class_id = cls_id
             track.is_active = True
 

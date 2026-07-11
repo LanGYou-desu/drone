@@ -940,11 +940,14 @@ def _validate_stage1(model, val_loader, device):
                     v_norm = torch.norm(v_phys, dim=-1)
                     total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
                     total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    # 加速度违反率（修复：此前 total_acc_v 从未被更新，恒为 0）
+                    a_h = v_norm / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
                     n_viol += 1
 
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
-                prev_pos = b["tgt_pos"][:, j, :] if j > 0 else prev_pos
+                prev_pos = b["tgt_pos"][:, j, :]  # 修复：无条件更新，避免速度计算用错前一帧
                 t_now = t_next
                 count += 1
             total_mse += (mse / max(count, 1)).item()
@@ -1027,7 +1030,15 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 count += 1
 
             loss = diff_loss_total / max(count, 1)
-        avg_train = total_loss / len(train_loader)
+            # 反向传播与参数更新（修复：阶段二缺少训练步骤）
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.diffusion.parameters(), 1.0)
+            if not _check_nan(loss, 2, epoch):
+                optimizer.step()
+            total_loss += loss.item()
+
+        avg_train = total_loss / max(len(train_loader), 1)
         val_loss, ade, fde, spd_v, hgt_v = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
@@ -1235,19 +1246,16 @@ def main():
 
     config = DEFAULT_CONFIG.copy()
 
-    # 从 config.json 合并 training 参数（命令行可覆盖）
+    # 从统一配置读取 training 参数（命令行可覆盖）
     try:
-        import json as _json
-        _cfg_path = os.path.join(_PROJECT_ROOT, "config.json")
-        if os.path.isfile(_cfg_path):
-            with open(_cfg_path, 'r', encoding='utf-8') as _f:
-                _train_cfg = _json.load(_f).get("training", {})
-            for _k in DEFAULT_CONFIG:
-                if _k in _train_cfg:
-                    config[_k] = _train_cfg[_k]
-            print("[CONFIG] 已从 config.json 读取训练参数")
-    except Exception:
-        pass
+        from trajectory_reconstruction.core.config.config_manager import ensure_config
+        _train_cfg = ensure_config().get("training", {})
+        for _k in DEFAULT_CONFIG:
+            if _k in _train_cfg:
+                config[_k] = _train_cfg[_k]
+        print("[CONFIG] 已从配置读取训练参数")
+    except Exception as e:
+        print(f"[WARN] 读取训练配置失败: {e}")
 
     config["ctx_len"] = args.ctx_len
     config["tgt_len"] = args.tgt_len

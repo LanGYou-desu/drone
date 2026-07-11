@@ -4,9 +4,10 @@
 import os
 import time
 from flask import Blueprint, jsonify, request
+from trajectory_reconstruction.core.config.config_manager import PROJECT_ROOT
 
 report_bp = Blueprint('report', __name__)
-REPORTS_DIR = os.path.join('reports')
+REPORTS_DIR = os.path.join(PROJECT_ROOT, 'reports')
 
 
 @report_bp.route('/api/save_report', methods=['POST'])

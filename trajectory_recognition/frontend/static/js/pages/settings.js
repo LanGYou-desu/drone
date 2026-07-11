@@ -103,7 +103,11 @@ async function loadConfig() {
         setVal('detModel', d.model); setVal('detDevice', d.device);
         setVal('detInputW', d.input_width); setVal('detInputH', d.input_height);
         setVal('detFrameInterval', d.frame_interval); setVal('detTracker', d.tracker);
-        if (d.target_classes && d.target_classes.length) setVal('detTargetClasses', d.target_classes.join(','));
+        if (d.target_classes && d.target_classes.length) {
+            setVal('detTargetClasses', d.target_classes.join(','));
+        } else if (d.target_classes !== undefined) {
+            setVal('detTargetClasses', '');  // null/空数组 → 清空输入框（检测全部）
+        }
         if (d.confidence_threshold != null) {
             document.getElementById('detConfidence').value = d.confidence_threshold;
             document.getElementById('confLabel').textContent = d.confidence_threshold.toFixed(2);

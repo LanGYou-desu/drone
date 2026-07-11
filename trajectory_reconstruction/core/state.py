@@ -4,6 +4,7 @@
 维护检测手段数据（轨迹、元信息）的全局内存缓存。
 路由蓝图通过此模块共享状态，避免循环导入。
 """
+import threading
 import time
 from trajectory_reconstruction.core.config.config_manager import ensure_config
 
@@ -14,12 +15,26 @@ _config = ensure_config()
 
 # { methodId: { name, color, visible, points, timestamps } }
 detection_methods: dict[str, dict] = {}
+_state_lock = threading.RLock()
 
 # AI 大模型配置（兼容旧 siliconflow 字段）
 _ai_cfg = _config.get('ai', _config.get('siliconflow', {}))
 AI_API_KEY: str = _ai_cfg.get('api_key', '')
 AI_URL: str = _ai_cfg.get('url', '')
 AI_MODEL: str = _ai_cfg.get('model', '')
+
+
+def get_methods_snapshot() -> dict:
+    """返回检测方法的线程安全浅拷贝快照"""
+    with _state_lock:
+        return {mid: dict(data) for mid, data in detection_methods.items()}
+
+
+def update_method(method_id: str, **kwargs):
+    """线程安全地更新单个检测方法的属性"""
+    with _state_lock:
+        if method_id in detection_methods:
+            detection_methods[method_id].update(kwargs)
 
 
 METHOD_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic']

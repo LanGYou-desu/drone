@@ -173,7 +173,6 @@ def preview():
 def list_backups():
     """列出 data/backup/ 中的所有备份（统一 manifest 格式）"""
     try:
-        import json as _json
         backup_dir = os.path.join(_PROJECT_ROOT, 'data', 'backup')
         if not os.path.isdir(backup_dir):
             return jsonify({'success': True, 'backups': []})
@@ -187,7 +186,7 @@ def list_backups():
             manifest = {}
             if os.path.isfile(manifest_path):
                 with open(manifest_path, 'r', encoding='utf-8') as f:
-                    manifest = _json.load(f)
+                    manifest = json.load(f)
 
             # 统一格式: {created, label, files: {fact:[], predict:[], memory:[]}}
             files_dict = manifest.get('files', {})
@@ -195,8 +194,17 @@ def list_backups():
             pt_count = 0
             for ff in fact_files:
                 fp = os.path.join(d, 'fact', ff)
-                if os.path.isfile(fp):
-                    pt_count += sum(1 for _ in open(fp, 'r'))
+                if not os.path.isfile(fp):
+                    continue
+                try:
+                    if ff.endswith('.npz'):
+                        import numpy as np
+                        pt_count += len(np.load(fp)['positions'])
+                    else:
+                        with open(fp, 'r') as fh2:
+                            pt_count += sum(1 for _ in fh2)
+                except Exception:
+                    pass
 
             backups.append({
                 'name': name,
@@ -327,7 +335,7 @@ def save_results():
         return jsonify({
             'success': True,
             'files': files,
-            'track_count': len(files),
+            'track_count': len(tracks),
             'platform': platform_id,
             'backup': backup_path,
         })

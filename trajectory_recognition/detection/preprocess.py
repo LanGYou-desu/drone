@@ -79,45 +79,46 @@ class VideoProcessor:
         if not self._cap.isOpened():
             raise RuntimeError(f"无法打开视频源: {source}")
 
-        self._fps = self._cap.get(cv2.CAP_PROP_FPS) or 30.0
-        self._total_frames = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        try:
+            self._fps = self._cap.get(cv2.CAP_PROP_FPS) or 30.0
+            self._total_frames = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
-        frame_count = 0
-        extracted_count = 0
+            frame_count = 0
+            extracted_count = 0
 
-        while True:
-            ret, image = self._cap.read()
-            if not ret:
-                break
+            while True:
+                ret, image = self._cap.read()
+                if not ret:
+                    break
 
-            # 抽帧
-            if frame_count % self.frame_interval != 0:
+                # 抽帧
+                if frame_count % self.frame_interval != 0:
+                    frame_count += 1
+                    continue
+
+                # 缩放到目标尺寸（仅当与原图不同时）
+                if self.target_size:
+                    h, w = image.shape[:2]
+                    tw, th = self.target_size
+                    if (w, h) != (tw, th):
+                        image = cv2.resize(image, (tw, th))
+
+                timestamp = frame_count / self._fps
+
+                yield Frame(
+                    image=image,
+                    frame_id=frame_count,
+                    timestamp=round(timestamp, 3),
+                )
+
                 frame_count += 1
-                continue
+                extracted_count += 1
 
-            # 缩放到目标尺寸（仅当与原图不同时）
-            if self.target_size:
-                h, w = image.shape[:2]
-                tw, th = self.target_size
-                if (w, h) != (tw, th):
-                    image = cv2.resize(image, (tw, th))
-
-            timestamp = frame_count / self._fps
-
-            yield Frame(
-                image=image,
-                frame_id=frame_count,
-                timestamp=round(timestamp, 3),
-            )
-
-            frame_count += 1
-            extracted_count += 1
-
-            if self.max_frames and extracted_count >= self.max_frames:
-                break
-
-        self._cap.release()
-        self._cap = None
+                if self.max_frames and extracted_count >= self.max_frames:
+                    break
+        finally:
+            self._cap.release()
+            self._cap = None
 
     def get_video_info(self, source: Union[str, int]) -> dict:
         """

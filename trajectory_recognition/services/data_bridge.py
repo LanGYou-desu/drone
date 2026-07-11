@@ -40,9 +40,9 @@ def backup_existing_fact(
     platform_id: str = "",
 ) -> Optional[str]:
     """
-    备份 data/fact/ 中的指定 .dat 文件到 data/backup/。
+    备份 data/fact/ 中的指定文件到 data/backup/。
 
-    未指定 filenames 则备份全部 .dat 文件。
+    未指定 filenames 则备份全部 .npz/.dat 文件。
     格式: data/backup/{YYYYmmdd_HHMMSS}_{label}/
     """
     # label 用中文平台名，如 "可见光"
@@ -53,7 +53,16 @@ def backup_existing_fact(
         return None
 
     if filenames:
-        dat_files = [f for f in filenames if os.path.isfile(os.path.join(src, f))]
+        dat_files = []
+        for f in filenames:
+            fp = os.path.join(src, f)
+            if os.path.isfile(fp):
+                dat_files.append(f)
+            elif f.endswith('.npz'):
+                # .npz 不存在时回退检查 .dat 旧格式
+                alt = f[:-4] + '.dat'
+                if os.path.isfile(os.path.join(src, alt)):
+                    dat_files.append(alt)
     else:
         dat_files = [f for f in os.listdir(src) if f.endswith(('.npz', '.dat'))]
     if not dat_files:
@@ -72,8 +81,10 @@ def backup_existing_fact(
     # 从文件名推断平台名 + 统计点数
     methods = {}
     for f in dat_files:
+        base = os.path.splitext(f)[0]  # "visible" (兼容 .npz 和 .dat)
         for pid, fname in PLATFORM_FACT_MAP.items():
-            if f == fname:
+            fname_base = os.path.splitext(fname)[0]
+            if base == fname_base:
                 cnt = 0
                 fpath = os.path.join(src, f)
                 try:
@@ -148,6 +159,13 @@ def tracks_to_dat(
 
     np.savez(fpath, positions=arr, timestamps=t_arr)
     print(f"[data_bridge] 合并写入 {fpath} ({len(all_points)} 个 3D 点)")
+
+    # 清理对应的旧 .dat 文件，避免格式迁移后数据重复
+    dat_file = os.path.join(out, filename[:-4] + '.dat')
+    if os.path.isfile(dat_file):
+        os.remove(dat_file)
+        print(f"[data_bridge] 已清理旧格式文件 {dat_file}")
+
     return [fpath]
 
 
@@ -167,7 +185,8 @@ def list_detect_files(data_dir: str = "data/fact/") -> list[dict]:
                 data = np.load(fpath)
                 point_count = len(data['positions'])
             else:
-                point_count = sum(1 for _ in open(fpath, 'r'))
+                with open(fpath, 'r') as fh:
+                    point_count = sum(1 for _ in fh)
         except Exception:
             point_count = 0
 

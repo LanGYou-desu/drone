@@ -83,6 +83,85 @@ DEFAULT_CONFIG: dict[str, Any] = {
         'acceleration': 1.0,
         'curvature': 1.0,
     },
+    'drone_dynamics': {
+        'g': 9.81,
+        'v_h_max': 20.0,
+        'v_v_up': 5.0,
+        'v_v_down': 3.0,
+        'max_tilt': 35.0,
+        'max_alt': 120.0,
+        'min_alt': 1.0,
+        'thrust_max': 25.0,
+        'thrust_hover': 9.81,
+    },
+    'training': {
+        'ctx_len': 20,
+        'tgt_len': 10,
+        'batch_size': 32,
+        'lr_stage1': 0.001,
+        'lr_stage2': 0.001,
+        'lr_stage3': 0.0001,
+        'weight_decay': 0.0001,
+        'epochs_stage1': 50,
+        'epochs_stage2': 100,
+        'epochs_stage3': 20,
+        'warmup_epochs_s1': 5,
+        'warmup_epochs_s2': 3,
+        'warmup_epochs_s3': 2,
+        'warmup_start_factor': 0.1,
+        'label_smoothing': 0.005,
+    },
+    'hybrid_model': {
+        'enabled': True,
+        'v_max': 25.0,
+        'a_max': 20.0,
+        'z_min': 5.0,
+        'z_max': 120.0,
+        'v_v_up': 5.0,
+        'v_v_down': 3.0,
+        'max_tilt': 35.0,
+        'guidance_eta': 0.15,
+        'inference_steps': 80,
+        'device': 'cpu',
+    },
+    'detection': {
+        'model': 'models/yolo/yolov8n.pt',
+        'confidence_threshold': 0.5,
+        'nms_threshold': 0.45,
+        'frame_interval': 3,
+        'tracker': 'bytetrack',
+        'input_width': 640,
+        'input_height': 640,
+        'device': 'cpu',
+        'auto_save': False,
+        'target_classes': [0],
+        'target_class_id': 0,
+    },
+    'platforms': {
+        'visible': {
+            'focal_length_px': 0, 'baseline': 1, 'fov_horizontal': 90,
+            'fov_vertical': 60, 'resolution_width': 1920, 'resolution_height': 1080,
+            'pos_x': 0, 'pos_y': 0, 'pos_z': 0, 'pitch': 0, 'yaw': 0, 'roll': 0,
+        },
+        'infrared': {
+            'focal_length_px': 0, 'baseline': 1.2, 'fov_horizontal': 60,
+            'fov_vertical': 45, 'resolution_width': 640, 'resolution_height': 480,
+            'pos_x': 2, 'pos_y': 1.5, 'pos_z': 0, 'pitch': 5, 'yaw': 0, 'roll': 0,
+            'convergence_angle': 0, 'tilt_angle': 5,
+        },
+        'radar': {
+            'focal_length_px': 0, 'baseline': 2, 'fov_horizontal': 120,
+            'fov_vertical': 90, 'resolution_width': 1024, 'resolution_height': 768,
+            'pos_x': -2, 'pos_y': 1.5, 'pos_z': 0, 'pitch': 0, 'yaw': 90, 'roll': 0,
+            'convergence_angle': 0, 'tilt_angle': 0,
+        },
+        'self': {
+            'focal_length_px': 0, 'baseline': 1, 'fov_horizontal': 90,
+            'fov_vertical': 60, 'resolution_width': 1920, 'resolution_height': 1080,
+            'pos_x': 0, 'pos_y': 1.5, 'pos_z': 0, 'pitch': 0, 'yaw': 0, 'roll': 0,
+            'convergence_angle': 0, 'tilt_angle': 0,
+        },
+    },
 }
 
 
@@ -141,8 +220,14 @@ def ensure_config(config_path: str = CONFIG_PATH) -> dict:
         # 优先从模板文件复制
         if os.path.exists(CONFIG_TEMPLATE):
             import shutil
-            shutil.copy(CONFIG_TEMPLATE, config_path)
-            print(f'[OK] 从模板创建配置文件 {config_path}')
+            try:
+                shutil.copy(CONFIG_TEMPLATE, config_path)
+                print(f'[OK] 从模板创建配置文件 {config_path}')
+            except (IOError, OSError) as e:
+                print(f'[WARN] 无法从模板复制 ({e})，使用默认配置')
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
+                return DEFAULT_CONFIG.copy()
         else:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
@@ -150,8 +235,12 @@ def ensure_config(config_path: str = CONFIG_PATH) -> dict:
             print('  请编辑文件填入硅基流动 API Key 后重启程序。')
             return DEFAULT_CONFIG.copy()
 
-    with open(config_path, 'r', encoding='utf-8') as f:
-        cfg = json.load(f)
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f'[ERR] 配置文件已损坏 ({e})，使用默认配置')
+        return DEFAULT_CONFIG.copy()
 
     # 校验并补全
     cfg = _validate_config(cfg)
@@ -159,6 +248,17 @@ def ensure_config(config_path: str = CONFIG_PATH) -> dict:
 
 
 def save_config(cfg: dict, config_path: str = CONFIG_PATH):
-    """保存配置到文件（仅写回 JSON）"""
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(cfg, f, indent=4, ensure_ascii=False)
+    """原子写入配置到文件，避免部分写入导致配置损坏"""
+    import tempfile
+    dirname = os.path.dirname(config_path) or '.'
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8', dir=dirname,
+            delete=False, suffix='.tmp'
+        ) as tmp:
+            json.dump(cfg, tmp, indent=4, ensure_ascii=False)
+            tmp_name = tmp.name
+        os.replace(tmp_name, config_path)
+    except (IOError, OSError) as e:
+        print(f'[ERR] 无法保存配置到 {config_path}: {e}')
+        raise RuntimeError(f'配置保存失败: {e}') from e

@@ -259,8 +259,14 @@ def clear_all_data() -> Optional[str]:
     """
     from trajectory_reconstruction.services.backup_service import create_backup
 
-    # 1. 备份
-    snapshot_name = create_backup(label='auto')
+    # 1. 备份（失败则拒绝清空，防止数据丢失）
+    try:
+        snapshot_name = create_backup(label='auto')
+        if not snapshot_name:
+            return None
+    except Exception as e:
+        print(f'[ERR] 备份失败，取消清空操作: {e}')
+        return None
 
     # 2. 删除 fact/ 文件
     fact_dir = _fact_dir()
