@@ -6,26 +6,23 @@ import os
 from flask import Blueprint, render_template, jsonify
 
 from trajectory_reconstruction.core.state import detection_methods, METHOD_ORDER
-from trajectory_reconstruction.core.io.data_loader import load_dat_file, _data_dir
+from trajectory_reconstruction.core.io.data_loader import load_trajectory_file, _data_dir
 from trajectory_reconstruction.core.config.config_manager import ensure_config, PROJECT_ROOT
 
 analysis_bp = Blueprint('analysis', __name__)
 
 # 预测文件映射
 _PREDICT_FILE_MAP = {
-    'visible': 'predict_visible.dat',
-    'infrared': 'predict_infrared.dat',
-    'radar': 'predict_radar.dat',
-    'self': 'predict_self.dat',
-    'synthetic': 'predict_synthetic.dat',
+    'visible': 'predict_visible', 'infrared': 'predict_infrared',
+    'radar': 'predict_radar', 'self': 'predict_self', 'synthetic': 'predict_synthetic',
 }
 
 
 def _load_predict_data(method_id: str):
     """加载某平台的预测数据（若存在）"""
-    fname = _PREDICT_FILE_MAP.get(method_id, f'pre{method_id}.dat')
+    fname = _PREDICT_FILE_MAP.get(method_id, f'predict_{method_id}')
     file_path = os.path.join(_data_dir('predict'), fname)
-    return load_dat_file(file_path)
+    return load_trajectory_file(file_path)
 
 
 def _compute_metrics(points, timestamps):
@@ -80,7 +77,8 @@ def analysis_page():
 @analysis_bp.route('/data')
 def get_analysis_data():
     """返回各检测手段的运动学分析数据（fact + predict 拼接后统一计算）"""
-    self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
+    self_exists = os.path.isfile(os.path.join('data', 'fact', 'self.npz')) or \
+                  os.path.isfile(os.path.join('data', 'fact', 'self.dat'))
     result = {}
     for mid in METHOD_ORDER:
         if mid not in detection_methods:

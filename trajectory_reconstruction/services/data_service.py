@@ -6,7 +6,9 @@ from typing import Optional
 
 from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.config.config_manager import save_config, ensure_config, PROJECT_ROOT
-from trajectory_reconstruction.core.io.data_loader import load_dat_file, load_default_data
+from trajectory_reconstruction.core.io.data_loader import (
+    load_trajectory_file, save_trajectory_file, load_default_data,
+)
 from trajectory_reconstruction.core.math_utils import lerp_3d, nearest_avg_3d, smooth_points_3d
 
 # ── 路径辅助 ──
@@ -50,9 +52,10 @@ def initialize_data():
     """
     # 清除上次遗留的临时文件
     _clear_predict_files()
-    self_path = os.path.join(_fact_dir(), 'self.dat')
-    if os.path.isfile(self_path):
-        os.remove(self_path)
+    for ext in ('.npz', '.dat'):
+        p = os.path.join(_fact_dir(), 'self' + ext)
+        if os.path.isfile(p):
+            os.remove(p)
 
     default_data = load_default_data()
     for mid, data in default_data.items():
@@ -73,7 +76,7 @@ def initialize_data():
 
 def refresh_fact_data(keep_self: bool = False) -> bool:
     """
-    重新加载 data/fact/*.dat 数据到 visible/infrared/radar
+    重新加载 data/fact/ 数据到 visible/infrared/radar
     keep_self=True 时保留自选平台数据（恢复备份时使用）
     """
     default_data = load_default_data()
@@ -86,17 +89,17 @@ def refresh_fact_data(keep_self: bool = False) -> bool:
 
     if not keep_self:
         # 清除自选文件和数据
-        self_path = os.path.join(_fact_dir(), 'self.dat')
-        if os.path.isfile(self_path):
-            os.remove(self_path)
+        for ext in ('.npz', '.dat'):
+            p = os.path.join(_fact_dir(), 'self' + ext)
+            if os.path.isfile(p):
+                os.remove(p)
         if 'self' in detection_methods:
             detection_methods['self']['points'] = []
             detection_methods['self']['timestamps'] = []
     else:
-        # 恢复时加载 self.dat
-        self_path = os.path.join(_fact_dir(), 'self.dat')
-        if os.path.isfile(self_path):
-            pts, tss = load_dat_file(self_path)
+        # 恢复时加载 self
+        pts, tss = load_trajectory_file(os.path.join(_fact_dir(), 'self'))
+        if pts:
             if 'self' not in detection_methods:
                 detection_methods['self'] = {
                     'name': '自选', 'color': '#ff9500', 'visible': True, 'enabled': True,
@@ -116,25 +119,19 @@ def refresh_fact_data(keep_self: bool = False) -> bool:
 
 def load_self_data(points: list, timestamps: list) -> dict:
     """
-    创建/更新自选平台（self）的轨迹数据，持久化到 data/fact/self.dat
+    创建/更新自选平台（self）的轨迹数据
     """
     if 'self' not in detection_methods:
         detection_methods['self'] = {
-            'name': '自选',
-            'color': '#FF9500',
-            'visible': True,
-            'enabled': True,
-            'weight': 1.0,
-            'points': [],
-            'timestamps': [],
+            'name': '自选', 'color': '#FF9500',
+            'visible': True, 'enabled': True, 'weight': 1.0,
+            'points': [], 'timestamps': [],
         }
-    # 上传数据即启用该平台（覆盖之前可能的禁用状态）
     detection_methods['self']['enabled'] = True
     detection_methods['self']['visible'] = True
     detection_methods['self']['points'] = points
     detection_methods['self']['timestamps'] = timestamps
-    # 持久化
-    _save_fact_file('self.dat', points, timestamps)
+    save_trajectory_file(os.path.join(_fact_dir(), 'self'), points, timestamps)
     # 清除旧预测（数据已变，需重新预测）
     _clear_predict_files()
     save_metadata()
@@ -146,16 +143,9 @@ def load_self_data(points: list, timestamps: list) -> dict:
 
 
 def _save_fact_file(filename: str, points: list, timestamps: list):
-    """保存轨迹到 data/fact/ 目录"""
-    cfg = ensure_config()
-    default_step = cfg.get('prediction_settings', {}).get('time_step', 0.5)
-    fact_dir = _fact_dir()
-    os.makedirs(fact_dir, exist_ok=True)
-    path = os.path.join(fact_dir, filename)
-    with open(path, 'w', encoding='utf-8') as f:
-        for i, p in enumerate(points):
-            t = timestamps[i] if i < len(timestamps) else i * default_step
-            f.write(f'{p[0]:.6f} {p[1]:.6f} {p[2]:.6f} {t:.6f}\n')
+    """保存轨迹到 data/fact/ — 委托给 save_trajectory_file"""
+    path = os.path.join(_fact_dir(), filename.replace('.dat', '').replace('.npz', ''))
+    save_trajectory_file(path, points, timestamps)
 
 
 def _clear_predict_files():

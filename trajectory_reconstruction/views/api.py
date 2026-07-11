@@ -17,7 +17,7 @@ from flask import Blueprint, jsonify, request
 from trajectory_reconstruction.services import data_service, backup_service
 from trajectory_reconstruction.services.data_service import save_metadata
 from trajectory_reconstruction.core.state import detection_methods
-from trajectory_reconstruction.core.io.data_loader import load_dat_file
+from trajectory_reconstruction.core.io.data_loader import load_trajectory_file
 
 api_bp = Blueprint('api', __name__)
 
@@ -39,8 +39,9 @@ def load_data():
 
     temp = os.path.join('data', 'temp_upload.dat')
     file.save(temp)
-    points, timestamps = load_dat_file(temp)
-    os.remove(temp)
+    points, timestamps = load_trajectory_file(temp)
+    if os.path.isfile(temp):
+        os.remove(temp)
 
     if not points:
         return jsonify({'success': False, 'error': '文件格式无效（需要 x y z t）'}), 400

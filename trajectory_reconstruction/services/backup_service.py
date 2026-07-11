@@ -95,11 +95,11 @@ def create_backup(label: str = 'manual') -> str:
         active_platforms = []
         if os.path.isdir(FACT_DIR):
             for fname in sorted(os.listdir(FACT_DIR)):
-                if not fname.endswith('.dat'):
+                if not fname.endswith(('.npz', '.dat')):
                     continue
                 for mid, data in detection_methods.items():
-                    fmap = {'visible': 'visible.dat', 'infrared': 'infrared.dat',
-                            'radar': 'radar.dat', 'self': 'self.dat'}
+                    fmap = {'visible': 'visible.npz', 'infrared': 'infrared.npz',
+                            'radar': 'radar.npz', 'self': 'self.npz'}
                     if fmap.get(mid) == fname and data.get('points'):
                         active_platforms.append(data.get('name', mid))
         if active_platforms:
@@ -121,11 +121,11 @@ def create_backup(label: str = 'manual') -> str:
         tss = data.get('timestamps', [])
         if not pts:
             continue
-        mem_path = os.path.join(snap_path, 'memory', f'{mid}.dat')
-        with open(mem_path, 'w', encoding='utf-8') as f:
-            for i, p in enumerate(pts):
-                t = tss[i] if i < len(tss) else 0.0
-                f.write(f'{p[0]} {p[1]} {p[2]} {t}\n')
+        mem_path = os.path.join(snap_path, 'memory', f'{mid}.npz')
+        import numpy as np
+        np.savez(mem_path,
+                 positions=np.array(pts, dtype=np.float32),
+                 timestamps=np.array(tss, dtype=np.float32))
 
     _write_manifest(name, label)
     print(f'[OK] 备份已创建: {name}')
@@ -201,7 +201,7 @@ def restore_backup(name: str, full: bool = False) -> tuple[bool, str]:
     if manifest is None:
         return False, '备份 manifest 丢失或损坏'
 
-    from trajectory_reconstruction.core.io.data_loader import load_dat_file
+    from trajectory_reconstruction.core.io.data_loader import load_trajectory_file
     from trajectory_reconstruction.services.data_service import save_metadata, refresh_fact_data
 
     restored_count = 0
@@ -275,8 +275,8 @@ def migrate_legacy() -> int:
     for entry in os.listdir(BACKUP_DIR):
         full = os.path.join(BACKUP_DIR, entry)
 
-        # 删除扁平 .dat 文件
-        if os.path.isfile(full) and entry.endswith('.dat'):
+        # 删除扁平轨迹文件
+        if os.path.isfile(full) and entry.endswith(('.npz', '.dat')):
             os.remove(full)
             removed += 1
 

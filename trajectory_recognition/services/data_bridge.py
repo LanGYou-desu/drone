@@ -4,25 +4,24 @@
 将跟踪轨迹写入 data/ 目录，供 trajectory_reconstruction 模块加载。
 
 平台 → 文件映射:
-  visible  → visible.dat
-  infrared → infrared.dat
-  radar    → radar.dat
-  self     → self.dat
-
-.dat 格式: 每行 "x y z t"（空格分隔浮点数）
+  visible  → visible.npz
+  infrared → infrared.npz
+  radar    → radar.npz
+  self     → self.npz
 """
 
 import json
 import os
 import shutil
+import numpy as np
 from datetime import datetime
 from typing import Optional
 
 PLATFORM_FACT_MAP = {
-    "visible":  "visible.dat",
-    "infrared": "infrared.dat",
-    "radar":    "radar.dat",
-    "self":     "self.dat",
+    "visible":  "visible.npz",
+    "infrared": "infrared.npz",
+    "radar":    "radar.npz",
+    "self":     "self.npz",
 }
 
 PLATFORM_NAMES = {
@@ -56,7 +55,7 @@ def backup_existing_fact(
     if filenames:
         dat_files = [f for f in filenames if os.path.isfile(os.path.join(src, f))]
     else:
-        dat_files = [f for f in os.listdir(src) if f.endswith('.dat')]
+        dat_files = [f for f in os.listdir(src) if f.endswith(('.npz', '.dat'))]
     if not dat_files:
         return None
 
@@ -108,19 +107,12 @@ def tracks_to_dat(
     auto_backup: bool = True,
 ) -> list[str]:
     """
-    将双目融合后的 3D 轨迹合并写入一个 .dat 文件。
-
-    所有 track 的 3D 点按时序合并，输出格式:
-      x y z t
-
-    平台映射:
-      visible → visible.dat    infrared → infrared.dat
-      radar   → radar.dat      self     → self.dat
+    将双目融合后的 3D 轨迹合并写入一个 .npz 文件。
     """
     out = os.path.join(PROJECT_ROOT, output_dir)
     os.makedirs(out, exist_ok=True)
 
-    filename = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
+    filename = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.npz")
 
     # 自动备份（只备份即将覆盖的文件，用平台名标记）
     if auto_backup:
@@ -148,11 +140,10 @@ def tracks_to_dat(
 
     # 按时序排序
     all_points.sort(key=lambda p: p[0])
+    arr = np.array([[x, y, z] for _, x, y, z in all_points], dtype=np.float32)
+    t_arr = np.array([t for t, _, _, _ in all_points], dtype=np.float32)
 
-    with open(fpath, 'w', encoding='utf-8') as f:
-        for ts, x, y, z in all_points:
-            f.write(f"{x:.4f} {y:.4f} {z:.4f} {ts:.4f}\n")
-
+    np.savez(fpath, positions=arr, timestamps=t_arr)
     print(f"[data_bridge] 合并写入 {fpath} ({len(all_points)} 个 3D 点)")
     return [fpath]
 
@@ -165,11 +156,15 @@ def list_detect_files(data_dir: str = "data/fact/") -> list[dict]:
 
     files = []
     for fname in sorted(os.listdir(d)):
-        if not fname.endswith('.dat'):
+        if not fname.endswith(('.npz', '.dat')):
             continue
         fpath = os.path.join(d, fname)
         try:
-            point_count = sum(1 for _ in open(fpath, 'r'))
+            if fname.endswith('.npz'):
+                data = np.load(fpath)
+                point_count = len(data['positions'])
+            else:
+                point_count = sum(1 for _ in open(fpath, 'r'))
         except Exception:
             point_count = 0
 

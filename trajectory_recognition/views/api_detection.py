@@ -228,8 +228,8 @@ def list_files():
 @api_detection_bp.route('/files/<filename>', methods=['DELETE'])
 def delete_file(filename: str):
     try:
-        # 安全检查：只允许删除 .dat 文件
-        if not filename.endswith('.dat') or '..' in filename or '/' in filename:
+        # 安全检查：只允许删除轨迹文件
+        if not filename.endswith(('.npz', '.dat')) or '..' in filename or '/' in filename:
             return jsonify({'success': False, 'error': '无效的文件名'}), 400
 
         fpath = os.path.join(_PROJECT_ROOT, 'data', 'fact', filename)
@@ -314,7 +314,7 @@ def save_results():
 
         # 确定目标文件
         from trajectory_recognition.services.data_bridge import PLATFORM_FACT_MAP
-        target_file = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.dat")
+        target_file = PLATFORM_FACT_MAP.get(platform_id, f"{platform_id}.npz")
 
         # 手动保存先备份旧数据再写入
         backup_path = backup_existing_fact(filenames=[target_file], label='manual')
