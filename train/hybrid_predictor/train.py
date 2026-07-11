@@ -859,12 +859,14 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
 
         scheduler.step()
         avg_train = total_loss / len(train_loader)
-        val_loss, ade, fde = _validate_stage1(model, val_loader, device)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage1(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
         logger.log_epoch(1, epoch, avg_train, val_loss, lr, epoch_time,
-                         extra={"ADE": ade, "FDE": fde})
+                         extra={"ADE": ade, "FDE": fde,
+                                "speed_violation": spd_v, "accel_violation": acc_v,
+                                "height_violation": hgt_v})
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
@@ -885,10 +887,11 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
 
 
 def _validate_stage1(model, val_loader, device):
-    """返回 (MSE_loss, ADE, FDE) 三元组"""
+    """返回 (MSE_loss, ADE, FDE, speed_viol, accel_viol, height_viol) 六元组"""
     model.eval()
     total_mse, total_ade, total_fde = 0.0, 0.0, 0.0
-    n_batches = 0
+    total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
+    n_batches, n_viol = 0, 0
     with torch.no_grad():
         for batch in val_loader:
             b = _to_device(batch, device)
@@ -898,6 +901,7 @@ def _validate_stage1(model, val_loader, device):
             t_now = b["ctx_t"][:, -1]
             mse, count = 0.0, 0
             preds, tgts = [], []
+            prev_pos = b["ctx_pos"][:, -1, :]
             for j in range(b["tgt_pos"].shape[1]):
                 t_next = b["tgt_t"][:, j]
                 dt_step = t_next - t_now
@@ -905,8 +909,20 @@ def _validate_stage1(model, val_loader, device):
                 p_pred = h_prior[:, :3]
                 mse += torch.nn.functional.mse_loss(p_pred, b["tgt_pos"][:, j, :])
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
+
+                # 物理违反率（反标准化到原始空间）
+                if b.get("p_std") is not None:
+                    p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
+                    prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
+                    v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    v_norm = torch.norm(v_phys, dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
+                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    n_viol += 1
+
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
+                prev_pos = b["tgt_pos"][:, j, :] if j > 0 else prev_pos
                 t_now = t_next
                 count += 1
             total_mse += (mse / max(count, 1)).item()
@@ -916,8 +932,9 @@ def _validate_stage1(model, val_loader, device):
                 total_fde += errs[:, -1].mean().item()
             n_batches += 1
     model.train()
-    n = max(n_batches, 1)
-    return total_mse / n, total_ade / n, total_fde / n
+    n = max(n_batches, 1); nv = max(n_viol, 1)
+    return (total_mse / n, total_ade / n, total_fde / n,
+            total_spd_v / nv, total_acc_v / nv, total_hgt_v / nv)
 
 
 # ── 阶段二：扩散模型 ──────────────────────────────────
@@ -989,11 +1006,13 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
             loss = diff_loss_total / max(count, 1)
         avg_train = total_loss / len(train_loader)
-        val_loss = _validate_stage2(model, val_loader, device)
+        val_loss, ade, fde, spd_v, hgt_v = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
-        logger.log_epoch(2, epoch, avg_train, val_loss, lr, epoch_time)
+        logger.log_epoch(2, epoch, avg_train, val_loss, lr, epoch_time,
+                         extra={"ADE": ade, "FDE": fde,
+                                "speed_violation": spd_v, "height_violation": hgt_v})
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
@@ -1013,8 +1032,11 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
 
 def _validate_stage2(model, val_loader, device):
+    """返回 (diff_loss, ADE, FDE, speed_viol, height_viol)"""
     model.eval()
-    total_loss = 0.0
+    total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
+    total_spd_v, total_hgt_v = 0.0, 0.0
+    n_batches, n_viol = 0, 0
     with torch.no_grad():
         for batch in val_loader:
             b = _to_device(batch, device)
@@ -1023,20 +1045,42 @@ def _validate_stage2(model, val_loader, device):
                                                 b["ctx_vel"][:, -1, :], c)
             t_now = b["ctx_t"][:, -1]
             diff_loss, count = 0.0, 0
+            preds, tgts = [], []
+            prev_pos = b["ctx_pos"][:, -1, :]
             for j in range(b["tgt_pos"].shape[1]):
                 dt_step = b["tgt_t"][:, j] - t_now
                 h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
+                p_pred = h_prior[:, :3]
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
                 loss_dict = model.diffusion.compute_loss(
                     h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :])
                 diff_loss += loss_dict["diff_loss"]
+
+                # 物理违反
+                if b.get("p_std") is not None:
+                    p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
+                    prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
+                    v_norm = torch.norm((p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1), dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
+                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    n_viol += 1
+
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
+                prev_pos = b["tgt_pos"][:, j, :]
                 t_now = b["tgt_t"][:, j]
                 count += 1
             total_loss += (diff_loss / max(count, 1)).item()
+            if preds:
+                errs = torch.norm(torch.stack(preds, 1) - torch.stack(tgts, 1), dim=-1)
+                total_ade += errs.mean().item()
+                total_fde += errs[:, -1].mean().item()
+            n_batches += 1
     model.train()
-    return total_loss / len(val_loader)
+    n = max(n_batches, 1); nv = max(n_viol, 1)
+    return (total_loss / n, total_ade / n, total_fde / n,
+            total_spd_v / nv, total_hgt_v / nv)
 
 
 # ── 阶段三：联合微调 ──────────────────────────────────
@@ -1119,12 +1163,14 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss, ade, fde = _validate_stage1(model, val_loader, device)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage1(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
         logger.log_epoch(3, epoch, avg_train, val_loss, lr, epoch_time,
                          extra={"ADE": ade, "FDE": fde,
+                                "speed_violation": spd_v, "accel_violation": acc_v,
+                                "height_violation": hgt_v,
                                 "scheduled_sampling_prob": round(ss_prob, 3)})
         is_best = val_loss < best_val_loss
         if is_best:
