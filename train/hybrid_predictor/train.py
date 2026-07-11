@@ -78,6 +78,8 @@ DEFAULT_CONFIG = {
     "warmup_epochs_s2": 3,       # 阶段二: 扩散模型对初始 LR 敏感
     "warmup_epochs_s3": 2,       # 阶段三: 微调已有基础，短 warmup
     "warmup_start_factor": 0.1,  # warmup 起始 LR = base_lr × factor
+    # 标签平滑（回归任务：对目标位置加高斯噪声作为正则化）
+    "label_smoothing": 0.005,     # 噪声标准差（相对于数据标准差的比例）
     "dataset_dir": "train/hybrid_predictor/dataset",
     "output_dir": "models/hybrid_predictor",
     "device": "cuda:0",
@@ -663,6 +665,20 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
     return latest_path
 
 
+def _label_smooth(tgt_pos: torch.Tensor, p_std: torch.Tensor,
+                  smoothing: float) -> torch.Tensor:
+    """
+    回归标签平滑：对目标位置添加小幅高斯噪声作为正则化。
+
+    噪声标准差 = smoothing × p_std（适应各样本的数据尺度）。
+    smoothing=0 时返回原始数据（无平滑）。
+    """
+    if smoothing <= 0:
+        return tgt_pos
+    noise = torch.randn_like(tgt_pos) * smoothing * p_std.unsqueeze(1)
+    return tgt_pos + noise
+
+
 def _build_scheduler(optimizer, total_epochs, warmup_epochs, start_factor):
     """
     构建 warmup + cosine 退火复合调度器。
@@ -753,7 +769,9 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
                 dt_step = t_next - t_now
                 h_prior = model.state_manager.evolve(h, t_now, t_next)
                 p_pred = h_prior[:, :3]
-                mse_loss += torch.nn.functional.mse_loss(p_pred, b["tgt_pos"][:, j, :])
+                tgt_s = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
+                                     config["label_smoothing"])
+                mse_loss += torch.nn.functional.mse_loss(p_pred, tgt_s)
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
                 v_pred = (p_pred - prev_p) / dt_step.clamp(min=1e-3).unsqueeze(-1)
                 v_norm = torch.norm(v_pred, dim=-1)
@@ -893,8 +911,10 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 with torch.no_grad():
                     h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
+                tgt_smooth = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
+                                           config["label_smoothing"])
                 loss_dict = model.diffusion.compute_loss(
-                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :])
+                    h_prior, dt_step, prev_p, tgt_smooth)
                 diff_loss_total += loss_dict["diff_loss"]
                 with torch.no_grad():
                     h = model.state_manager.update(h_prior, dt_step,
@@ -903,17 +923,6 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 count += 1
 
             loss = diff_loss_total / max(count, 1)
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.diffusion.parameters(), 1.0)
-            if not _check_nan(loss, 2, epoch):
-                optimizer.step()
-            total_loss += loss.item()
-
-            if HAS_TQDM:
-                batch_iter.set_postfix(loss=f"{loss.item():.4f}")
-
-        scheduler.step()
         avg_train = total_loss / len(train_loader)
         val_loss = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
@@ -1011,7 +1020,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                 use_gt = torch.rand(1).item() > ss_prob
 
                 if use_gt or j == 0:
-                    p_obs = b["tgt_pos"][:, j, :]
+                    p_obs = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
+                                          config["label_smoothing"])
                     v_obs = b["tgt_vel"][:, j, :]
                 else:
                     # 使用 ODE 先验位置（轻量），而非完整扩散采样（昂贵且不参与梯度）
@@ -1085,6 +1095,8 @@ def main():
     parser.add_argument("--warmup-s2", type=int, default=None, help="阶段二 warmup 轮数")
     parser.add_argument("--warmup-s3", type=int, default=None, help="阶段三 warmup 轮数")
     parser.add_argument("--warmup-factor", type=float, default=None, help="warmup 起始 LR 因子")
+    parser.add_argument("--label-smoothing", type=float, default=None,
+                        help="标签平滑噪声标准差比例")
     parser.add_argument("--no-charts", action="store_true", help="跳过图表生成")
     args = parser.parse_args()
 
@@ -1110,6 +1122,8 @@ def main():
         config["warmup_epochs_s3"] = args.warmup_s3
     if args.warmup_factor is not None:
         config["warmup_start_factor"] = args.warmup_factor
+    if args.label_smoothing is not None:
+        config["label_smoothing"] = args.label_smoothing
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(f"[DEVICE] {device}")

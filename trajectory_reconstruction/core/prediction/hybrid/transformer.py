@@ -85,9 +85,12 @@ class TransformerEncoder(nn.Module):
             dropout=dropout,
             activation='gelu',
             batch_first=True,
-            norm_first=False,
+            norm_first=True,   # Pre-LN: 更稳定的训练，梯度流更好
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.transformer = nn.TransformerEncoder(
+            encoder_layer, num_layers=n_layers,
+            enable_nested_tensor=False,  # Pre-LN 下禁用嵌套张量避免警告
+        )
 
         self.context_proj = nn.Sequential(
             nn.Linear(d_feat, d_context),
