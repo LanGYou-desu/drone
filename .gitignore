@@ -16,7 +16,7 @@ data/backup/
 data/predict/
 data/uploads/
 data/fact/*.json
-data/fact/self.dat
+data/fact/self.*
 
 # OS
 .DS_Store

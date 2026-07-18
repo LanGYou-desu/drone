@@ -446,7 +446,7 @@ CLI 参数：`--warmup-s1 5 --warmup-s2 3 --warmup-s3 2 --warmup-factor 0.1`
 
 ```
 # 从阶段二最佳模型恢复
-python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 ```
 
 ---
@@ -518,12 +518,12 @@ train/hybrid_predictor/
 │   └── _plot_all_charts()                  # 5张训练图表生成
 └── train_result/                           # 训练输出（图表+日志）
 
-models/hybrid_predictor/
+train/hybrid_predictor/train_result/models/
 ├── phy_ode_diffusion_s1_e50_v0.1234.pt     # 阶段一检查点（含描述）
 ├── phy_ode_diffusion_s2_e100_v0.0456.pt    # 阶段二检查点
-├── phy_ode_diffusion_best_s1.pt             # 阶段一最佳（不被覆盖）
+├── phy_ode_diffusion_best_s1.pt             # 阶段一最佳
 ├── phy_ode_diffusion_best_s2.pt             # 阶段二最佳
-└── phy_ode_diffusion.pt                     # 旧命名（兼容）
+└── phy_ode_diffusion.pt                     # 兼容
 ```
 
 ---
@@ -667,7 +667,7 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
 # ========== 3. 恢复训练 ==========
-python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 
 # ========== 4. CPU 训练 ==========
 python train/hybrid_predictor/train.py --stage 2 --epochs 30 --batch 32 --device cpu
@@ -687,7 +687,7 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 
 ## 9. 输出文件
 
-### 训练输出目录 `train/hybrid_predictor/train_result/run_YYYYmmdd_HHMMSS/`
+### 训练输出目录 `train/hybrid_predictor/train_result/`
 
 | 文件 | 内容 | 对应指标 |
 |------|------|----------|
@@ -700,17 +700,17 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 | `training_history.json` | 每 epoch 的 train_loss/val_loss/ADE/FDE/lr/time + 物理违反率 | 全部指标 |
 | `training_summary.json` | 各阶段最优指标、总参数、总耗时 | 摘要 |
 
-### 模型权重目录 `models/hybrid_predictor/`
+### 模型权重目录 `train/hybrid_predictor/train_result/models/`
 
 | 文件 | 说明 |
 |------|------|
 | `phy_ode_diffusion_s1_e50_v0.1234.pt` | 阶段一 epoch 50 检查点（含优化器/调度器状态） |
 | `phy_ode_diffusion_s2_e100_v0.0456.pt` | 阶段二 epoch 100 检查点 |
-| `phy_ode_diffusion_best_s1.pt` | 阶段一最佳模型（不被覆盖） |
-| `phy_ode_diffusion_best_s2.pt` | 阶段二最佳模型（不被覆盖） |
-| `phy_ode_diffusion.pt` | 旧命名（兼容） |
+| `phy_ode_diffusion_best_s1.pt` | 阶段一最佳模型 |
+| `phy_ode_diffusion_best_s2.pt` | 阶段二最佳模型 |
+| `phy_ode_diffusion.pt` | 兼容 |
 
-推理时自动查找优先级：`best_s*` > `s*_e*` > 旧命名。
+训练完成后如需部署，将权重复制到 `models/hybrid_predictor/`。推理时自动查找优先级：`best_s*` > `s*_e*` > 旧命名。
 
 ---
 

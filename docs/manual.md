@@ -111,7 +111,7 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
 # 4. 恢复训练
-python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 
 # 训练完成后权重自动保存，重启服务即生效
 ```

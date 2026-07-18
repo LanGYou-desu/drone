@@ -827,10 +827,11 @@ python train/yolotrain/train.py \
     --data train/yolotrain/dataset/data.yaml \
     --model yolov8n.pt \
     --epochs 100 \
-    --imgsz 640
+    --imgsz 960
 
-# 4. 训练完成后复制到 models/yolo/
-cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
+# 4. 训练完成后模型自动保存到 train/yolotrain/train_result/models/
+#    部署时复制到 models/yolo/:
+#    cp train/yolotrain/train_result/models/drone_detect_*.pt models/yolo/drone_detect.pt
 ```
 
 #### 训练参数说明
@@ -840,12 +841,12 @@ cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
 | `--data` | `train/yolotrain/dataset/data.yaml` | 数据集描述文件路径 |
 | `--model` | `yolov8n.pt` | 预训练权重（yolov8n/s/m/l/x 或 yolov11 系列） |
 | `--epochs` | `100` | 训练轮数，小数据集 50~100，大数据集 100~300 |
-| `--imgsz` | `640` | 输入尺寸，小目标（无人机）建议 1280 |
+| `--imgsz` | `960` | 输入尺寸，1280×720 推荐 960（小目标优先用 1280） |
 | `--batch` | `16` | 批次大小，根据 GPU 显存调整（16GB→32, 8GB→16, 4GB→8） |
-| `--device` | `0` | 训练设备（0/1/cpu） |
+| `--device` | `auto` | 训练设备（auto/cpu/cuda:0） |
 | `--freeze` | `None` | 冻结前 N 层微调，小数据集推荐 `--freeze 10` |
 | `--lr` | `0.01` | 初始学习率 |
-| `--name` | `drone_detect` | 实验名称，输出到 `runs/detect/<name>/` |
+| `--name` | `drone_detect` | 实验名称，输出到 `train/yolotrain/train_result/models/<name>/` |
 | `--workers` | `8` | 数据加载线程数 |
 | `--resume` | — | 从 checkpoint 继续训练 |
 
@@ -853,7 +854,7 @@ cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
 
 ```bash
 # ONNX（通用加速，CPU 快 2~3x）
-python train/yolotrain/train.py --export runs/detect/drone_detect/weights/best.pt --format onnx
+python train/yolotrain/train.py --export train/yolotrain/train_result/models/drone_detect/weights/best.pt --format onnx
 
 # TensorRT（NVIDIA GPU 快 3~5x）
 python train/yolotrain/train.py --export best.pt --format engine
@@ -909,7 +910,7 @@ class_id x_center y_center width height
 | 增强 | 参数 | 作用 |
 |------|------|------|
 | Mosaic | `mosaic=1.0` | 4 图拼接，提升小目标检测 |
-| 缩放 | `scale=0.5` | 模拟远近距离变化 |
+| 缩放 | `scale=0.3` | 模拟远近距离变化（高分辨率下降低幅度防止目标过小） |
 | HSV 扰动 | `hsv_h=0.015, hsv_s=0.7, hsv_v=0.4` | 应对不同天气/光照 |
 | 上下翻转 | `flipud=0.0` | **关闭**，天空在上 |
 | 左右翻转 | `fliplr=0.5` | 水平翻转 OK |
@@ -928,13 +929,13 @@ python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model
 
 **Phase 2 — 全网络训练**
 ```bash
-python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model runs/detect/drone_detect/weights/last.pt --epochs 100
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model train/yolotrain/train_result/models/drone_detect/weights/last.pt --epochs 100
 ```
 解冻全网络，精细调优。
 
 **Phase 3 — 大尺寸精调**
 ```bash
-python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model runs/detect/drone_detect/weights/best.pt --epochs 30 --imgsz 1280 --batch 4
+python train/yolotrain/train.py --data train/yolotrain/dataset/data.yaml --model train/yolotrain/train_result/models/drone_detect/weights/best.pt --epochs 30 --imgsz 1280 --batch 4
 ```
 提高输入分辨率，增强小目标检测能力。
 

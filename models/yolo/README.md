@@ -13,10 +13,10 @@ model = YOLO('yolov8n.pt')  # 自动下载 yolov8n.pt
 
 ## 放置自定义训练的模型
 
-将训练好的 drone 检测模型复制到此目录：
+训练完成后，将模型从训练输出目录复制到此：
 
 ```bash
-cp runs/detect/drone_detect/weights/best.pt models/yolo/drone_detect.pt
+cp train/yolotrain/train_result/models/drone_detect_YYYYMMDD_HHMMSS.pt models/yolo/drone_detect.pt
 ```
 
 然后在 `config.json` 中配置：

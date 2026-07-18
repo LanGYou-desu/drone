@@ -141,7 +141,7 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device
 python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
 
 # 4. 恢复训练（自动跳过已完成阶段，恢复优化器/调度器状态）
-python train/hybrid_predictor/train.py --stage 2 --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 ```
 
 每阶段结束自动保存完整检查点（含优化器/调度器状态），命名格式 `phy_ode_diffusion_s{stage}_e{epoch}_v{loss}.pt`。
