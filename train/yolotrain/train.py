@@ -3,7 +3,7 @@ YOLO 无人机检测模型 — 训练脚本（含图表输出和进度条）
 
 位于 train/yolotrain/ 目录，独立于主项目代码。
 训练结果:
-  - 模型权重: train/yolotrain/train_result/models/drone_detect.pt
+  - 模型权重: train/yolotrain/train_result/models/drone_detect_YYYYMMDD_HHMMSS.pt
   - ultralytics 输出: train/yolotrain/train_result/models/drone_detect/
   - 图表日志: train/yolotrain/train_result/
 
@@ -559,19 +559,14 @@ def main():
         _plot_training_results(save_dir, output_dir)
         _save_training_summary(save_dir, output_dir, vars(args))
 
-    # 复制最佳模型到 train_result/models/drone_detect.pt
+    # 复制最佳模型到 train_result/models/
     import shutil
     best_pt = os.path.join(save_dir, "weights", "best.pt")
     if os.path.isfile(best_pt):
-        dst = os.path.join(yolo_model_dir, "drone_detect.pt")
-        # 备份旧模型（带时间戳）
-        if os.path.isfile(dst):
-            _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            _backup = os.path.join(yolo_model_dir, f"drone_detect_backup_{_ts}.pt")
-            shutil.copy2(dst, _backup)
-            print(f"旧模型已备份到: {_backup}")
+        _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        dst = os.path.join(yolo_model_dir, f"drone_detect_{_ts}.pt")
         shutil.copy2(best_pt, dst)
-        print(f"\n最佳模型已复制到: {dst}")
+        print(f"\n最佳模型已保存: {dst}")
 
     # 验证最佳模型
     print(f"\n{'='*50}")
