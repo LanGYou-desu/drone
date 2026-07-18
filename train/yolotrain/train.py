@@ -2,11 +2,10 @@
 YOLO 无人机检测模型 — 训练脚本（含图表输出和进度条）
 
 位于 train/yolotrain/ 目录，独立于主项目代码。
-训练结果自动保存到 train/yolotrain/results/ 目录，包含:
-  - 训练损失曲线图
-  - 验证指标图 (mAP, Precision, Recall)
-  - 训练日志 CSV
-  - 模型权重文件
+训练结果:
+  - 模型权重: models/yolo/drone_detect.pt（推理用）
+  - 训练产物: models/yolo/drone_detect/（ultralytics 输出）
+  - 图表日志: train/yolotrain/train_result/drone_detect/
 
 ======== 快速开始 ========
 
@@ -488,6 +487,10 @@ def main():
             sys.exit(1)
         print(f"[数据] {_split}: {len(_imgs)} 张图片")
 
+    # 模型直接保存到 models/yolo/，不使用 ultralytics 默认的 runs/detect/
+    yolo_model_dir = os.path.join(_PROJECT_ROOT, "models", "yolo")
+    os.makedirs(yolo_model_dir, exist_ok=True)
+
     model = YOLO(args.model)
 
     train_kwargs = dict(
@@ -499,6 +502,7 @@ def main():
         workers=args.workers,
         lr0=args.lr,
         name=args.name,
+        project=str(yolo_model_dir),
         resume=args.resume,
         seed=args.seed,
         # 优化策略
@@ -555,10 +559,8 @@ def main():
         _plot_training_results(save_dir, output_dir)
         _save_training_summary(save_dir, output_dir, vars(args))
 
-    # 复制最佳模型到 models/yolo/
+    # 复制最佳模型到 models/yolo/drone_detect.pt（方便推理时直接加载）
     import shutil
-    yolo_model_dir = os.path.join(_PROJECT_ROOT, "models", "yolo")
-    os.makedirs(yolo_model_dir, exist_ok=True)
     best_pt = os.path.join(save_dir, "weights", "best.pt")
     if os.path.isfile(best_pt):
         dst = os.path.join(yolo_model_dir, "drone_detect.pt")
