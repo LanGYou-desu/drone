@@ -2,12 +2,14 @@
 Phy-ODE-Diffusion 分阶段训练脚本（含进度条、图表输出和详细日志）
 
 输出目录: train/hybrid_predictor/train_result/
-  - 01_loss_breakdown.png    损失分解曲线
-  - 02_convergence_analysis.png  收敛性分析
-  - 03_stage_comparison.png      阶段对比（含雷达图）
-  - 05_dashboard.png             综合仪表盘
-  - training_history.json   详细训练日志
-  - training_summary.json   训练摘要
+  - 01_loss_breakdown.png       损失分解曲线
+  - 02_convergence_analysis.png 收敛性分析
+  - 03_stage_comparison.png     阶段对比（含雷达图）
+  - 04_ade_fde.png              ADE/FDE 预测精度指标
+  - 05_physics_metrics.png      物理约束违反率
+  - 06_dashboard.png            综合仪表盘
+  - training_history.json       详细训练日志
+  - training_summary.json       训练摘要
 
 阶段一: 训练 Transformer 编码器 + ODE + GRU 更新（无扩散）
 阶段二: 固定上述模块，训练扩散模型
@@ -38,7 +40,6 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 from train.hybrid_predictor.dataset import (
     load_all_trajectories, TrajectoryDataset, collate_fn,
 )
-from train.hybrid_predictor.generate_synthetic import generate_dataset
 from trajectory_reconstruction.core.prediction.hybrid import PhyODEDiffusion
 
 _RESULTS_DIR = _MODULE_DIR / "train_result"
@@ -424,23 +425,25 @@ def _make_ade_fde_chart(logger: TrainingLogger, output_dir: str):
             ax.annotate(f'{fde_vals[best_i]:.3f}', xy=(epochs[best_i], fde_vals[best_i]),
                         fontsize=8, color='darkred')
 
-        # ADE vs FDE 对比
+        # ADE vs FDE 对比（各阶段数据叠加在同一图上）
         ax = axes[1, 0]
         ax.scatter(ade_vals, fde_vals, c=epochs, cmap='viridis', s=25, alpha=0.7, label=f'S{stage}')
-        ax.set_title('ADE vs FDE (color=epoch)')
-        ax.set_xlabel('ADE'); ax.set_ylabel('FDE')
-        ax.grid(True, alpha=0.3)
 
-        # ADE 改进率
+        # ADE 改进率（各阶段数据叠加在同一图上）
         ax = axes[1, 1]
         if len(ade_vals) > 1:
             imp = [(ade_vals[0] - v) / max(ade_vals[0], 1e-8) * 100 for v in ade_vals]
             ax.plot(epochs, imp, '-', color=color, linewidth=1.5, label=f'Stage {stage}')
-    ax = axes[1, 1]
-    ax.set_title('ADE Improvement Over Initial (%)')
-    ax.set_xlabel('Epoch'); ax.set_ylabel('Improvement %')
-    ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    # 设置 subplot [1,0] / [1,1] 标题和标签（循环外，避免覆盖）
+    axes[1, 0].set_title('ADE vs FDE (color=epoch)')
+    axes[1, 0].set_xlabel('ADE'); axes[1, 0].set_ylabel('FDE')
+    axes[1, 0].grid(True, alpha=0.3)
+
+    axes[1, 1].set_title('ADE Improvement Over Initial (%)')
+    axes[1, 1].set_xlabel('Epoch'); axes[1, 1].set_ylabel('Improvement %')
+    axes[1, 1].axhline(y=0, color='gray', linestyle=':', alpha=0.5)
+    axes[1, 1].legend(fontsize=8); axes[1, 1].grid(True, alpha=0.3)
 
     _plt.tight_layout()
     path = os.path.join(output_dir, "04_ade_fde.png")
@@ -501,7 +504,7 @@ def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
 
 
 def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
-    """图5: 综合仪表盘 — 一页展示所有关键指标"""
+    """图6: 综合仪表盘 — 一页展示所有关键指标"""
     fig = _plt.figure(figsize=(20, 12))
     gs = fig.add_gridspec(3, 4, hspace=0.35, wspace=0.3)
     fig.suptitle('Phy-ODE-Diffusion Training Dashboard', fontsize=16, fontweight='bold', y=0.98)
@@ -668,7 +671,7 @@ def _make_loaders(train_trajs, valid_trajs, config):
 
 
 def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
-    """构建训练/验证数据加载器。优先级: data/ > train/|valid/ > 自动生成"""
+    """构建训练/验证数据加载器。优先级: data/ > train/|valid/"""
     from numpy.random import RandomState
 
     dataset_root = os.path.join(_PROJECT_ROOT, config["dataset_dir"])
@@ -693,18 +696,19 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
     train_dir = os.path.join(dataset_root, "train")
     valid_dir = os.path.join(dataset_root, "valid")
 
-    train_exists = os.path.isdir(train_dir) and \
-        any(f.endswith(('.npz', '.dat')) for f in os.listdir(train_dir))
-    if not train_exists:
-        print("[INFO] 训练数据不存在，自动生成 200 条轨迹...")
-        generate_dataset(output_dir=dataset_root, n_trajectories=200)
-
-    train_trajs = load_all_trajectories(synthetic_dir=train_dir)
+    train_trajs = load_all_trajectories(synthetic_dir=train_dir) \
+        if os.path.isdir(train_dir) else []
     valid_trajs = load_all_trajectories(synthetic_dir=valid_dir) \
         if os.path.isdir(valid_dir) else []
 
     if len(train_trajs) == 0:
-        raise RuntimeError("没有可用的训练数据！")
+        raise RuntimeError(
+            f"没有可用的训练数据！请将 .npz 轨迹文件放入以下任一目录:\n"
+            f"  • {data_dir}\n"
+            f"  • {train_dir}\n"
+            f"或使用 generate_synthetic.py 生成合成数据:\n"
+            f"  python train/hybrid_predictor/generate_synthetic.py 200"
+        )
     print(f"[数据] train: {len(train_trajs)} 条轨迹, valid: {len(valid_trajs)} 条轨迹")
     return _make_loaders(train_trajs, valid_trajs, config)
 
@@ -1038,14 +1042,16 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 optimizer.step()
             total_loss += loss.item()
 
+        scheduler.step()
         avg_train = total_loss / max(len(train_loader), 1)
-        val_loss, ade, fde, spd_v, hgt_v = _validate_stage2(model, val_loader, device)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
         logger.log_epoch(2, epoch, avg_train, val_loss, lr, epoch_time,
                          extra={"ADE": ade, "FDE": fde,
-                                "speed_violation": spd_v, "height_violation": hgt_v})
+                                "speed_violation": spd_v, "accel_violation": acc_v,
+                                "height_violation": hgt_v})
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
@@ -1065,10 +1071,10 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
 
 def _validate_stage2(model, val_loader, device):
-    """返回 (diff_loss, ADE, FDE, speed_viol, height_viol)"""
+    """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)"""
     model.eval()
     total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
-    total_spd_v, total_hgt_v = 0.0, 0.0
+    total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
     n_batches, n_viol = 0, 0
     with torch.no_grad():
         for batch in val_loader:
@@ -1096,6 +1102,8 @@ def _validate_stage2(model, val_loader, device):
                     prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
                     v_norm = torch.norm((p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1), dim=-1)
                     total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
+                    a_h = v_norm / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
                     total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
                     n_viol += 1
 
@@ -1113,7 +1121,7 @@ def _validate_stage2(model, val_loader, device):
     model.train()
     n = max(n_batches, 1); nv = max(n_viol, 1)
     return (total_loss / n, total_ade / n, total_fde / n,
-            total_spd_v / nv, total_hgt_v / nv)
+            total_spd_v / nv, total_acc_v / nv, total_hgt_v / nv)
 
 
 # ── 阶段三：联合微调 ──────────────────────────────────
@@ -1128,9 +1136,19 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                             lr=config["lr_stage3"], weight_decay=config["weight_decay"])
     scheduler = _build_scheduler(optimizer, config["epochs_stage3"],
                                   config["warmup_epochs_s3"], config["warmup_start_factor"])
+
+    start_epoch = 1
+    if resume_ckpt is not None and resume_ckpt.get("stage") == 3:
+        if "optimizer_state_dict" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        if "scheduler_state_dict" in resume_ckpt:
+            scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+        start_epoch = resume_ckpt.get("epoch", 0) + 1
+        print(f"  [RESUME] 从 epoch {start_epoch} 继续训练")
+
     best_val_loss = float('inf')
 
-    epoch_iter = range(1, config["epochs_stage3"] + 1)
+    epoch_iter = range(start_epoch, config["epochs_stage3"] + 1)
     if HAS_TQDM:
         epoch_iter = _tqdm_import(epoch_iter, desc="Stage 3", unit="epoch",
                                   bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]')

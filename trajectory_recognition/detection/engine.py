@@ -62,6 +62,7 @@ class YOLODetector:
         device: str = "cpu",
         input_size: tuple[int, int] = (640, 640),
         target_classes: Optional[list[int]] = None,
+        tracker_type: str = "bytetrack",
     ):
         """
         初始化 YOLO 检测器。
@@ -70,10 +71,11 @@ class YOLODetector:
             model_path: 模型权重文件路径（.pt）
             confidence: 置信度阈值，低于此值的检测框被过滤
             nms_threshold: NMS 交并比阈值
-            device: 推理设备（"cpu" / "cuda:0" / "mps"）
+            device: 推理设备（"cpu" / "cuda:0" / "0" / "auto"）
             input_size: 模型输入尺寸 (width, height)，通常 640
             target_classes: 关注的类别 ID 列表，None 表示不过滤。
                            无人机场景建议设为 [4] (airplane) 或自定义 drone 模型后设为 [0]
+            tracker_type: 跟踪器类型（"bytetrack" / "botsort"）
         """
         self.model_path = model_path
         self.confidence = confidence
@@ -81,6 +83,7 @@ class YOLODetector:
         self.device = device
         self.input_size = input_size
         self.target_classes = target_classes
+        self.tracker_type = tracker_type
         self._model = None
 
     @property
@@ -94,13 +97,16 @@ class YOLODetector:
         """加载 YOLO 模型权重"""
         try:
             from ultralytics import YOLO
-            # 自动检测 GPU
+            # 规范化 device 格式：ultralytics 接受 "cpu" / "0" / "cuda:0"
             if self.device == "auto":
                 try:
                     import torch
                     self.device = "0" if torch.cuda.is_available() else "cpu"
                 except Exception:
                     self.device = "cpu"
+            # 将 PyTorch 格式 "cuda:N" 转换为 ultralytics 格式 "N"
+            elif self.device.startswith("cuda:"):
+                self.device = self.device.split(":")[-1]
             self._model = YOLO(self.model_path)
             print(f"[YOLO] 模型已加载: {self.model_path} on {self.device}")
         except ImportError:
@@ -178,7 +184,7 @@ class YOLODetector:
         Returns:
             ultralytics Results 对象（含 boxes.id 跟踪 ID）
         """
-        tracker_cfg = "bytetrack.yaml"  # 默认 ByteTrack
+        tracker_cfg = f"{self.tracker_type}.yaml"
         results = self.model.track(
             frame,
             conf=self.confidence,

@@ -13,7 +13,10 @@ YOLO 无人机检测模型 — 训练脚本（含图表输出和进度条）
   python train/yolotrain/train.py \
       --data train/yolotrain/dataset/data.yaml \
       --model yolov8n.pt \
-      --epochs 100 --imgsz 640
+      --epochs 100 --imgsz 960
+
+      对于 1280×720 图片，推荐 --imgsz 960 或 1280。
+      小目标检测建议 960，追求极致精度用 1280（显存消耗更大）。
 
 ======== 数据标注格式 (YOLO) ========
 
@@ -394,14 +397,18 @@ def main():
     parser.add_argument("--data", type=str, default="train/yolotrain/dataset/data.yaml")
     parser.add_argument("--model", type=str, default="yolov8n.pt")
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--imgsz", type=int, default=960,
+                        help="训练输入尺寸。对于 1280×720 图片推荐 960 或 1280，"
+                             "可保留更多小目标细节。默认 640 适用于 ≤720p 的图片")
     parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--device", type=str, default="0")
+    parser.add_argument("--device", type=str, default="auto")
     parser.add_argument("--freeze", type=int, default=None)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--name", type=str, default="drone_detect")
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--seed", type=int, default=42,
+                        help="随机种子，确保训练可复现")
     parser.add_argument("--export", type=str, default=None)
     parser.add_argument("--format", type=str, default="onnx",
                         choices=["onnx", "engine", "tflite", "openvino"])
@@ -409,6 +416,12 @@ def main():
     parser.add_argument("--no-charts", action="store_true",
                         help="跳过图表生成")
     args = parser.parse_args()
+
+    # Windows 下多进程 DataLoader 可能不稳定，自动降级
+    if sys.platform == "win32" and args.workers > 0:
+        print(f"[提示] Windows 检测到 workers={args.workers}，"
+              "多进程在 Windows 下可能不稳定，建议 --workers 0")
+        # 不强制覆盖，用户可能已经知道并配置了合适值
 
     # 检查依赖
     try:
@@ -459,6 +472,22 @@ def main():
         print(f"  冻结层数:   {args.freeze}")
     print(f"{'='*60}\n")
 
+    # 检查数据集是否包含实际图片
+    _data_yaml_dir = os.path.dirname(os.path.abspath(args.data))
+    for _split, _sub in [("训练集", "train/images"), ("验证集", "valid/images")]:
+        _img_dir = os.path.join(_data_yaml_dir, _sub)
+        if not os.path.isdir(_img_dir):
+            print(f"[警告] {_split}目录不存在: {_img_dir}")
+            continue
+        _imgs = [f for f in os.listdir(_img_dir)
+                 if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+        if not _imgs:
+            print(f"[错误] {_split}为空（{_img_dir} 中无图片文件）")
+            print("请将标注好的图片放入对应目录后再训练。")
+            print("详见: train/yolotrain/dataset/README.md")
+            sys.exit(1)
+        print(f"[数据] {_split}: {len(_imgs)} 张图片")
+
     model = YOLO(args.model)
 
     train_kwargs = dict(
@@ -471,9 +500,21 @@ def main():
         lr0=args.lr,
         name=args.name,
         resume=args.resume,
+        seed=args.seed,
+        # 优化策略
+        optimizer="AdamW",
+        cos_lr=True,
+        patience=20,
+        # 矩形训练 — 按宽高比分组 batch，减少 padding 浪费
+        # 对 1280×720 (16:9) 等非正方形图片效果显著
+        rect=True,
         # 数据增强（无人机场景优化）
+        # 注: scale 值需配合 imgsz — 高分辨率输入时避免过度缩小小目标
         mosaic=1.0,
-        scale=0.5,
+        close_mosaic=10,
+        degrees=15.0,
+        translate=0.1,
+        scale=0.3,          # 640→0.5, 960/1280→0.3 防止无人机缩成几个像素
         flipud=0.0,
         hsv_h=0.015,
         hsv_s=0.7,
@@ -521,6 +562,12 @@ def main():
     best_pt = os.path.join(save_dir, "weights", "best.pt")
     if os.path.isfile(best_pt):
         dst = os.path.join(yolo_model_dir, "drone_detect.pt")
+        # 备份旧模型（带时间戳）
+        if os.path.isfile(dst):
+            _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            _backup = os.path.join(yolo_model_dir, f"drone_detect_backup_{_ts}.pt")
+            shutil.copy2(dst, _backup)
+            print(f"旧模型已备份到: {_backup}")
         shutil.copy2(best_pt, dst)
         print(f"\n最佳模型已复制到: {dst}")
 
