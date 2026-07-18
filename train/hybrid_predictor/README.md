@@ -30,16 +30,18 @@ train/hybrid_predictor/
 │   ├── data/                   # 训练数据 (.npz 格式，优先加载)
 │   ├── train/                  # 回退：训练集目录
 │   └── valid/                  # 回退：验证集目录
-└── train_result/               # 训练输出（按时间戳分目录）
-    └── run_YYYYMMDD_HHMMSS/
-        ├── 01_loss_breakdown.png
-        ├── 02_convergence_analysis.png
-        ├── 03_stage_comparison.png
-        ├── 04_ade_fde.png
-        ├── 05_physics_metrics.png
-        ├── 06_dashboard.png
-        ├── training_history.json
-        └── training_summary.json
+└── train_result/               # 训练输出
+    ├── models/                 # 模型权重（检查点）
+    │   ├── phy_ode_diffusion_best_s1.pt
+    │   └── phy_ode_diffusion_best_s2.pt
+    ├── 01_loss_breakdown.png
+    ├── 02_convergence_analysis.png
+    ├── 03_stage_comparison.png
+    ├── 04_ade_fde.png
+    ├── 05_physics_metrics.png
+    ├── 06_dashboard.png
+    ├── training_history.json
+    └── training_summary.json
 ```
 
 ## 数据格式
@@ -222,7 +224,7 @@ python train/hybrid_predictor/train.py --stage all \
 | `training_history.json` | 每 epoch 详细指标 |
 | `training_summary.json` | 训练摘要（最优指标 + 配置） |
 
-模型权重保存到 `train/hybrid_predictor/train_result/models/`：
+训练完成后所有产物均在 `train/hybrid_predictor/train_result/` 下：
 - `phy_ode_diffusion_best_s1.pt` — 阶段一最佳
 - `phy_ode_diffusion_best_s2.pt` — 阶段二最佳
 - 带 epoch/loss 的检查点文件用于断点续训

@@ -5,7 +5,7 @@ YOLO 无人机检测模型 — 训练脚本（含图表输出和进度条）
 训练结果:
   - 模型权重: train/yolotrain/train_result/models/drone_detect.pt
   - ultralytics 输出: train/yolotrain/train_result/models/drone_detect/
-  - 图表日志: train/yolotrain/train_result/drone_detect/
+  - 图表日志: train/yolotrain/train_result/
 
 ======== 快速开始 ========
 
@@ -555,7 +555,7 @@ def main():
         print("生成训练图表和日志")
         print(f"{'='*50}")
 
-        output_dir = os.path.join(_RESULTS_DIR, args.name)
+        output_dir = _RESULTS_DIR
         _plot_training_results(save_dir, output_dir)
         _save_training_summary(save_dir, output_dir, vars(args))
 

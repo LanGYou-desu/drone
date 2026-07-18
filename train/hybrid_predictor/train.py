@@ -1,7 +1,7 @@
 """
 Phy-ODE-Diffusion 分阶段训练脚本（含进度条、图表输出和详细日志）
 
-输出目录: train/hybrid_predictor/train_result/
+输出目录: train/hybrid_predictor/train_result/（图表/日志/模型均在此目录下）
   - 01_loss_breakdown.png       损失分解曲线
   - 02_convergence_analysis.png 收敛性分析
   - 03_stage_comparison.png     阶段对比（含雷达图）
@@ -1361,7 +1361,7 @@ def main():
         save_checkpoint(model, out_dir, 0, 0, final_loss, is_best=True)
 
     # ── 输出图表和日志到 train/hybrid_predictor/train_result/ ──
-    results_dir = os.path.join(_RESULTS_DIR, f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    results_dir = str(_RESULTS_DIR)
     os.makedirs(results_dir, exist_ok=True)
 
     # 保存训练历史 JSON
