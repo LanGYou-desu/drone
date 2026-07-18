@@ -82,7 +82,7 @@ DEFAULT_CONFIG = {
     # 标签平滑（回归任务：对目标位置加高斯噪声作为正则化）
     "label_smoothing": 0.005,     # 噪声标准差（相对于数据标准差的比例）
     "dataset_dir": "train/hybrid_predictor/dataset",
-    "output_dir": "models/hybrid_predictor",
+    "output_dir": "train/hybrid_predictor/train_result/models",
     "device": "cuda:0",
     "val_split": 0.1,
 }

@@ -153,15 +153,15 @@ python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 16 --device
 ```bash
 # 恢复阶段一（保留 optimizer/scheduler 状态）
 python train/hybrid_predictor/train.py --stage 1 \
-    --resume models/hybrid_predictor/phy_ode_diffusion_best_s1.pt
+    --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s1.pt
 
 # 恢复阶段一+二
 python train/hybrid_predictor/train.py --stage 2 \
-    --resume models/hybrid_predictor/phy_ode_diffusion_best_s1.pt
+    --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s1.pt
 
 # 完整训练（自动跳过已完成阶段）
 python train/hybrid_predictor/train.py --stage all \
-    --resume models/hybrid_predictor/phy_ode_diffusion_best_s2.pt
+    --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 ```
 
 #### 常用组合速查
@@ -222,10 +222,10 @@ python train/hybrid_predictor/train.py --stage all \
 | `training_history.json` | 每 epoch 详细指标 |
 | `training_summary.json` | 训练摘要（最优指标 + 配置） |
 
-模型权重保存到 `models/hybrid_predictor/`：
+模型权重保存到 `train/hybrid_predictor/train_result/models/`：
 - `phy_ode_diffusion_best_s1.pt` — 阶段一最佳
 - `phy_ode_diffusion_best_s2.pt` — 阶段二最佳
-- 带时间戳的检查点文件用于断点续训
+- 带 epoch/loss 的检查点文件用于断点续训
 
 ## 自定义数据
 
