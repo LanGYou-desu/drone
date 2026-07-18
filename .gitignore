@@ -28,19 +28,14 @@ config.json
 # Reports (generated, not tracked)
 reports/
 
-# Models (large binary files, not tracked)
+# Models (deprecated paths — 模型现保存在 train/*/train_result/models/)
 models/yolo/*.pt
 models/yolo/*.onnx
 models/yolo/*.engine
 models/hybrid_predictor/*.pt
 !models/yolo/README.md
 
-# Training data and results (generated, not tracked)
-train/**/dataset/train/
-train/**/dataset/valid/
-train/**/train_result/
-
-# Ultralytics runs
+# Ultralytics runs (deprecated — 训练输出已迁移到 train/*/train_result/)
 runs/
 
 # PDF
@@ -53,4 +48,4 @@ runs/
 .env
 # config.json is tracked (contains placeholder API key)
 .playwright-mcp/
-train/hybrid_predictor/dataset/data/
+
