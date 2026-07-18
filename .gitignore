@@ -28,13 +28,6 @@ config.json
 # Reports (generated, not tracked)
 reports/
 
-# Models (deprecated paths — 模型现保存在 train/*/train_result/models/)
-models/yolo/*.pt
-models/yolo/*.onnx
-models/yolo/*.engine
-models/hybrid_predictor/*.pt
-!models/yolo/README.md
-
 # Ultralytics runs (deprecated — 训练输出已迁移到 train/*/train_result/)
 runs/
 
