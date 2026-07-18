@@ -1248,7 +1248,7 @@ def main():
                         help="1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch", type=int, default=32)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--ctx-len", type=int, default=20)

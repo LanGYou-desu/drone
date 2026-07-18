@@ -400,7 +400,7 @@ def main():
                         help="训练输入尺寸。对于 1280×720 图片推荐 960 或 1280，"
                              "可保留更多小目标细节。默认 640 适用于 ≤720p 的图片")
     parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--freeze", type=int, default=None)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--resume", action="store_true")
