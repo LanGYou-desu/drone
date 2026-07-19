@@ -98,17 +98,18 @@ class YOLODetector:
         try:
             from ultralytics import YOLO
             # 规范化 device 格式：ultralytics 接受 "cpu" / "0" / "cuda:0"
-            if self.device == "auto":
+            _device = self.device
+            if _device == "auto":
                 try:
                     import torch
-                    self.device = "0" if torch.cuda.is_available() else "cpu"
+                    _device = "0" if torch.cuda.is_available() else "cpu"
                 except Exception:
-                    self.device = "cpu"
+                    _device = "cpu"
             # 将 PyTorch 格式 "cuda:N" 转换为 ultralytics 格式 "N"
-            elif self.device.startswith("cuda:"):
-                self.device = self.device.split(":")[-1]
+            elif _device.startswith("cuda:"):
+                _device = _device.split(":")[-1]
             self._model = YOLO(self.model_path)
-            print(f"[YOLO] 模型已加载: {self.model_path} on {self.device}")
+            print(f"[YOLO] 模型已加载: {self.model_path} on {_device}")
         except ImportError:
             raise ImportError(
                 "ultralytics 未安装，请运行: pip install ultralytics"

@@ -237,7 +237,7 @@ def list_files():
 def delete_file(filename: str):
     try:
         # 安全检查：只允许删除轨迹文件
-        if not filename.endswith(('.npz', '.dat')) or '..' in filename or '/' in filename:
+        if not filename.endswith(('.npz', '.dat')) or '..' in filename or '/' in filename or '\\' in filename:
             return jsonify({'success': False, 'error': '无效的文件名'}), 400
 
         fpath = os.path.join(_PROJECT_ROOT, 'data', 'fact', filename)

@@ -37,7 +37,8 @@ def load_data():
     if not file or method_id != 'self':
         return jsonify({'success': False, 'error': '参数错误'}), 400
 
-    temp = os.path.join('data', 'temp_upload.dat')
+    from trajectory_reconstruction.core.config.config_manager import _PROJECT_ROOT
+    temp = os.path.join(_PROJECT_ROOT, 'data', 'temp_upload.dat')
     file.save(temp)
     points, timestamps = load_trajectory_file(temp)
     if os.path.isfile(temp):

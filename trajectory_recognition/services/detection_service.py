@@ -90,6 +90,7 @@ class DetectionSession:
 
 _sessions: dict[str, DetectionSession] = {}
 _active_session_id: Optional[str] = None
+_sessions_lock = threading.Lock()  # 保护 _sessions 和 _active_session_id 的并发访问
 
 
 def _load_config():
@@ -238,6 +239,7 @@ def _run_detection_pipeline(session: DetectionSession):
     VideoProcessor_B ─→ YOLODetector ─→ (右目 dets) ─┘
     """
     try:
+        gen_a = gen_b = None  # 防止 finally 块 NameError
         from trajectory_recognition.detection.preprocess import VideoProcessor
         from trajectory_recognition.detection.engine import YOLODetector
         from trajectory_recognition.detection.tracker import MultiTracker
