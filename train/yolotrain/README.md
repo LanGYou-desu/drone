@@ -7,9 +7,7 @@
 ```
 train/yolotrain/dataset/
 ├── data.yaml              # 数据集配置（训练入口）
-├── data/
-│   └── data.yaml          # 备用配置（类别一致）
-├── train/
+├── train/                  # 训练集（主数据）
 │   ├── images/            # 训练图片 (.jpg, .png)
 │   └── labels/            # YOLO 标注 (.txt，与图片同名)
 ├── valid/

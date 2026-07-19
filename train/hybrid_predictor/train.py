@@ -690,12 +690,25 @@ def _make_loaders(train_trajs, valid_trajs, config):
 
 
 def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
-    """构建训练/验证数据加载器。优先级: data/ > train/|valid/"""
+    """构建训练/验证数据加载器。优先级: train/|valid/ > data/"""
     from numpy.random import default_rng
 
     dataset_root = os.path.join(_PROJECT_ROOT, config["dataset_dir"])
 
-    # 优先 data/ 目录
+    # 优先 train/ + valid/ 目录
+    train_dir = os.path.join(dataset_root, "train")
+    valid_dir = os.path.join(dataset_root, "valid")
+
+    train_trajs = load_all_trajectories(synthetic_dir=train_dir) \
+        if os.path.isdir(train_dir) else []
+    valid_trajs = load_all_trajectories(synthetic_dir=valid_dir) \
+        if os.path.isdir(valid_dir) else []
+
+    if len(train_trajs) > 0:
+        print(f"[数据] train: {len(train_trajs)} 条轨迹, valid: {len(valid_trajs)} 条轨迹")
+        return _make_loaders(train_trajs, valid_trajs, config)
+
+    # 回退 data/ 目录（备份数据）
     data_dir = os.path.join(dataset_root, "data")
     if os.path.isdir(data_dir) and any(
         f.endswith(('.npz', '.dat')) for f in os.listdir(data_dir)
@@ -708,28 +721,16 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
             n_val = max(1, int(len(all_trajs) * config.get("val_split", 0.15)))
             train_trajs = [all_trajs[i] for i in indices[n_val:]]
             valid_trajs = [all_trajs[i] for i in indices[:n_val]]
-            print(f"[数据] data/ → train: {len(train_trajs)}, valid: {len(valid_trajs)}")
+            print(f"[数据] data/ (备份) → train: {len(train_trajs)}, valid: {len(valid_trajs)}")
             return _make_loaders(train_trajs, valid_trajs, config)
 
-    # 回退 train/ | valid/ 目录
-    train_dir = os.path.join(dataset_root, "train")
-    valid_dir = os.path.join(dataset_root, "valid")
-
-    train_trajs = load_all_trajectories(synthetic_dir=train_dir) \
-        if os.path.isdir(train_dir) else []
-    valid_trajs = load_all_trajectories(synthetic_dir=valid_dir) \
-        if os.path.isdir(valid_dir) else []
-
-    if len(train_trajs) == 0:
-        raise RuntimeError(
-            f"没有可用的训练数据！请将 .npz 轨迹文件放入以下任一目录:\n"
-            f"  • {data_dir}\n"
-            f"  • {train_dir}\n"
-            f"或使用 generate_synthetic.py 生成合成数据:\n"
-            f"  python train/hybrid_predictor/generate_synthetic.py 200"
-        )
-    print(f"[数据] train: {len(train_trajs)} 条轨迹, valid: {len(valid_trajs)} 条轨迹")
-    return _make_loaders(train_trajs, valid_trajs, config)
+    raise RuntimeError(
+        f"没有可用的训练数据！请将 .npz 轨迹文件放入以下任一目录:\n"
+        f"  • {train_dir}\n"
+        f"  • {data_dir}\n"
+        f"或使用 generate_synthetic.py 生成合成数据:\n"
+        f"  python train/hybrid_predictor/generate_synthetic.py 200"
+    )
 
 
 def build_test_loader(config: dict) -> DataLoader | None:

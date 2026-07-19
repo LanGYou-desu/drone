@@ -27,10 +27,10 @@ train/hybrid_predictor/
 ├── dataset.py                  # 轨迹数据集 + 滑动窗口采样
 ├── generate_synthetic.py       # 四旋翼动力学生成合成数据
 ├── dataset/
-│   ├── data/                   # 训练数据 (.npz 格式，优先加载)
-│   ├── train/                  # 回退：训练集目录
-│   ├── valid/                  # 回退：验证集目录
-│   └── test/                   # 测试集目录（训练后自动评估）
+│   ├── train/                  # 训练集目录（优先加载）
+│   ├── valid/                  # 验证集目录
+│   ├── test/                   # 测试集目录（训练后自动评估）
+│   └── data/                   # 备份数据（回退加载）
 └── train_result/               # 训练输出
     ├── models/                 # 模型权重（检查点）
     │   ├── phy_ode_diffusion_best_s1.pt
@@ -260,7 +260,7 @@ np.savez("train/hybrid_predictor/dataset/data/traj_custom_001.npz",
          positions=positions, timestamps=timestamps)
 ```
 
-数据加载优先级：`data/` > `train/` + `valid/`。三个目录均无数据时报错退出。
+数据加载优先级：`train/` + `valid/` > `data/`（备份）。均无数据时报错退出。
 
 ## 注意事项
 
