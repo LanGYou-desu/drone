@@ -82,9 +82,9 @@ def get_ai_suggestion(
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=timeout)
         response.raise_for_status()
-    except Timeout:
+    except requests.Timeout:
         raise RequestException('AI 服务响应超时，请稍后重试')
-    except RequestException as e:
+    except requests.RequestException as e:
         raise RequestException(f'AI 服务请求失败: {e}')
 
     try:

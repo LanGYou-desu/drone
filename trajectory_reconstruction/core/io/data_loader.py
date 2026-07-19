@@ -63,7 +63,7 @@ def load_npz_file(file_path: str) -> tuple[list[list[float]], list[float]]:
         points = pos.tolist()
         timestamps = ts.tolist()
         print(f'[OK] 成功加载 {file_path}: {len(points)} 个轨迹点')
-    except Exception as e:
+    except (ValueError, IOError, OSError, KeyError) as e:
         print(f'[ERR] 加载 .npz 失败 {file_path}: {e}')
         return [], []
 
