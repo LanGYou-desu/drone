@@ -18,46 +18,7 @@ import numpy as np
 from trajectory_reconstruction.core.prediction.hybrid.transformer import TransformerEncoder
 from trajectory_reconstruction.core.prediction.hybrid.ode_manager import ODEStateManager
 from trajectory_reconstruction.core.prediction.hybrid.diffusion import GuidedDiffusion
-
-
-def _estimate_kinematics(positions: np.ndarray, timestamps: np.ndarray):
-    """
-    计算速度和加速度估计（纯函数，避免跨模块依赖）。
-    返回 (velocity, acceleration)，端点用前向/后向差分。
-    """
-    N = len(positions)
-    vel = np.zeros((N, 3), dtype=np.float32)
-    acc = np.zeros((N, 3), dtype=np.float32)
-    if N < 2:
-        return vel, acc
-
-    if N >= 3:
-        for i in range(1, N - 1):
-            dt_span = timestamps[i + 1] - timestamps[i - 1]
-            if dt_span > 0:
-                vel[i] = (positions[i + 1] - positions[i - 1]) / dt_span
-        dt_fwd = timestamps[1] - timestamps[0]
-        if dt_fwd > 0:
-            vel[0] = (positions[1] - positions[0]) / dt_fwd
-        dt_bwd = timestamps[-1] - timestamps[-2]
-        if dt_bwd > 0:
-            vel[-1] = (positions[-1] - positions[-2]) / dt_bwd
-        # 加速度: 速度的差分
-        for i in range(1, N - 1):
-            dt_span = timestamps[i + 1] - timestamps[i - 1]
-            if dt_span > 0:
-                acc[i] = (vel[i + 1] - vel[i - 1]) / dt_span
-        if N >= 3:
-            dt_fwd = timestamps[1] - timestamps[0]
-            acc[0] = (vel[1] - vel[0]) / dt_fwd if dt_fwd > 0 else 0
-            dt_bwd = timestamps[-1] - timestamps[-2]
-            acc[-1] = (vel[-1] - vel[-2]) / dt_bwd if dt_bwd > 0 else 0
-    else:
-        dt_span = timestamps[1] - timestamps[0]
-        if dt_span > 0:
-            v = (positions[1] - positions[0]) / dt_span
-            vel[0] = vel[1] = v
-    return vel, acc
+from trajectory_reconstruction.core.math_utils import estimate_velocity
 
 
 class PhyODEDiffusion(nn.Module):
@@ -164,7 +125,13 @@ class PhyODEDiffusion(nn.Module):
         p_mean: torch.Tensor = None,   # (B, 3) 归一化统计量
         p_std: torch.Tensor = None,    # (B, 3)
     ) -> dict:
-        """训练前向传播（教师强制模式）。"""
+        """训练前向传播（教师强制模式）。
+
+        注意: 此 forward() 方法预留用于标准 PyTorch 训练循环（loss = model(...)），
+        当前 train/hybrid_predictor/train.py 分阶段训练脚本直接调用子模块
+        （model.transformer / model.state_manager / model.diffusion），
+        以便在各阶段使用不同的损失函数和冻结策略。
+        """
         # 1. Transformer 编码
         c = self.transformer(ctx_t, ctx_dt, ctx_pos, ctx_vel, mask)
 
@@ -248,7 +215,7 @@ class PhyODEDiffusion(nn.Module):
         # 计算 Δt 和估计速度（使用共享工具函数）
         dt_arr = np.zeros(N, dtype=np.float32)
         dt_arr[1:] = t_arr[1:] - t_arr[:-1]
-        v_arr, _ = _estimate_kinematics(p_arr, t_arr)
+        v_arr = estimate_velocity(p_arr, t_arr)
 
         # 标准化
         p_mean = p_arr.mean(axis=0)

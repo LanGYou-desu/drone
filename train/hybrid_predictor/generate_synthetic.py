@@ -25,6 +25,7 @@
 """
 
 import os
+from pathlib import Path
 import numpy as np
 
 
@@ -47,12 +48,11 @@ def _load_dynamics():
     """从 config.json 加载四旋翼动力学参数，缺失用默认值"""
     import json
     try:
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "config.json"
-        )
-        if os.path.isfile(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
+        _module_dir = Path(__file__).resolve().parent       # train/hybrid_predictor/
+        _project_root = _module_dir.parent.parent            # drone/
+        config_path = _project_root / "config.json"
+        if config_path.is_file():
+            with open(str(config_path), 'r', encoding='utf-8') as f:
                 cfg = json.load(f).get("drone_dynamics", {})
             result = DEFAULT_DYNAMICS.copy()
             result.update({k: v for k, v in cfg.items() if k in result})
@@ -74,7 +74,7 @@ def _random_waypoints(n_waypoints: int, duration: float, dyn: dict,
       - 高度在 [min_alt, max_alt] 之间
       - 水平转弯半径合理
     """
-    rng = np.random.RandomState(seed)
+    rng = np.random.default_rng(seed)
 
     # 初始位置: 随机高度
     start_h = rng.uniform(dyn["min_alt"] + 10, dyn["max_alt"] - 20)
@@ -197,7 +197,6 @@ def _apply_dynamics_constraints(
         return positions
 
     corrected = positions.copy()
-    max_tilt_rad = np.radians(dyn["max_tilt"])
 
     for i in range(1, N):
         dt = timestamps[i] - timestamps[i - 1]
@@ -269,7 +268,7 @@ def generate_trajectory(
     """
     if dynamics is None:
         dynamics = _load_dynamics()
-    rng = np.random.RandomState(seed)
+    rng = np.random.default_rng(seed)
 
     # 非等距采样
     N = int(duration / dt)
@@ -325,7 +324,7 @@ def generate_dataset(
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(valid_dir, exist_ok=True)
 
-    rng = np.random.RandomState(seed)
+    rng = np.random.default_rng(seed)
     dynamics = _load_dynamics()
 
     n_valid = max(1, int(n_trajectories * valid_ratio))

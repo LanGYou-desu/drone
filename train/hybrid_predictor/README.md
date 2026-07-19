@@ -29,7 +29,8 @@ train/hybrid_predictor/
 ├── dataset/
 │   ├── data/                   # 训练数据 (.npz 格式，优先加载)
 │   ├── train/                  # 回退：训练集目录
-│   └── valid/                  # 回退：验证集目录
+│   ├── valid/                  # 回退：验证集目录
+│   └── test/                   # 测试集目录（训练后自动评估）
 └── train_result/               # 训练输出
     ├── models/                 # 模型权重（检查点）
     │   ├── phy_ode_diffusion_best_s1.pt
@@ -40,8 +41,10 @@ train/hybrid_predictor/
     ├── 04_ade_fde.png
     ├── 05_physics_metrics.png
     ├── 06_dashboard.png
+    ├── 07_test_evaluation.png       # 测试集评价仪表盘
     ├── training_history.json
-    └── training_summary.json
+    ├── training_summary.json
+    └── test_metrics.json            # 测试集详细指标
 ```
 
 ## 数据格式
@@ -198,7 +201,7 @@ python train/hybrid_predictor/train.py --stage all \
 | `--stage` | `all` | 训练阶段: `1`, `2`, `3`, `all` |
 | `--epochs` | 按阶段 | 统一覆盖各阶段轮数 |
 | `--batch` | 32 | 批次大小 |
-| `--device` | `cpu` | 训练设备 (`cpu`, `cuda:0`) |
+| `--device` | `cuda:0` | 训练设备 (`cpu`, `cuda:0`) |
 | `--lr` | 按阶段 | 统一覆盖各阶段学习率 |
 | `--ctx-len` | 20 | 历史窗口长度 |
 | `--tgt-len` | 10 | 预测目标长度 |
@@ -211,7 +214,7 @@ python train/hybrid_predictor/train.py --stage all \
 
 ## 训练输出
 
-训练完成后生成 **6 张图表** + **2 个 JSON 日志**：
+训练完成后生成 **7 张图表** + **3 个 JSON 日志**：
 
 | 文件 | 内容 |
 |------|------|
@@ -221,13 +224,27 @@ python train/hybrid_predictor/train.py --stage all \
 | `04_ade_fde.png` | ADE/FDE 预测精度指标曲线 |
 | `05_physics_metrics.png` | 速度/加速度/高度违反率变化 |
 | `06_dashboard.png` | 综合仪表盘（一页概览） |
+| `07_test_evaluation.png` | 测试集指标柱状图 + 物理违反 + 雷达图 |
 | `training_history.json` | 每 epoch 详细指标 |
-| `training_summary.json` | 训练摘要（最优指标 + 配置） |
+| `training_summary.json` | 训练摘要（最优指标 + 配置 + 测试结果） |
+| `test_metrics.json` | 测试集 Loss/ADE/FDE/物理违反率 |
 
 训练完成后所有产物均在 `train/hybrid_predictor/train_result/` 下：
 - `phy_ode_diffusion_best_s1.pt` — 阶段一最佳
 - `phy_ode_diffusion_best_s2.pt` — 阶段二最佳
 - 带 epoch/loss 的检查点文件用于断点续训
+
+## 测试集评价
+
+训练完成后自动在测试集上评估最佳模型。只需将测试轨迹放入 `dataset/test/` 目录即可。
+
+测试评价输出：
+- 控制台打印 Loss / ADE / FDE / 物理违反率
+- `07_test_evaluation.png` — 精度柱状图 + 物理违反 + 雷达图
+- `test_metrics.json` — 详细测试指标
+- 测试结果同时写入 `training_summary.json`
+
+若 `dataset/test/` 目录不存在或为空，则自动跳过测试评价。
 
 ## 自定义数据
 

@@ -1,10 +1,11 @@
 """
-纯数学工具 — 三维轨迹的插值、平均、平滑
+纯数学工具 — 三维轨迹的插值、平均、平滑、速度估计
 
 这些是无副作用的纯函数，不依赖全局状态或 Flask。
 所有函数对输入数据做防御性拷贝，不会修改原始数据。
 """
 import bisect
+import numpy as np
 
 
 def _lerp_3d_impl(pts: list, ts_arr: list, t: float):
@@ -104,6 +105,47 @@ def nearest_avg_3d(pts: list, ts_arr: list, t: float):
         return [(prev_pt[j] + next_pt[j]) / 2 for j in range(3)]
     target = prev_pt or next_pt
     return list(target) if target else None
+
+
+def estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarray:
+    """
+    用中心差分 + 端点前向/后向差分估计各点的速度向量。
+
+    内部点用中心差分（O(Δt²) 精度），端点用单侧差分（O(Δt) 精度），
+    避免简单复制相邻值导致的边界速度失真。
+
+    Args:
+        positions: (N, 3) 位置序列
+        timestamps: (N,) 时间戳
+
+    Returns:
+        velocities: (N, 3) 速度估计
+    """
+    N = len(positions)
+    vel = np.zeros((N, 3), dtype=np.float32)
+    if N < 2:
+        return vel
+
+    if N >= 3:
+        # 内部点: 中心差分
+        for i in range(1, N - 1):
+            dt_span = timestamps[i + 1] - timestamps[i - 1]
+            if dt_span > 0:
+                vel[i] = (positions[i + 1] - positions[i - 1]) / dt_span
+        # 起点: 前向差分
+        dt_fwd = timestamps[1] - timestamps[0]
+        if dt_fwd > 0:
+            vel[0] = (positions[1] - positions[0]) / dt_fwd
+        # 终点: 后向差分
+        dt_bwd = timestamps[-1] - timestamps[-2]
+        if dt_bwd > 0:
+            vel[-1] = (positions[-1] - positions[-2]) / dt_bwd
+    else:  # N == 2
+        dt_span = timestamps[1] - timestamps[0]
+        if dt_span > 0:
+            v = (positions[1] - positions[0]) / dt_span
+            vel[0] = vel[1] = v
+    return vel
 
 
 def smooth_points_3d(points: list, passes: int = 2) -> list:

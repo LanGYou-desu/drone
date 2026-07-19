@@ -31,6 +31,7 @@ from pathlib import Path
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import numpy as np
 
 # 路径（pathlib 绝对路径，无 sys.path 注入）
 _MODULE_DIR = Path(__file__).resolve().parent          # .../train/hybrid_predictor/
@@ -85,6 +86,25 @@ DEFAULT_CONFIG = {
     "output_dir": "train/hybrid_predictor/train_result/models",
     "device": "cuda:0",
     "val_split": 0.1,
+    # 模型架构参数（可通过 config.json → training 覆盖）
+    "d_feat": 64,
+    "d_context": 128,
+    "n_head": 4,
+    "n_layers": 3,
+    "dim_feedforward": 256,
+    "dropout": 0.1,
+    "d_z": 32,
+    "a_max": 30.0,
+    "ode_hidden_dim": 64,
+    "n_diffusion_steps": 500,
+    "n_inference_steps": 50,
+    "tau_emb_dim": 16,
+    "dt_emb_dim": 16,
+    "diff_hidden_dim": 128,
+    "guidance_eta": 0.1,
+    "v_max": 30.0,
+    "z_min": 0.0,
+    "obs_hidden_dim": 32,
 }
 
 
@@ -346,7 +366,6 @@ def _make_stage_comparison_chart(logger: TrainingLogger, output_dir: str):
             stability,
         ]
 
-    import numpy as np
     angles = [n * 2 * np.pi / len(metrics) for n in range(len(metrics))]
     angles += angles[:1]  # 闭合
 
@@ -672,7 +691,7 @@ def _make_loaders(train_trajs, valid_trajs, config):
 
 def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
     """构建训练/验证数据加载器。优先级: data/ > train/|valid/"""
-    from numpy.random import RandomState
+    from numpy.random import default_rng
 
     dataset_root = os.path.join(_PROJECT_ROOT, config["dataset_dir"])
 
@@ -683,7 +702,7 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
     ):
         all_trajs = load_all_trajectories(synthetic_dir=data_dir)
         if all_trajs:
-            rng = RandomState(42)
+            rng = default_rng(42)
             indices = list(range(len(all_trajs)))
             rng.shuffle(indices)
             n_val = max(1, int(len(all_trajs) * config.get("val_split", 0.15)))
@@ -713,13 +732,47 @@ def build_dataloaders(config: dict) -> tuple[DataLoader, DataLoader]:
     return _make_loaders(train_trajs, valid_trajs, config)
 
 
+def build_test_loader(config: dict) -> DataLoader | None:
+    """构建测试集数据加载器。若 test/ 目录不存在或为空，返回 None。"""
+    dataset_root = os.path.join(_PROJECT_ROOT, config["dataset_dir"])
+    test_dir = os.path.join(dataset_root, "test")
+
+    if not os.path.isdir(test_dir):
+        print(f"[测试] test/ 目录不存在，跳过测试集评价")
+        return None
+
+    test_trajs = load_all_trajectories(synthetic_dir=test_dir)
+    if len(test_trajs) == 0:
+        print(f"[测试] test/ 为空，跳过测试集评价")
+        return None
+
+    test_set = TrajectoryDataset(test_trajs, ctx_len=config["ctx_len"],
+                                  tgt_len=config["tgt_len"], augment=False)
+    print(f"[测试] {len(test_trajs)} 条轨迹 → {len(test_set)} 个评估窗口")
+    return DataLoader(test_set, batch_size=config["batch_size"], shuffle=False,
+                      collate_fn=collate_fn, drop_last=False)
+
+
 def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:
     model = PhyODEDiffusion(
-        d_feat=64, d_context=128, n_head=4, n_layers=3, dim_feedforward=256, dropout=0.1,
-        d_z=32, a_max=30.0, ode_hidden_dim=64,
-        n_diffusion_steps=500, n_inference_steps=50,
-        tau_emb_dim=16, dt_emb_dim=16, diff_hidden_dim=128,
-        guidance_eta=0.1, v_max=30.0, z_min=0.0, obs_hidden_dim=32,
+        d_feat=config.get("d_feat", 64),
+        d_context=config.get("d_context", 128),
+        n_head=config.get("n_head", 4),
+        n_layers=config.get("n_layers", 3),
+        dim_feedforward=config.get("dim_feedforward", 256),
+        dropout=config.get("dropout", 0.1),
+        d_z=config.get("d_z", 32),
+        a_max=config.get("a_max", 30.0),
+        ode_hidden_dim=config.get("ode_hidden_dim", 64),
+        n_diffusion_steps=config.get("n_diffusion_steps", 500),
+        n_inference_steps=config.get("n_inference_steps", 50),
+        tau_emb_dim=config.get("tau_emb_dim", 16),
+        dt_emb_dim=config.get("dt_emb_dim", 16),
+        diff_hidden_dim=config.get("diff_hidden_dim", 128),
+        guidance_eta=config.get("guidance_eta", 0.1),
+        v_max=config.get("v_max", 30.0),
+        z_min=config.get("z_min", 0.0),
+        obs_hidden_dim=config.get("obs_hidden_dim", 32),
     )
     model.to(device)
     model.diffusion.scheduler.to(device)
@@ -756,6 +809,180 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
     return latest_path
 
 
+def evaluate_test(model, test_loader, device, out_dir: str):
+    """在测试集上评估最终模型，输出详细指标并写入 JSON。"""
+    print(f"\n{'='*60}")
+    print("  测试集评价")
+    print(f"{'='*60}")
+
+    model.eval()
+    total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
+    total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
+    n_batches, n_viol = 0, 0
+
+    with torch.no_grad():
+        for batch in test_loader:
+            b = _to_device(batch, device)
+            c = model.transformer(b["ctx_t"], b["ctx_dt"], b["ctx_pos"], b["ctx_vel"])
+            h = model.state_manager.init_state(b["ctx_pos"][:, -1, :],
+                                                b["ctx_vel"][:, -1, :], c)
+            t_now = b["ctx_t"][:, -1]
+            diff_loss, count = 0.0, 0
+            preds, tgts = [], []
+            prev_pos = b["ctx_pos"][:, -1, :]
+
+            for j in range(b["tgt_pos"].shape[1]):
+                dt_step = b["tgt_t"][:, j] - t_now
+                h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
+                p_pred = h_prior[:, :3]
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
+                prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
+                loss_dict = model.diffusion.compute_loss(
+                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :])
+                diff_loss += loss_dict["diff_loss"]
+
+                if b.get("p_std") is not None:
+                    p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
+                    prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
+                    v_norm = torch.norm((p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1), dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
+                    a_h = v_norm / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
+                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    n_viol += 1
+
+                h = model.state_manager.update(h_prior, dt_step,
+                                               b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
+                prev_pos = b["tgt_pos"][:, j, :]
+                t_now = b["tgt_t"][:, j]
+                count += 1
+
+            total_loss += (diff_loss / max(count, 1)).item()
+            if preds:
+                errs = torch.norm(torch.stack(preds, 1) - torch.stack(tgts, 1), dim=-1)
+                total_ade += errs.mean().item()
+                total_fde += errs[:, -1].mean().item()
+            n_batches += 1
+
+    n = max(n_batches, 1); nv = max(n_viol, 1)
+    metrics = {
+        "test_loss": round(total_loss / n, 6),
+        "test_ADE": round(total_ade / n, 6),
+        "test_FDE": round(total_fde / n, 6),
+        "test_speed_violation": round(total_spd_v / nv, 6),
+        "test_accel_violation": round(total_acc_v / nv, 6),
+        "test_height_violation": round(total_hgt_v / nv, 6),
+    }
+
+    print(f"  Loss:             {metrics['test_loss']:.4f}")
+    print(f"  ADE:              {metrics['test_ADE']:.4f}")
+    print(f"  FDE:              {metrics['test_FDE']:.4f}")
+    print(f"  Speed Violation:  {metrics['test_speed_violation']:.4f}")
+    print(f"  Accel Violation:  {metrics['test_accel_violation']:.4f}")
+    print(f"  Height Violation: {metrics['test_height_violation']:.4f}")
+
+    os.makedirs(out_dir, exist_ok=True)
+    json_path = os.path.join(out_dir, "test_metrics.json")
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(metrics, f, indent=2, ensure_ascii=False)
+    print(f"  测试指标已保存: {json_path}")
+
+    # 生成测试图表
+    if HAS_MPL:
+        _make_test_chart(metrics, out_dir)
+
+    model.train()
+    return metrics
+
+
+def _make_test_chart(metrics: dict, output_dir: str):
+    """图7: 测试集评价仪表盘 — 指标柱状图 + 物理违反 + 雷达图"""
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure(figsize=(16, 10))
+    fig.suptitle('Test Set Evaluation', fontsize=15, fontweight='bold')
+
+    # (左) 精度指标柱状图
+    ax = fig.add_subplot(2, 2, 1)
+    acc_metrics = {
+        'Loss': metrics.get('test_loss', 0),
+        'ADE': metrics.get('test_ADE', 0),
+        'FDE': metrics.get('test_FDE', 0),
+    }
+    colors_acc = ['#2196F3', '#FF9800', '#EF5350']
+    bars = ax.barh(list(acc_metrics.keys()), list(acc_metrics.values()),
+                   color=colors_acc, alpha=0.85, height=0.5)
+    for bar, val in zip(bars, acc_metrics.values()):
+        ax.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
+                f'{val:.4f}', va='center', fontsize=11, fontweight='bold')
+    ax.set_title('Prediction Accuracy', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Value'); ax.grid(True, alpha=0.3, axis='x')
+    ax.set_xlim(0, max(acc_metrics.values()) * 1.2 if max(acc_metrics.values()) > 0 else 1)
+
+    # (右) 物理违反率柱状图
+    ax = fig.add_subplot(2, 2, 2)
+    phy_metrics = {
+        'Speed': metrics.get('test_speed_violation', 0),
+        'Accel': metrics.get('test_accel_violation', 0),
+        'Height': metrics.get('test_height_violation', 0),
+    }
+    colors_phy = ['#FF7043', '#AB47BC', '#26C6DA']
+    bars = ax.barh(list(phy_metrics.keys()), list(phy_metrics.values()),
+                   color=colors_phy, alpha=0.85, height=0.5)
+    for bar, val in zip(bars, phy_metrics.values()):
+        ax.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
+                f'{val:.4f}', va='center', fontsize=11, fontweight='bold')
+    ax.set_title('Physics Constraint Violations', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Rate'); ax.grid(True, alpha=0.3, axis='x')
+    ax.set_xlim(0, max(phy_metrics.values()) * 1.3 if max(phy_metrics.values()) > 0 else 1)
+
+    # (左下) 评测概要
+    ax = fig.add_subplot(2, 2, 3)
+    ax.axis('off')
+    summary = "Test Evaluation Summary\n" + "─" * 28 + "\n"
+    summary += f"Loss:              {metrics.get('test_loss', 0):.4f}\n"
+    summary += f"ADE (avg error):   {metrics.get('test_ADE', 0):.4f}\n"
+    summary += f"FDE (final error): {metrics.get('test_FDE', 0):.4f}\n"
+    summary += f"Speed  violation:  {metrics.get('test_speed_violation', 0):.4f}\n"
+    summary += f"Accel  violation:  {metrics.get('test_accel_violation', 0):.4f}\n"
+    summary += f"Height violation:  {metrics.get('test_height_violation', 0):.4f}\n"
+    phy_score = 1.0 - sum(phy_metrics.values()) / 3
+    summary += f"─" * 28 + f"\nPhysics Score:     {phy_score:.4f}"
+    ax.text(0.05, 0.95, summary, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', fontfamily='monospace',
+            bbox=dict(boxstyle='round', facecolor='#F5F5F5', alpha=0.8))
+
+    # (右下) 综合雷达图
+    ax = fig.add_subplot(2, 2, 4, projection='polar')
+    max_ade = max(metrics.get('test_ADE', 0.001), 0.001)
+    max_fde = max(metrics.get('test_FDE', 0.001), 0.001)
+    radar_labels = ['1-ADE', '1-FDE', '1-Speed\nViol', '1-Accel\nViol',
+                    '1-Height\nViol', 'Physics\nScore']
+    radar_values = [
+        max(0, 1 - metrics.get('test_ADE', 0) / max_ade),
+        max(0, 1 - metrics.get('test_FDE', 0) / max_fde),
+        max(0, 1 - metrics.get('test_speed_violation', 0)),
+        max(0, 1 - metrics.get('test_accel_violation', 0)),
+        max(0, 1 - metrics.get('test_height_violation', 0)),
+        phy_score,
+    ]
+    angles = [n * 2 * np.pi / len(radar_labels) for n in range(len(radar_labels))]
+    radar_values += radar_values[:1]
+    angles += angles[:1]
+    ax.fill(angles, radar_values, alpha=0.2, color='#4CAF50')
+    ax.plot(angles, radar_values, 'o-', linewidth=2, color='#4CAF50')
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(radar_labels, fontsize=8)
+    ax.set_title('Composite Radar', fontsize=13, fontweight='bold', pad=20)
+    ax.set_ylim(0, 1.05)
+
+    plt.tight_layout()
+    path = os.path.join(output_dir, "07_test_evaluation.png")
+    plt.savefig(path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"[图表7] 测试评价: {path}")
+
+
 def _label_smooth(tgt_pos: torch.Tensor, p_std: torch.Tensor,
                   smoothing: float) -> torch.Tensor:
     """
@@ -766,7 +993,7 @@ def _label_smooth(tgt_pos: torch.Tensor, p_std: torch.Tensor,
     """
     if smoothing <= 0:
         return tgt_pos
-    noise = torch.randn_like(tgt_pos) * smoothing * p_std.unsqueeze(1)
+    noise = torch.randn_like(tgt_pos) * smoothing * p_std
     return tgt_pos + noise
 
 
@@ -875,10 +1102,10 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
             loss = mse_loss / max(count, 1) + 0.1 * phy_loss / max(count, 1)
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             if not _check_nan(loss, 1, epoch):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
-            total_loss += loss.item()
+                total_loss += loss.item()
 
             if HAS_TQDM:
                 batch_iter.set_postfix(loss=f"{loss.item():.4f}")
@@ -1034,13 +1261,13 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 count += 1
 
             loss = diff_loss_total / max(count, 1)
-            # 反向传播与参数更新（修复：阶段二缺少训练步骤）
+            # 反向传播与参数更新
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.diffusion.parameters(), 1.0)
             if not _check_nan(loss, 2, epoch):
+                torch.nn.utils.clip_grad_norm_(model.diffusion.parameters(), 1.0)
                 optimizer.step()
-            total_loss += loss.item()
+                total_loss += loss.item()
 
         scheduler.step()
         avg_train = total_loss / max(len(train_loader), 1)
@@ -1198,10 +1425,10 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             loss = diff_loss_total / max(count, 1)
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             if not _check_nan(loss, 3, epoch):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                 optimizer.step()
-            total_loss += loss.item()
+                total_loss += loss.item()
 
             if HAS_TQDM:
                 batch_iter.set_postfix(loss=f"{loss.item():.4f}")
@@ -1214,7 +1441,7 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage1(model, val_loader, device)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage2(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
@@ -1248,7 +1475,7 @@ def main():
                         help="1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch", type=int, default=32)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--ctx-len", type=int, default=20)
@@ -1324,8 +1551,8 @@ def main():
         resumed_stage = resume_ckpt.get("stage", 0)
         resume_epoch = resume_ckpt.get("epoch", 0)
         print(f"[RESUME] 已完成: stage={resumed_stage}, epoch={resume_epoch}, "
-              f"val_loss={resume_ckpt.get('val_loss', '?'):.4f}")
-        if "ADE" in resume_ckpt:
+              f"val_loss={resume_ckpt.get('val_loss', 0.0):.4f}")
+        if "ADE" in resume_ckpt and "FDE" in resume_ckpt:
             print(f"[RESUME] 历史指标: ADE={resume_ckpt['ADE']:.4f}, FDE={resume_ckpt['FDE']:.4f}")
     else:
         model = create_model(config, device)
@@ -1355,13 +1582,35 @@ def main():
     print(f"{'='*60}")
 
     # 保存最终权重（各阶段已完成 checkpoint 保存，此处兜底）
-    if not os.path.exists(os.path.join(_PROJECT_ROOT, config["output_dir"], "phy_ode_diffusion.pt")):
-        out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
+    import glob as _pt_glob
+    _existing = _pt_glob.glob(os.path.join(out_dir, "*.pt"))
+    if not _existing:
         final_loss = logger.history[-1]["val_loss"] if logger.history else 0.0
         save_checkpoint(model, out_dir, 0, 0, final_loss, is_best=True)
 
     # ── 输出图表和日志到 train/hybrid_predictor/train_result/ ──
     results_dir = str(_RESULTS_DIR)
+
+    # ── 测试集评价 ──────────────────────────────────────
+    test_loader = build_test_loader(config)
+    if test_loader is not None:
+        # 加载最佳 checkpoint（优先级: s3 > s2 > s1）
+        best_ckpt_path = None
+        for _s in (3, 2, 1):
+            _p = os.path.join(out_dir, f"phy_ode_diffusion_best_s{_s}.pt")
+            if os.path.isfile(_p):
+                best_ckpt_path = _p
+                break
+        if best_ckpt_path is not None:
+            test_model = create_model(config, device)
+            test_ckpt = torch.load(best_ckpt_path, map_location=device)
+            test_model.load_state_dict(test_ckpt["model_state_dict"])
+            test_model.diffusion.scheduler.to(device)
+            test_metrics = evaluate_test(test_model, test_loader, device, results_dir)
+        else:
+            # 无最佳模型时用当前模型直接评估
+            test_metrics = evaluate_test(model, test_loader, device, results_dir)
     os.makedirs(results_dir, exist_ok=True)
 
     # 保存训练历史 JSON
@@ -1379,6 +1628,8 @@ def main():
     summary = _save_training_summary(logger, config, results_dir)
     summary["total_params"] = total_params
     summary["total_time_minutes"] = round(total_time / 60, 1)
+    if test_loader is not None and 'test_metrics' in dir():
+        summary["test_metrics"] = test_metrics
     with open(os.path.join(results_dir, "training_summary.json"), 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
 

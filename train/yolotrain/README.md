@@ -12,9 +12,12 @@ train/yolotrain/dataset/
 ├── train/
 │   ├── images/            # 训练图片 (.jpg, .png)
 │   └── labels/            # YOLO 标注 (.txt，与图片同名)
-└── valid/
-    ├── images/            # 验证图片
-    └── labels/            # 验证标注
+├── valid/
+│   ├── images/            # 验证图片
+│   └── labels/            # 验证标注
+└── test/
+    ├── images/            # 测试图片（训练后自动评估）
+    └── labels/            # 测试标注
 ```
 
 ## 图片分辨率要求
@@ -83,6 +86,31 @@ python train/yolotrain/train.py \
 | 1280×720 推荐 | **960** | 16 | 默认值，平衡精度与速度 |
 | 小目标优先 | **1280** | 8 | 原始分辨率，无人机细节最完整 |
 | 快速实验 | **640** | 32 | 训练最快，但小目标细节丢失较多 |
+
+## 训练输出
+
+训练完成后产物位于 `train/yolotrain/train_result/`：
+
+| 文件 | 内容 |
+|------|------|
+| `models/drone_detect_YYYYMMDD_HHMMSS.pt` | 最佳模型副本 |
+| `models/drone_detect/weights/best.pt` | ultralytics 最佳权重 |
+| `01_loss_decomposition.png` | 训练损失分解曲线 |
+| `02_validation_metrics.png` | 验证 mAP/Precision/Recall |
+| `03_convergence_analysis.png` | 收敛性分析 |
+| `04_dashboard.png` | 综合仪表盘 |
+| `05_test_comparison.png` | 验证 vs 测试 mAP 对比 |
+| `training_summary.json` | 训练摘要 |
+
+## 测试集评价
+
+训练完成后自动在测试集上评估最佳模型。只需将测试图片和标注放入 `dataset/test/` 即可。
+
+测试评价输出：
+- 控制台打印测试集 mAP@0.5 和 mAP@0.5:0.95
+- `05_test_comparison.png` — 验证集 vs 测试集 mAP 对比柱状图
+
+若 `dataset/test/images/` 目录为空，则自动跳过测试评价。
 
 ## 标注工具推荐
 

@@ -381,6 +381,51 @@ def _save_training_summary(results_dir: str, output_dir: str, config: dict):
     print(f"[日志] 训练摘要已保存: {summary_path}")
 
 
+def _make_test_comparison_chart(val_map50, val_map50_95, test_map50, test_map50_95,
+                                output_dir):
+    """生成验证集 vs 测试集 mAP 对比柱状图"""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        fig.suptitle('Validation vs Test — mAP Comparison', fontsize=13, fontweight='bold')
+
+        labels = ['mAP@0.5', 'mAP@0.5:0.95']
+        val_vals = [val_map50, val_map50_95]
+        test_vals = [test_map50, test_map50_95]
+
+        x = range(len(labels))
+        w = 0.3
+        bars1 = ax.bar([i - w/2 for i in x], val_vals, w, label='Validation',
+                       color='#2196F3', alpha=0.85)
+        bars2 = ax.bar([i + w/2 for i in x], test_vals, w, label='Test',
+                       color='#4CAF50', alpha=0.85)
+
+        for bar, val in zip(bars1, val_vals):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                    f'{val:.4f}', ha='center', fontsize=11, fontweight='bold')
+        for bar, val in zip(bars2, test_vals):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                    f'{val:.4f}', ha='center', fontsize=11, fontweight='bold')
+
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(labels, fontsize=12)
+        ax.set_ylabel('mAP'); ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3, axis='y')
+        ymax = max(val_vals + test_vals) * 1.15
+        ax.set_ylim(0, ymax if ymax > 0 else 1)
+
+        plt.tight_layout()
+        path = os.path.join(output_dir, "05_test_comparison.png")
+        plt.savefig(path, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"[图表5] 测试对比: {path}")
+    except Exception as e:
+        print(f"[警告] 测试对比图生成失败: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="YOLO 无人机检测模型训练",
@@ -400,7 +445,7 @@ def main():
                         help="训练输入尺寸。对于 1280×720 图片推荐 960 或 1280，"
                              "可保留更多小目标细节。默认 640 适用于 ≤720p 的图片")
     parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--freeze", type=int, default=None)
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--resume", action="store_true")
@@ -538,10 +583,33 @@ def main():
         print("训练中... (ultralytics 内置进度条)")
         print("-" * 40)
 
-    results = model.train(**train_kwargs)
+    training_failed = False
+    try:
+        results = model.train(**train_kwargs)
+    except Exception as e:
+        print(f"\n[错误] 训练过程中出现异常: {e}")
+        print("尝试从已保存的中间结果生成图表...")
+        training_failed = True
+        import glob as _glob
+        # ultralytics 自动保存到 project/name/ 目录
+        _run_dirs = sorted(
+            _glob.glob(os.path.join(yolo_model_dir, args.name + "*")),
+            key=os.path.getmtime, reverse=True,
+        )
+        if _run_dirs:
+            # 构造一个伪 results 对象用于后续步骤
+            class _FakeResults:
+                save_dir = _run_dirs[0]
+            results = _FakeResults()
+        else:
+            print("未找到 ultralytics 输出目录，跳过后续步骤")
+            sys.exit(1)
 
     elapsed = time.time() - t_start
-    print(f"\n训练完成！耗时: {elapsed/60:.1f} 分钟")
+    if training_failed:
+        print(f"\n训练异常终止！已耗时: {elapsed/60:.1f} 分钟")
+    else:
+        print(f"\n训练完成！耗时: {elapsed/60:.1f} 分钟")
 
     # 输出结果路径
     save_dir = str(results.save_dir)
@@ -549,7 +617,7 @@ def main():
     print(f"  最佳模型: {save_dir}/weights/best.pt")
     print(f"  最终模型: {save_dir}/weights/last.pt")
 
-    # ── 生成训练图表 ──
+    # ── 生成训练图表 ──（训练失败时也尝试从已有数据生成）
     if not args.no_charts:
         print(f"\n{'='*50}")
         print("生成训练图表和日志")
@@ -559,23 +627,72 @@ def main():
         _plot_training_results(save_dir, output_dir)
         _save_training_summary(save_dir, output_dir, vars(args))
 
-    # 复制最佳模型到 train_result/models/
-    import shutil
-    best_pt = os.path.join(save_dir, "weights", "best.pt")
-    if os.path.isfile(best_pt):
-        _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dst = os.path.join(yolo_model_dir, f"drone_detect_{_ts}.pt")
-        shutil.copy2(best_pt, dst)
-        print(f"\n最佳模型已保存: {dst}")
+    if training_failed:
+        print("\n训练未完成，跳过模型复制和验证步骤")
+    else:
+        # 复制最佳模型到 train_result/models/
+        import shutil
+        best_pt = os.path.join(save_dir, "weights", "best.pt")
+        if os.path.isfile(best_pt):
+            _ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dst = os.path.join(yolo_model_dir, f"drone_detect_{_ts}.pt")
+            shutil.copy2(best_pt, dst)
+            print(f"\n最佳模型已保存: {dst}")
 
-    # 验证最佳模型
-    print(f"\n{'='*50}")
-    print("在验证集上评估最佳模型")
-    print(f"{'='*50}")
-    best_model = YOLO(best_pt)
-    metrics = best_model.val(data=args.data, imgsz=args.imgsz, device=args.device)
-    print(f"  mAP@0.5:      {metrics.box.map50:.4f}")
-    print(f"  mAP@0.5:0.95: {metrics.box.map:.4f}")
+            # 验证最佳模型（验证集）
+            print(f"\n{'='*50}")
+            print("在验证集上评估最佳模型")
+            print(f"{'='*50}")
+            best_model = YOLO(best_pt)
+            metrics = best_model.val(data=args.data, imgsz=args.imgsz, device=args.device)
+            val_map50 = metrics.box.map50
+            val_map50_95 = metrics.box.map
+            print(f"  mAP@0.5:      {val_map50:.4f}")
+            print(f"  mAP@0.5:0.95: {val_map50_95:.4f}")
+
+            # 测试集评价
+            _test_img_dir = os.path.join(_data_yaml_dir, "test", "images")
+            if os.path.isdir(_test_img_dir) and any(
+                f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))
+                for f in os.listdir(_test_img_dir)
+            ):
+                print(f"\n{'='*50}")
+                print("在测试集上评估最佳模型")
+                print(f"{'='*50}")
+                # 构建测试集 data yaml（复用验证集路径，替换为测试集）
+                import yaml as _yaml_lib
+                try:
+                    with open(args.data, 'r') as _f:
+                        _ds_cfg = _yaml_lib.safe_load(_f)
+                except Exception:
+                    _ds_cfg = {}
+                _ds_cfg['val'] = 'test/images'
+                _ds_cfg['test'] = 'test/images'
+                _test_yaml = os.path.join(_data_yaml_dir, "_test_eval.yaml")
+                with open(_test_yaml, 'w') as _f:
+                    _yaml_lib.dump(_ds_cfg, _f)
+                try:
+                    test_metrics = best_model.val(
+                        data=_test_yaml, imgsz=args.imgsz, device=args.device,
+                    )
+                    test_map50 = test_metrics.box.map50
+                    test_map50_95 = test_metrics.box.map
+                    print(f"  mAP@0.5:      {test_map50:.4f}")
+                    print(f"  mAP@0.5:0.95: {test_map50_95:.4f}")
+
+                    # 生成验证 vs 测试对比图
+                    _make_test_comparison_chart(
+                        val_map50, val_map50_95,
+                        test_map50, test_map50_95,
+                        _RESULTS_DIR,
+                    )
+                finally:
+                    if os.path.isfile(_test_yaml):
+                        os.remove(_test_yaml)
+            else:
+                print("\n[提示] 测试集为空，跳过测试集评价")
+        else:
+            print("\n[警告] best.pt 不存在，跳过模型验证")
 
 
 if __name__ == "__main__":

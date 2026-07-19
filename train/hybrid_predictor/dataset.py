@@ -12,46 +12,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-
-def estimate_velocity(positions: np.ndarray, timestamps: np.ndarray) -> np.ndarray:
-    """
-    用中心差分 + 端点前向/后向差分估计各点的速度向量。
-
-    内部点用中心差分（O(Δt²) 精度），端点用单侧差分（O(Δt) 精度），
-    避免简单复制相邻值导致的边界速度失真。
-
-    Args:
-        positions: (N, 3) 位置序列
-        timestamps: (N,) 时间戳
-
-    Returns:
-        velocities: (N, 3) 速度估计
-    """
-    N = len(positions)
-    vel = np.zeros((N, 3), dtype=np.float32)
-    if N < 2:
-        return vel
-
-    if N >= 3:
-        # 内部点: 中心差分
-        for i in range(1, N - 1):
-            dt_span = timestamps[i + 1] - timestamps[i - 1]
-            if dt_span > 0:
-                vel[i] = (positions[i + 1] - positions[i - 1]) / dt_span
-        # 起点: 前向差分
-        dt_fwd = timestamps[1] - timestamps[0]
-        if dt_fwd > 0:
-            vel[0] = (positions[1] - positions[0]) / dt_fwd
-        # 终点: 后向差分
-        dt_bwd = timestamps[-1] - timestamps[-2]
-        if dt_bwd > 0:
-            vel[-1] = (positions[-1] - positions[-2]) / dt_bwd
-    else:  # N == 2
-        dt_span = timestamps[1] - timestamps[0]
-        if dt_span > 0:
-            v = (positions[1] - positions[0]) / dt_span
-            vel[0] = vel[1] = v
-    return vel
+from trajectory_reconstruction.core.math_utils import estimate_velocity
 
 
 def load_trajectory_from_dat(file_path: str) -> tuple[np.ndarray, np.ndarray]:
