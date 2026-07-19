@@ -47,12 +47,8 @@ _RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "train_r
 
 def _plot_training_results(results_dir: str, output_dir: str):
     """
-    从 ultralytics 输出的 results.csv 生成多种评价指标图表。
-    图表类型:
-      1. 损失分解曲线 (box/cls/dfl + val)
-      2. 验证指标曲线 (mAP/Precision/Recall/F1)
-      3. 收敛性分析 (改进率/过拟合检测)
-      4. 综合仪表盘
+    从 ultralytics 输出的 results.csv 生成高分辨率单图评价指标。
+    每张图只包含一个指标，DPI=300，适合论文发表。
     """
     import csv
 
@@ -71,273 +67,188 @@ def _plot_training_results(results_dir: str, output_dir: str):
 
     epochs = list(range(1, len(rows) + 1))
     os.makedirs(output_dir, exist_ok=True)
+    _CHART_DPI = 300
+    _FS = (10, 6)
 
     try:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
 
-        # 色板
-        c_loss = ['#2196F3', '#FF9800', '#9C27B0']
-        c_metric = ['#4CAF50', '#FF5722', '#2196F3', '#FF9800']
-
-        # ── 图1: 损失分解 ──
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        fig.suptitle('YOLO Training — Loss Decomposition', fontsize=14, fontweight='bold')
-
-        loss_panels = [
-            ('train/box_loss', 'Box Loss (Train)', axes[0, 0], c_loss[0]),
-            ('train/cls_loss', 'Class Loss (Train)', axes[0, 1], c_loss[1]),
-            ('train/dfl_loss', 'DFL Loss (Train)', axes[1, 0], c_loss[2]),
-            ('val/box_loss', 'Box Loss (Validation)', axes[1, 1], '#EF5350'),
+        # ── 01 损失分解（4 张单图）──────────────────────
+        loss_configs = [
+            ('train/box_loss', 'Box Loss (Train)', '#2196F3', '01a_box_loss.png'),
+            ('train/cls_loss', 'Class Loss (Train)', '#FF9800', '01b_cls_loss.png'),
+            ('train/dfl_loss', 'DFL Loss (Train)', '#9C27B0', '01c_dfl_loss.png'),
+            ('val/box_loss', 'Box Loss (Validation)', '#EF5350', '01d_val_box_loss.png'),
         ]
-        for key, title, ax, color in loss_panels:
+        for key, title, color, fname in loss_configs:
             if key in rows[0]:
+                fig, ax = plt.subplots(figsize=_FS)
                 vals = [r[key] for r in rows]
-                ax.plot(epochs, vals, '-', color=color, linewidth=1.8, alpha=0.85)
+                ax.plot(epochs, vals, '-', color=color, lw=2, alpha=0.85)
                 ax.fill_between(epochs, 0, vals, alpha=0.08, color=color)
-                ax.set_title(title, fontsize=12, fontweight='bold')
-                ax.set_xlabel('Epoch'); ax.set_ylabel('Loss')
+                ax.set_title(title, fontsize=14, fontweight='bold')
+                ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
                 ax.grid(True, alpha=0.3)
-                # 标注最优
                 best_i = vals.index(min(vals))
-                ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i+1, vals[best_i]),
-                            fontsize=9, color='darkred', fontweight='bold')
+                ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i+1, vals[best_i]), fontsize=11, color='darkred', fontweight='bold')
+                fig.tight_layout(); fig.savefig(os.path.join(output_dir, fname), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
+                print(f"[图表] {fname}")
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "01_loss_decomposition.png"), dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"[图表1] 损失分解: {output_dir}/01_loss_decomposition.png")
-
-        # ── 图2: 验证指标 ──
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        fig.suptitle('YOLO Validation Metrics', fontsize=14, fontweight='bold')
-
-        metric_panels = [
-            ('metrics/precision(B)', 'Precision', axes[0, 0], c_metric[0]),
-            ('metrics/recall(B)', 'Recall', axes[0, 1], c_metric[1]),
-            ('metrics/mAP50(B)', 'mAP@0.5', axes[1, 0], c_metric[2]),
-            ('metrics/mAP50-95(B)', 'mAP@0.5:0.95', axes[1, 1], c_metric[3]),
+        # ── 02 验证指标（4 张单图）──────────────────────
+        metric_configs = [
+            ('metrics/precision(B)', 'Precision', '#4CAF50', '02a_precision.png'),
+            ('metrics/recall(B)', 'Recall', '#FF5722', '02b_recall.png'),
+            ('metrics/mAP50(B)', 'mAP@0.5', '#2196F3', '02c_mAP50.png'),
+            ('metrics/mAP50-95(B)', 'mAP@0.5:0.95', '#FF9800', '02d_mAP50_95.png'),
         ]
-        for key, title, ax, color in metric_panels:
+        for key, title, color, fname in metric_configs:
             if key in rows[0]:
+                fig, ax = plt.subplots(figsize=_FS)
                 vals = [r[key] for r in rows]
-                ax.plot(epochs, vals, '-', color=color, linewidth=1.8, alpha=0.85)
+                ax.plot(epochs, vals, '-', color=color, lw=2, alpha=0.85)
                 ax.fill_between(epochs, 0, vals, alpha=0.08, color=color)
-                ax.set_title(title, fontsize=12, fontweight='bold')
-                ax.set_xlabel('Epoch'); ax.set_ylabel('Value')
+                ax.set_title(title, fontsize=14, fontweight='bold')
+                ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Value', fontsize=12)
                 ax.grid(True, alpha=0.3)
                 best_i = vals.index(max(vals))
-                ax.annotate(f'Best: {vals[best_i]:.4f} (e{best_i+1})',
-                            xy=(best_i+1, vals[best_i]),
-                            xytext=(10, -15), textcoords='offset points',
-                            fontsize=8, color='darkred',
+                ax.annotate(f'Best: {vals[best_i]:.4f} (e{best_i+1})', xy=(best_i+1, vals[best_i]),
+                            xytext=(10, -15), textcoords='offset points', fontsize=10, color='darkred',
                             arrowprops=dict(arrowstyle='->', lw=0.8, color='darkred'))
+                fig.tight_layout(); fig.savefig(os.path.join(output_dir, fname), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
+                print(f"[图表] {fname}")
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "02_validation_metrics.png"), dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"[图表2] 验证指标: {output_dir}/02_validation_metrics.png")
+        # ── 03 收敛性分析（6 张单图）───────────────────
 
-        # ── 图3: 收敛性分析 ──
-        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        fig.suptitle('YOLO — Convergence Analysis', fontsize=14, fontweight='bold')
-
-        # 3a. 损失下降百分比
-        ax = axes[0, 0]
-        for key, label, color in [('train/box_loss', 'Box Loss', c_loss[0]),
-                                   ('train/cls_loss', 'Cls Loss', c_loss[1]),
-                                   ('train/dfl_loss', 'DFL Loss', c_loss[2])]:
+        # 03a 损失改进率
+        fig, ax = plt.subplots(figsize=_FS)
+        for key, label, color in [('train/box_loss','Box', '#2196F3'),('train/cls_loss','Cls', '#FF9800'),('train/dfl_loss','DFL', '#9C27B0')]:
             if key in rows[0]:
                 vals = [r[key] for r in rows]
                 improvements = [(vals[0]-v)/vals[0]*100 for v in vals]
-                ax.plot(epochs, improvements, '-', color=color, linewidth=1.5, label=label)
-        ax.set_title('Loss Improvement (%)')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('Improvement %')
-        ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+                ax.plot(epochs, improvements, '-', color=color, lw=2, label=label)
+        ax.set_title('Loss Improvement (%)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Improvement %', fontsize=12)
+        ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+        fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03a_improvement.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        # 3b. 过拟合检测
-        ax = axes[0, 1]
+        # 03b 过拟合检测
         if 'train/box_loss' in rows[0] and 'val/box_loss' in rows[0]:
-            train_v = [r['train/box_loss'] for r in rows]
-            val_v = [r['val/box_loss'] for r in rows]
-            ax.plot(epochs, train_v, '-', color='#2196F3', linewidth=1.2, alpha=0.7, label='Train')
-            ax.plot(epochs, val_v, '-', color='#EF5350', linewidth=1.2, alpha=0.7, label='Val')
-            ax.fill_between(epochs, train_v, val_v, alpha=0.1, color='gray')
-            ax.set_title('Overfitting Detection (Box Loss)')
-            ax.set_xlabel('Epoch'); ax.set_ylabel('Loss')
-            ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+            fig, ax = plt.subplots(figsize=_FS)
+            ax.plot(epochs, [r['train/box_loss'] for r in rows], '-', color='#2196F3', lw=1.5, alpha=0.7, label='Train')
+            ax.plot(epochs, [r['val/box_loss'] for r in rows], '-', color='#EF5350', lw=1.5, alpha=0.7, label='Val')
+            ax.fill_between(epochs, [r['train/box_loss'] for r in rows], [r['val/box_loss'] for r in rows], alpha=0.1, color='gray')
+            ax.set_title('Overfitting Detection (Box Loss)', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+            fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03b_overfitting.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        # 3c. mAP 提升率
-        ax = axes[0, 2]
-        for key, label, color in [('metrics/mAP50(B)', 'mAP@0.5', c_metric[2]),
-                                   ('metrics/mAP50-95(B)', 'mAP@0.5:0.95', c_metric[3])]:
+        # 03c mAP 演进
+        fig, ax = plt.subplots(figsize=_FS)
+        for key, label, color in [('metrics/mAP50(B)','mAP@0.5','#4CAF50'),('metrics/mAP50-95(B)','mAP@0.5:0.95','#2196F3')]:
             if key in rows[0]:
-                vals = [r[key] for r in rows]
-                ax.plot(epochs, vals, '-', color=color, linewidth=1.8, label=label)
-        ax.set_title('mAP Progression')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('mAP')
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+                ax.plot(epochs, [r[key] for r in rows], '-', color=color, lw=2, label=label)
+        ax.set_title('mAP Progression', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('mAP', fontsize=12); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+        fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03c_map_progression.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        # 3d. Precision-Recall 平衡
-        ax = axes[1, 0]
+        # 03d P-R 平衡
         if 'metrics/precision(B)' in rows[0] and 'metrics/recall(B)' in rows[0]:
-            p_vals = [r['metrics/precision(B)'] for r in rows]
-            r_vals = [r['metrics/recall(B)'] for r in rows]
-            ax.plot(epochs, p_vals, '-', color='#4CAF50', linewidth=1.5, label='Precision')
-            ax.plot(epochs, r_vals, '-', color='#FF5722', linewidth=1.5, label='Recall')
-            # F1 估计
+            fig, ax = plt.subplots(figsize=_FS)
+            p_vals = [r['metrics/precision(B)'] for r in rows]; r_vals = [r['metrics/recall(B)'] for r in rows]
+            ax.plot(epochs, p_vals, '-', color='#4CAF50', lw=1.5, label='Precision')
+            ax.plot(epochs, r_vals, '-', color='#FF5722', lw=1.5, label='Recall')
             f1_vals = [2*p*r/(p+r) if (p+r)>0 else 0 for p, r in zip(p_vals, r_vals)]
-            ax.plot(epochs, f1_vals, '--', color='#7E57C2', linewidth=1.5, label='F1 (est.)')
-            ax.set_title('Precision / Recall / F1 Balance')
-            ax.set_xlabel('Epoch'); ax.set_ylabel('Value')
-            ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+            ax.plot(epochs, f1_vals, '--', color='#7E57C2', lw=1.5, label='F1 (est.)')
+            ax.set_title('Precision / Recall / F1 Balance', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Value', fontsize=12); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+            fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03d_pr_balance.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        # 3e. 指标稳定性（变异系数）
-        ax = axes[1, 1]
-        for key, label, color in [('metrics/mAP50(B)', 'mAP@0.5', c_metric[2]),
-                                   ('metrics/precision(B)', 'Precision', c_metric[0])]:
+        # 03e 稳定性
+        fig, ax = plt.subplots(figsize=_FS)
+        for key, label, color in [('metrics/mAP50(B)','mAP@0.5','#4CAF50'),('metrics/precision(B)','Precision','#FF9800')]:
             if key in rows[0]:
-                vals = [r[key] for r in rows]
-                window = max(5, len(vals)//5)
+                vals = [r[key] for r in rows]; window = max(5, len(vals)//5)
                 rolling_std = [np.std(vals[max(0,i-window):i+1]) for i in range(len(vals))]
-                ax.plot(epochs, rolling_std, '-', color=color, linewidth=1.2, alpha=0.8, label=f'{label} σ')
-        ax.set_title('Metric Stability (Rolling Std Dev)')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('Std Dev')
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+                ax.plot(epochs, rolling_std, '-', color=color, lw=1.5, alpha=0.8, label=f'{label}')
+        ax.set_title('Metric Stability (Rolling Std Dev)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Std Dev', fontsize=12); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+        fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03e_stability.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        # 3f. 学习曲线效率
-        ax = axes[1, 2]
+        # 03f 学习效率
         if 'metrics/mAP50(B)' in rows[0]:
-            mAP_vals = [r['metrics/mAP50(B)'] for r in rows]
-            # 每个 epoch 相对最终 mAP 的完成度
-            final_map = mAP_vals[-1]
+            fig, ax = plt.subplots(figsize=_FS)
+            mAP_vals = [r['metrics/mAP50(B)'] for r in rows]; final_map = mAP_vals[-1]
             if final_map > 0:
                 completion = [v/final_map*100 for v in mAP_vals]
                 ax.fill_between(epochs, 0, completion, alpha=0.3, color='#4CAF50')
-                ax.plot(epochs, completion, '-', color='#2E7D32', linewidth=2)
-                ax.axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='90%')
-                ax.axhline(y=95, color='red', linestyle='--', alpha=0.5, label='95%')
-            ax.set_title('mAP Learning Efficiency (% of final)')
-            ax.set_xlabel('Epoch'); ax.set_ylabel('%'); ax.set_ylim(0, 105)
-            ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+                ax.plot(epochs, completion, '-', color='#2E7D32', lw=2)
+                ax.axhline(y=90, color='orange', linestyle='--', alpha=0.5, label='90%'); ax.axhline(y=95, color='red', linestyle='--', alpha=0.5, label='95%')
+            ax.set_title('mAP Learning Efficiency (% of final)', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('%', fontsize=12); ax.set_ylim(0, 105); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+            fig.tight_layout(); fig.savefig(os.path.join(output_dir, '03f_efficiency.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "03_convergence_analysis.png"), dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"[图表3] 收敛性分析: {output_dir}/03_convergence_analysis.png")
-
-        # ── 图4: 综合仪表盘 ──
-        fig = plt.figure(figsize=(20, 12))
+        # ── 04 仪表盘（保留概览，高 DPI）────────────────
+        fig = plt.figure(figsize=(24, 14))
         gs = fig.add_gridspec(3, 4, hspace=0.35, wspace=0.3)
-        fig.suptitle('YOLO Training Dashboard', fontsize=16, fontweight='bold', y=0.98)
+        fig.suptitle('YOLO Training Dashboard', fontsize=18, fontweight='bold', y=0.98)
 
-        # 全图损失
         ax = fig.add_subplot(gs[0, :2])
-        for key, label, color in [('train/box_loss', 'Train Box', '#2196F3'),
-                                   ('val/box_loss', 'Val Box', '#EF5350'),
-                                   ('train/cls_loss', 'Train Cls', '#FF9800'),
-                                   ('train/dfl_loss', 'Train DFL', '#9C27B0')]:
-            if key in rows[0]:
-                ax.plot(epochs, [r[key] for r in rows], '-', color=color, linewidth=1.2, alpha=0.8, label=label)
-        ax.set_title('All Losses Overview', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('Loss')
-        ax.legend(fontsize=7, ncol=4); ax.grid(True, alpha=0.3)
+        for key, label, color in [('train/box_loss','Train Box','#2196F3'),('val/box_loss','Val Box','#EF5350'),
+                                   ('train/cls_loss','Train Cls','#FF9800'),('train/dfl_loss','Train DFL','#9C27B0')]:
+            if key in rows[0]: ax.plot(epochs, [r[key] for r in rows], '-', color=color, lw=1.2, alpha=0.8, label=label)
+        ax.set_title('All Losses Overview', fontsize=14, fontweight='bold'); ax.set_xlabel('Epoch'); ax.set_ylabel('Loss')
+        ax.legend(fontsize=8, ncol=4); ax.grid(True, alpha=0.3)
 
-        # mAP 综合
         ax = fig.add_subplot(gs[0, 2:])
-        for key, label, color in [('metrics/mAP50(B)', 'mAP@0.5', '#4CAF50'),
-                                   ('metrics/mAP50-95(B)', 'mAP@0.5:0.95', '#2196F3')]:
-            if key in rows[0]:
-                ax.plot(epochs, [r[key] for r in rows], '-', color=color, linewidth=2, label=label)
-        ax.set_title('Detection Performance', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('mAP')
-        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+        for key, label, color in [('metrics/mAP50(B)','mAP@0.5','#4CAF50'),('metrics/mAP50-95(B)','mAP@0.5:0.95','#2196F3')]:
+            if key in rows[0]: ax.plot(epochs, [r[key] for r in rows], '-', color=color, lw=2, label=label)
+        ax.set_title('Detection Performance', fontsize=14, fontweight='bold'); ax.set_xlabel('Epoch'); ax.set_ylabel('mAP')
+        ax.legend(fontsize=10); ax.grid(True, alpha=0.3)
 
-        # 训练统计
-        ax = fig.add_subplot(gs[1, 0])
-        ax.axis('off')
+        ax = fig.add_subplot(gs[1, 0]); ax.axis('off')
         stats = f"Training Summary\n{'─'*25}\nEpochs: {len(rows)}\n"
-        for k, label in [('metrics/mAP50(B)', 'Best mAP@0.5'),
-                          ('metrics/mAP50-95(B)', 'Best mAP@0.5:0.95'),
-                          ('metrics/precision(B)', 'Best Precision'),
-                          ('metrics/recall(B)', 'Best Recall')]:
+        for k, label in [('metrics/mAP50(B)','Best mAP@0.5'),('metrics/mAP50-95(B)','Best mAP@0.5:0.95'),
+                          ('metrics/precision(B)','Best Precision'),('metrics/recall(B)','Best Recall')]:
             if k in rows[0]:
-                vals = [r[k] for r in rows]
-                best_v, best_e = max(vals), vals.index(max(vals)) + 1
+                vals = [r[k] for r in rows]; best_v, best_e = max(vals), vals.index(max(vals))+1
                 stats += f"{label}: {best_v:.4f} (e{best_e})\n"
-        ax.text(0.05, 0.95, stats, transform=ax.transAxes, fontsize=8,
-                verticalalignment='top', fontfamily='monospace',
+        ax.text(0.05, 0.95, stats, transform=ax.transAxes, fontsize=9, verticalalignment='top', fontfamily='monospace',
                 bbox=dict(boxstyle='round', facecolor='#F5F5F5', alpha=0.8))
 
-        # 各指标最优条形图
         ax = fig.add_subplot(gs[1, 1:3])
-        metrics_summary = []
-        labels_summary = []
-        colors_summary = []
-        for k, label, c in [('metrics/mAP50(B)', 'mAP@0.5', '#4CAF50'),
-                             ('metrics/mAP50-95(B)', 'mAP@0.5:0.95', '#2196F3'),
-                             ('metrics/precision(B)', 'Precision', '#FF9800'),
-                             ('metrics/recall(B)', 'Recall', '#FF5722')]:
-            if k in rows[0]:
-                vals = [r[k] for r in rows]
-                metrics_summary.append(max(vals))
-                labels_summary.append(label)
-                colors_summary.append(c)
-        bars = ax.barh(labels_summary, metrics_summary, color=colors_summary, alpha=0.8)
-        for bar, v in zip(bars, metrics_summary):
-            ax.text(bar.get_width() + 0.005, bar.get_y() + bar.get_height()/2,
-                    f'{v:.4f}', va='center', fontsize=10, fontweight='bold')
-        ax.set_title('Best Metrics Summary', fontsize=12, fontweight='bold')
-        ax.set_xlim(0, max(metrics_summary)*1.15 if metrics_summary else 1)
-        ax.grid(True, alpha=0.3, axis='x')
+        m_sum, l_sum, c_sum = [], [], []
+        for k, label, c in [('metrics/mAP50(B)','mAP@0.5','#4CAF50'),('metrics/mAP50-95(B)','mAP@0.5:0.95','#2196F3'),
+                             ('metrics/precision(B)','Precision','#FF9800'),('metrics/recall(B)','Recall','#FF5722')]:
+            if k in rows[0]: vals = [r[k] for r in rows]; m_sum.append(max(vals)); l_sum.append(label); c_sum.append(c)
+        bars = ax.barh(l_sum, m_sum, color=c_sum, alpha=0.8)
+        for bar, v in zip(bars, m_sum): ax.text(bar.get_width()+0.005, bar.get_y()+bar.get_height()/2, f'{v:.4f}', va='center', fontsize=11, fontweight='bold')
+        ax.set_title('Best Metrics Summary', fontsize=14, fontweight='bold'); ax.set_xlim(0, max(m_sum)*1.15 if m_sum else 1); ax.grid(True, alpha=0.3, axis='x')
 
-        # Precision-Recall 散点
         ax = fig.add_subplot(gs[1, 3])
         if 'metrics/precision(B)' in rows[0] and 'metrics/recall(B)' in rows[0]:
-            p_arr = [r['metrics/precision(B)'] for r in rows]
-            r_arr = [r['metrics/recall(B)'] for r in rows]
-            scatter = ax.scatter(r_arr, p_arr, c=epochs, cmap='viridis', s=30, alpha=0.7)
-            ax.set_title('P-R Space Over Training')
-            ax.set_xlabel('Recall'); ax.set_ylabel('Precision')
-            plt.colorbar(scatter, ax=ax, label='Epoch')
+            sc = ax.scatter([r['metrics/recall(B)'] for r in rows], [r['metrics/precision(B)'] for r in rows], c=epochs, cmap='viridis', s=40, alpha=0.7)
+            ax.set_title('P-R Space Over Training'); ax.set_xlabel('Recall'); ax.set_ylabel('Precision'); plt.colorbar(sc, ax=ax, label='Epoch')
 
-        # 损失下降直方图
         ax = fig.add_subplot(gs[2, :2])
-        for key, label, color in [('train/box_loss', 'Box', '#2196F3'),
-                                   ('train/cls_loss', 'Cls', '#FF9800'),
-                                   ('train/dfl_loss', 'DFL', '#9C27B0')]:
+        for key, label, color in [('train/box_loss','Box','#2196F3'),('train/cls_loss','Cls','#FF9800'),('train/dfl_loss','DFL','#9C27B0')]:
             if key in rows[0]:
                 vals = [r[key] for r in rows]
-                if len(vals) > 1:
-                    drops = [vals[i-1] - vals[i] for i in range(1, len(vals))]
-                    ax.hist(drops, bins=20, alpha=0.5, color=color, label=f'{label} Δ')
-        ax.set_title('Per-Epoch Loss Change Distribution')
-        ax.set_xlabel('Loss Change (Δ)'); ax.set_ylabel('Frequency')
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3, axis='y')
+                if len(vals) > 1: drops = [vals[i-1]-vals[i] for i in range(1,len(vals))]; ax.hist(drops, bins=20, alpha=0.5, color=color, label=f'{label}')
+        ax.set_title('Per-Epoch Loss Change Distribution'); ax.set_xlabel('Loss Change'); ax.set_ylabel('Frequency'); ax.legend(fontsize=9); ax.grid(True, alpha=0.3, axis='y')
 
-        # mAP 改进积累
         ax = fig.add_subplot(gs[2, 2:])
         if 'metrics/mAP50(B)' in rows[0]:
-            mAP_vals = [r['metrics/mAP50(B)'] for r in rows]
-            ax.plot(epochs, mAP_vals, '-', color='#4CAF50', linewidth=2)
-            # 标注最大提升 epoch
+            mAP_vals = [r['metrics/mAP50(B)'] for r in rows]; ax.plot(epochs, mAP_vals, '-', color='#4CAF50', lw=2)
             if len(mAP_vals) > 1:
-                diffs = [mAP_vals[i]-mAP_vals[i-1] for i in range(1, len(mAP_vals))]
-                top3 = sorted(range(len(diffs)), key=lambda i: diffs[i], reverse=True)[:3]
-                for i in top3:
-                    ax.annotate(f'+{diffs[i]:.4f}', xy=(i+2, mAP_vals[i+1]),
-                                fontsize=8, color='darkgreen',
+                diffs = [mAP_vals[i]-mAP_vals[i-1] for i in range(1,len(mAP_vals))]
+                for i in sorted(range(len(diffs)), key=lambda i: diffs[i], reverse=True)[:3]:
+                    ax.annotate(f'+{diffs[i]:.4f}', xy=(i+2, mAP_vals[i+1]), fontsize=9, color='darkgreen',
                                 arrowprops=dict(arrowstyle='->', lw=0.8, color='darkgreen'))
-        ax.set_title('mAP@0.5 with Top Gains Annotated')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('mAP@0.5')
-        ax.grid(True, alpha=0.3)
+        ax.set_title('mAP@0.5 with Top Gains'); ax.set_xlabel('Epoch'); ax.set_ylabel('mAP@0.5'); ax.grid(True, alpha=0.3)
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "04_dashboard.png"), dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"[图表4] 综合仪表盘: {output_dir}/04_dashboard.png")
+        fig.tight_layout(); fig.savefig(os.path.join(output_dir, '04_dashboard.png'), dpi=_CHART_DPI, bbox_inches='tight'); plt.close(fig)
+        print(f"[图表] 04_dashboard.png")
 
     except ImportError:
         print("[跳过] matplotlib 未安装，无法生成图表")
@@ -419,7 +330,7 @@ def _make_test_comparison_chart(val_map50, val_map50_95, test_map50, test_map50_
 
         plt.tight_layout()
         path = os.path.join(output_dir, "05_test_comparison.png")
-        plt.savefig(path, dpi=150, bbox_inches='tight')
+        plt.savefig(path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"[图表5] 测试对比: {path}")
     except Exception as e:

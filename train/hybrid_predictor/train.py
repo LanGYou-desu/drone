@@ -155,7 +155,11 @@ class TrainingLogger:
         return min(losses) if losses else float('inf')
 
 
-# ── 图表生成（多种评价指标）─────────────────────────────
+# ── 图表生成（单图高分辨率，适合论文发表）────────────────
+# 全局设置
+_CHART_DPI = 300
+_CHART_SIZE = (10, 6)
+_CHART_SIZE_WIDE = (12, 6)
 
 # 全局色板
 _COLORS = {
@@ -164,482 +168,418 @@ _COLORS = {
     'speed': '#FF7043', 'accel': '#AB47BC', 'height': '#26C6DA',
 }
 
-
-def _make_loss_breakdown_chart(logger: TrainingLogger, output_dir: str):
-    """图1: 损失分解 — 每阶段 train/val 损失 + 最优标注"""
-    stages_data = {}
-    for e in logger.history:
-        s = e["stage"]
-        if s not in stages_data:
-            stages_data[s] = {"epochs": [], "train": [], "val": []}
-        stages_data[s]["epochs"].append(e["epoch"])
-        stages_data[s]["train"].append(e["train_loss"])
-        stages_data[s]["val"].append(e["val_loss"])
-
-    n_stages = len(stages_data)
-    fig, axes = _plt.subplots(2, n_stages, figsize=(6 * n_stages, 10))
-    if n_stages == 1:
-        axes = axes.reshape(2, 1)
-
-    for idx, (stage, data) in enumerate(sorted(stages_data.items())):
-        color = _COLORS.get(f'stage{stage}', '#333')
-        epochs = data["epochs"]
-
-        # 上排: 损失曲线
-        ax = axes[0, idx]
-        ax.plot(epochs, data["train"], '-', color=color, linewidth=1.8, alpha=0.85, label='Train')
-        ax.plot(epochs, data["val"], '--', color=_COLORS['val'], linewidth=1.8, alpha=0.85, label='Val')
-        # 最优标注
-        best_epoch = epochs[data["val"].index(min(data["val"]))]
-        best_val = min(data["val"])
-        ax.axvline(x=best_epoch, color=_COLORS['best'], linestyle=':', alpha=0.5, linewidth=1)
-        ax.annotate(f'Best: {best_val:.4f}', xy=(best_epoch, best_val),
-                    xytext=(10, 15), textcoords='offset points', fontsize=9,
-                    arrowprops=dict(arrowstyle='->', lw=1, color=_COLORS['best']),
-                    color=_COLORS['best'], fontweight='bold')
-        ax.set_title(f'Stage {stage} — Loss', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('Loss')
-        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
-
-        # 下排: 对数尺度损失（更清晰观察收敛）
-        ax = axes[1, idx]
-        ax.semilogy(epochs, data["train"], '-', color=color, linewidth=1.5, alpha=0.8, label='Train (log)')
-        ax.semilogy(epochs, data["val"], '--', color=_COLORS['val'], linewidth=1.5, alpha=0.8, label='Val (log)')
-        ax.set_title(f'Stage {stage} — Loss (log scale)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('Loss (log)')
-        ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
-
-    _plt.suptitle('Training Loss Breakdown', fontsize=15, fontweight='bold', y=1.01)
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "01_loss_breakdown.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表1] 损失分解: {path}")
+def _savefig(fig, output_dir, name):
+    path = os.path.join(output_dir, name)
+    fig.savefig(path, dpi=_CHART_DPI, bbox_inches='tight')
+    _plt.close(fig)
+    print(f"[图表] {name}")
+    return path
 
 
-def _make_convergence_chart(logger: TrainingLogger, output_dir: str):
-    """图2: 收敛性分析 — val/train 比、损失下降率、学习率"""
-    fig, axes = _plt.subplots(2, 3, figsize=(18, 10))
-    fig.suptitle('Convergence Analysis', fontsize=14, fontweight='bold')
+# ═══════════════════ 01 损失曲线（每阶段一张）═══════════════
 
-    # 获取全部 epoch 序列（跨阶段连续）
+def _chart_loss_stage(logger, output_dir, stage, color):
+    data = [e for e in logger.history if e["stage"] == stage]
+    if not data: return
+    epochs = [e["epoch"] for e in data]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    ax.plot(epochs, [e["train_loss"] for e in data], '-', color=color, lw=2, alpha=0.85, label='Train')
+    ax.plot(epochs, [e["val_loss"] for e in data], '--', color=_COLORS['val'], lw=2, alpha=0.85, label='Val')
+    best_i = min(range(len(data)), key=lambda i: data[i]["val_loss"])
+    ax.axvline(x=epochs[best_i], color=_COLORS['best'], linestyle=':', alpha=0.5, lw=1)
+    ax.annotate(f'Best: {data[best_i]["val_loss"]:.4f}', xy=(epochs[best_i], data[best_i]["val_loss"]),
+                xytext=(10, 15), textcoords='offset points', fontsize=11,
+                arrowprops=dict(arrowstyle='->', lw=1, color=_COLORS['best']), color=_COLORS['best'], fontweight='bold')
+    ax.set_title(f'Stage {stage} — Training Loss', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, f'01{chr(96+stage)}_loss_s{stage}.png')
+
+
+# ═══════════════════ 02 收敛性分析（单图）═══════════════════
+
+def _chart_global_loss(logger, output_dir):
     all_epochs = list(range(1, len(logger.history) + 1))
     train_losses = [e["train_loss"] for e in logger.history]
     val_losses = [e["val_loss"] for e in logger.history]
-    stage_boundaries = []
-    current_stage = None
-    for i, e in enumerate(logger.history):
-        if e["stage"] != current_stage:
-            stage_boundaries.append(i)
-            current_stage = e["stage"]
+    boundaries = [i for i, e in enumerate(logger.history) if i == 0 or e["stage"] != logger.history[i-1]["stage"]]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    ax.plot(all_epochs, train_losses, '-', color=_COLORS['train'], lw=1.5, alpha=0.8, label='Train')
+    ax.plot(all_epochs, val_losses, '-', color=_COLORS['val'], lw=1.5, alpha=0.8, label='Val')
+    for b in boundaries[1:]: ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, lw=0.8)
+    ax.set_title('Global Loss Curve', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '02a_global_loss.png')
 
-    # (0,0) 全局损失曲线
-    ax = axes[0, 0]
-    ax.plot(all_epochs, train_losses, '-', color=_COLORS['train'], linewidth=1.2, alpha=0.8, label='Train')
-    ax.plot(all_epochs, val_losses, '-', color=_COLORS['val'], linewidth=1.2, alpha=0.8, label='Val')
-    for b in stage_boundaries[1:]:
-        ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, linewidth=0.8)
-    ax.set_title('Global Loss Curve')
-    ax.set_xlabel('Global Epoch'); ax.set_ylabel('Loss')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
 
-    # (0,1) val/train 比
-    ax = axes[0, 1]
-    ratios = [v / max(t, 1e-8) for v, t in zip(val_losses, train_losses)]
-    ax.plot(all_epochs, ratios, '-', color='#7E57C2', linewidth=1.5)
+def _chart_overfitting(logger, output_dir):
+    all_epochs = list(range(1, len(logger.history) + 1))
+    ratios = [e["val_loss"] / max(e["train_loss"], 1e-8) for e in logger.history]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    ax.plot(all_epochs, ratios, '-', color='#7E57C2', lw=2)
     ax.axhline(y=1.0, color='gray', linestyle=':', alpha=0.5)
     ax.fill_between(all_epochs, 0, ratios, alpha=0.15, color='#7E57C2')
-    ax.set_title('Val/Train Ratio (Overfitting Detection)')
-    ax.set_xlabel('Global Epoch'); ax.set_ylabel('Ratio')
+    ax.set_title('Val/Train Ratio (Overfitting Detection)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Ratio', fontsize=12)
     ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '02b_overfitting.png')
 
-    # (0,2) 损失下降百分比
-    ax = axes[0, 2]
-    for stage, data in sorted({e["stage"]: [] for e in logger.history}.items()):
-        stage_losses = [e["val_loss"] for e in logger.history if e["stage"] == stage]
-        if len(stage_losses) < 2:
-            continue
-        improvements = [(stage_losses[0] - l) / stage_losses[0] * 100 for l in stage_losses]
-        color = _COLORS.get(f'stage{stage}', '#333')
-        ax.plot(range(1, len(improvements) + 1), improvements, '-o', color=color,
-                markersize=3, linewidth=1.5, label=f'Stage {stage}')
-    ax.set_title('Improvement Over Initial Loss (%)')
-    ax.set_xlabel('Epoch (within stage)'); ax.set_ylabel('Improvement %')
+
+def _chart_improvement(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    for stage in sorted(set(e["stage"] for e in logger.history)):
+        losses = [e["val_loss"] for e in logger.history if e["stage"] == stage]
+        if len(losses) < 2: continue
+        imp = [(losses[0] - l) / losses[0] * 100 for l in losses]
+        ax.plot(range(1, len(imp)+1), imp, '-o', color=_COLORS.get(f'stage{stage}','#333'), markersize=4, lw=2, label=f'Stage {stage}')
+    ax.set_title('Improvement Over Initial Loss (%)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch (within stage)', fontsize=12); ax.set_ylabel('Improvement %', fontsize=12)
     ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '02c_improvement.png')
 
-    # (1,0) 学习率衰减
-    ax = axes[1, 0]
+
+def _chart_lr_schedule(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     for stage in sorted(set(e["stage"] for e in logger.history)):
         lrs = [e["lr"] for e in logger.history if e["stage"] == stage]
-        epochs_s = list(range(1, len(lrs) + 1))
-        color = _COLORS.get(f'stage{stage}', '#333')
-        ax.semilogy(epochs_s, lrs, '-o', color=color, markersize=3, linewidth=1.5, label=f'Stage {stage}')
-    ax.set_title('Learning Rate Schedule (log)')
-    ax.set_xlabel('Epoch (within stage)'); ax.set_ylabel('LR')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+        ax.semilogy(range(1, len(lrs)+1), lrs, '-o', color=_COLORS.get(f'stage{stage}','#333'), markersize=4, lw=2, label=f'Stage {stage}')
+    ax.set_title('Learning Rate Schedule', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch (within stage)', fontsize=12); ax.set_ylabel('LR', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '02d_lr_schedule.png')
 
-    # (1,1) 每 epoch 耗时
-    ax = axes[1, 1]
+
+def _chart_epoch_time(logger, output_dir):
+    all_epochs = list(range(1, len(logger.history) + 1))
     times = [e["epoch_time_s"] for e in logger.history]
-    colors_t = [_COLORS.get(f'stage{e["stage"]}', '#333') for e in logger.history]
+    colors_t = [_COLORS.get(f'stage{e["stage"]}','#333') for e in logger.history]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     ax.bar(all_epochs, times, color=colors_t, alpha=0.7, width=0.8)
     avg_time = sum(times) / len(times) if times else 0
-    ax.axhline(y=avg_time, color='red', linestyle='--', alpha=0.5, label=f'Avg: {avg_time:.1f}s')
-    ax.set_title('Epoch Training Time')
-    ax.set_xlabel('Global Epoch'); ax.set_ylabel('Time (s)')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3, axis='y')
+    ax.axhline(y=avg_time, color='red', linestyle='--', alpha=0.5, lw=1, label=f'Avg: {avg_time:.1f}s')
+    ax.set_title('Epoch Training Time', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Time (s)', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout(); _savefig(fig, output_dir, '02e_epoch_time.png')
 
-    # (1,2) 累积训练时间
-    ax = axes[1, 2]
+
+def _chart_cumulative_time(logger, output_dir):
+    all_epochs = list(range(1, len(logger.history) + 1))
+    times = [e["epoch_time_s"] for e in logger.history]
     cum_times = [sum(times[:i+1]) / 60 for i in range(len(times))]
+    boundaries = [i for i, e in enumerate(logger.history) if i == 0 or e["stage"] != logger.history[i-1]["stage"]]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     ax.fill_between(all_epochs, 0, cum_times, alpha=0.3, color='#26C6DA')
-    ax.plot(all_epochs, cum_times, '-', color='#00838F', linewidth=2)
-    for b in stage_boundaries[1:]:
-        ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, linewidth=0.8)
-    ax.set_title('Cumulative Training Time')
-    ax.set_xlabel('Global Epoch'); ax.set_ylabel('Time (min)')
+    ax.plot(all_epochs, cum_times, '-', color='#00838F', lw=2)
+    for b in boundaries[1:]: ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, lw=0.8)
+    ax.set_title('Cumulative Training Time', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Time (min)', fontsize=12)
     ax.grid(True, alpha=0.3)
-
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "02_convergence_analysis.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表2] 收敛性分析: {path}")
+    fig.tight_layout(); _savefig(fig, output_dir, '02f_cumulative_time.png')
 
 
-def _make_stage_comparison_chart(logger: TrainingLogger, output_dir: str):
-    """图3: 阶段对比 — 柱状图 + 雷达图 + 箱线图"""
+# ═══════════════════ 03 阶段对比（单图）═══════════════════
+
+def _chart_final_vs_best(logger, output_dir):
     stages = sorted(set(e["stage"] for e in logger.history))
-    if len(stages) < 1:
-        return
-
-    fig = _plt.figure(figsize=(18, 6))
-    fig.suptitle('Stage Comparison', fontsize=14, fontweight='bold')
-
-    # (左) 柱状图: 各阶段最终/最优损失
-    ax = fig.add_subplot(1, 3, 1)
-    stage_labels = [f'S{s}' for s in stages]
-    final_losses = []
-    best_losses = []
+    final_losses, best_losses = [], []
     for s in stages:
         s_data = [e for e in logger.history if e["stage"] == s]
         final_losses.append(s_data[-1]["val_loss"] if s_data else 0)
         best_losses.append(min(e["val_loss"] for e in s_data) if s_data else 0)
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    x = range(len(stages)); w = 0.35
+    ax.bar([i-w/2 for i in x], final_losses, w, label='Final Loss', color='#FF9800', alpha=0.85)
+    bars = ax.bar([i+w/2 for i in x], best_losses, w, label='Best Loss', color='#4CAF50', alpha=0.85)
+    for bar in bars: ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.005, f'{bar.get_height():.4f}', ha='center', fontsize=11, fontweight='bold')
+    ax.set_xticks(list(x)); ax.set_xticklabels([f'S{s}' for s in stages], fontsize=12)
+    ax.set_title('Final vs Best Val Loss', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Loss', fontsize=12); ax.legend(fontsize=11); ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout(); _savefig(fig, output_dir, '03a_final_vs_best.png')
 
-    x = range(len(stage_labels))
-    w = 0.35
-    bars1 = ax.bar([i - w/2 for i in x], final_losses, w, label='Final Loss', color='#FF9800', alpha=0.8)
-    bars2 = ax.bar([i + w/2 for i in x], best_losses, w, label='Best Loss', color='#4CAF50', alpha=0.8)
-    for bar in bars2:
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
-                f'{bar.get_height():.4f}', ha='center', fontsize=9, fontweight='bold')
-    ax.set_xticks(list(x)); ax.set_xticklabels(stage_labels)
-    ax.set_title('Final vs Best Val Loss')
-    ax.set_ylabel('Loss'); ax.legend(fontsize=9); ax.grid(True, alpha=0.3, axis='y')
 
-    # (中) 雷达图: 各阶段综合评分
-    ax = fig.add_subplot(1, 3, 2, projection='polar')
-    metrics = ['1-Final\nLoss', '1-Best\nLoss', 'Speed\n(1/epoch)', 'Stability\n(val/train)']
-    scores = {}
+def _chart_stage_radar(logger, output_dir):
+    stages = sorted(set(e["stage"] for e in logger.history))
+    if len(stages) < 1: return
+    metrics = ['1-Final Loss', '1-Best Loss', 'Speed (1/epoch)', 'Stability']
+    all_final = []; all_best = []; all_times = {}
     for s in stages:
         s_data = [e for e in logger.history if e["stage"] == s]
-        if not s_data:
-            continue
-        final = s_data[-1]["val_loss"]
-        best = min(e["val_loss"] for e in s_data)
-        avg_time = sum(e["epoch_time_s"] for e in s_data) / len(s_data)
-        ratios = [e["val_loss"] / max(e["train_loss"], 1e-8) for e in s_data]
-        stability = 1.0 / (max(ratios) - min(ratios) + 1) if len(ratios) > 1 else 1
-
-        # 归一化到 [0,1]
-        max_loss = max(final_losses + best_losses) if final_losses else 1
-        max_time = max(
-            sum(e["epoch_time_s"] for e in logger.history if e["stage"] == ss) / max(len([x for x in logger.history if x["stage"] == ss]), 1)
-            for ss in stages
-        ) if stages else 1
-
-        scores[s] = [
-            1 - final / max(max_loss, 1e-8),
-            1 - best / max(max_loss, 1e-8),
-            1 - avg_time / max(max_time, 1e-8),
-            stability,
-        ]
-
-    angles = [n * 2 * np.pi / len(metrics) for n in range(len(metrics))]
-    angles += angles[:1]  # 闭合
-
-    for s, values in scores.items():
-        values_plot = values + values[:1]
-        color = _COLORS.get(f'stage{s}', '#333')
-        ax.fill(angles, values_plot, alpha=0.15, color=color)
-        ax.plot(angles, values_plot, 'o-', linewidth=2, color=color, label=f'Stage {s}')
-
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(metrics, fontsize=8)
-    ax.set_title('Radar: Stage Comparison', fontsize=12, fontweight='bold', pad=20)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=8)
-
-    # (右) 箱线图: 损失分布
-    ax = fig.add_subplot(1, 3, 3)
-    box_data = [[e["val_loss"] for e in logger.history if e["stage"] == s] for s in stages]
-    bp = ax.boxplot(box_data, patch_artist=True, showmeans=True,
-                    meanprops=dict(marker='D', markerfacecolor='red', markersize=6))
-    ax.set_xticklabels(stage_labels)
-    for i, (patch, s) in enumerate(zip(bp['boxes'], stages)):
-        patch.set_facecolor(_COLORS.get(f'stage{s}', '#333'))
-        patch.set_alpha(0.6)
-    ax.set_title('Val Loss Distribution per Stage')
-    ax.set_ylabel('Loss'); ax.grid(True, alpha=0.3, axis='y')
-
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "03_stage_comparison.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表3] 阶段对比: {path}")
+        all_final.append(s_data[-1]["val_loss"]); all_best.append(min(e["val_loss"] for e in s_data))
+        all_times[s] = sum(e["epoch_time_s"] for e in s_data) / len(s_data)
+    max_loss = max(all_final + all_best) if all_final else 1
+    max_time = max(all_times.values()) if all_times else 1
+    fig = _plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111, projection='polar')
+    angles = [n * 2 * np.pi / len(metrics) for n in range(len(metrics))]; angles += angles[:1]
+    for s in stages:
+        s_data = [e for e in logger.history if e["stage"] == s]
+        final = s_data[-1]["val_loss"]; best = min(e["val_loss"] for e in s_data)
+        ratios = [e["val_loss"]/max(e["train_loss"],1e-8) for e in s_data]
+        stability = 1.0/(max(ratios)-min(ratios)+1) if len(ratios)>1 else 1
+        vals = [1-final/max(max_loss,1e-8), 1-best/max(max_loss,1e-8), 1-all_times[s]/max(max_time,1e-8), stability]
+        color = _COLORS.get(f'stage{s}','#333')
+        ax.fill(angles, vals+vals[:1], alpha=0.15, color=color)
+        ax.plot(angles, vals+vals[:1], 'o-', lw=2, color=color, label=f'Stage {s}')
+    ax.set_xticks(angles[:-1]); ax.set_xticklabels(metrics, fontsize=10)
+    ax.set_title('Stage Comparison Radar', fontsize=14, fontweight='bold', pad=20)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3,1.1), fontsize=10)
+    fig.tight_layout(); _savefig(fig, output_dir, '03b_radar.png')
 
 
-def _make_ade_fde_chart(logger: TrainingLogger, output_dir: str):
-    """图4: ADE/FDE 验证指标曲线"""
-    has_ade = any("ADE" in e for e in logger.history)
-    if not has_ade:
-        print("[图表4] 无 ADE/FDE 数据，跳过")
-        return
+def _chart_stage_boxplot(logger, output_dir):
+    stages = sorted(set(e["stage"] for e in logger.history))
+    box_data = [[e["val_loss"] for e in logger.history if e["stage"]==s] for s in stages]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    bp = ax.boxplot(box_data, patch_artist=True, showmeans=True, meanprops=dict(marker='D', markerfacecolor='red', markersize=8))
+    ax.set_xticklabels([f'S{s}' for s in stages], fontsize=12)
+    for patch, s in zip(bp['boxes'], stages): patch.set_facecolor(_COLORS.get(f'stage{s}','#333')); patch.set_alpha(0.6)
+    ax.set_title('Val Loss Distribution per Stage', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Loss', fontsize=12); ax.grid(True, alpha=0.3, axis='y')
+    fig.tight_layout(); _savefig(fig, output_dir, '03c_boxplot.png')
 
-    fig, axes = _plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('Prediction Accuracy Metrics (ADE / FDE)', fontsize=14, fontweight='bold')
 
-    # 按阶段分组
+# ═══════════════════ 04 ADE/FDE（单图）═══════════════════
+
+def _chart_ade(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     for stage in sorted(set(e["stage"] for e in logger.history)):
-        s_data = [e for e in logger.history if e["stage"] == stage
-                  and "ADE" in e and "FDE" in e]
-        if not s_data:
-            continue
-        epochs = [e["epoch"] for e in s_data]
-        color = _COLORS.get(f'stage{stage}', '#333')
-
-        # ADE
-        ax = axes[0, 0]
-        ade_vals = [e["ADE"] for e in s_data]
-        ax.plot(epochs, ade_vals, 'o-', color=color, markersize=3, linewidth=1.5,
-                label=f'Stage {stage}')
-        ax.set_title('ADE (Average Displacement Error)')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('ADE')
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
-        if ade_vals:
-            best_i = ade_vals.index(min(ade_vals))
-            ax.annotate(f'{ade_vals[best_i]:.3f}', xy=(epochs[best_i], ade_vals[best_i]),
-                        fontsize=8, color='darkred')
-
-        # FDE
-        ax = axes[0, 1]
-        fde_vals = [e["FDE"] for e in s_data]
-        ax.plot(epochs, fde_vals, 's--', color=color, markersize=3, linewidth=1.5,
-                label=f'Stage {stage}')
-        ax.set_title('FDE (Final Displacement Error)')
-        ax.set_xlabel('Epoch'); ax.set_ylabel('FDE')
-        ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
-        if fde_vals:
-            best_i = fde_vals.index(min(fde_vals))
-            ax.annotate(f'{fde_vals[best_i]:.3f}', xy=(epochs[best_i], fde_vals[best_i]),
-                        fontsize=8, color='darkred')
-
-        # ADE vs FDE 对比（各阶段数据叠加在同一图上）
-        ax = axes[1, 0]
-        ax.scatter(ade_vals, fde_vals, c=epochs, cmap='viridis', s=25, alpha=0.7, label=f'S{stage}')
-
-        # ADE 改进率（各阶段数据叠加在同一图上）
-        ax = axes[1, 1]
-        if len(ade_vals) > 1:
-            imp = [(ade_vals[0] - v) / max(ade_vals[0], 1e-8) * 100 for v in ade_vals]
-            ax.plot(epochs, imp, '-', color=color, linewidth=1.5, label=f'Stage {stage}')
-
-    # 设置 subplot [1,0] / [1,1] 标题和标签（循环外，避免覆盖）
-    axes[1, 0].set_title('ADE vs FDE (color=epoch)')
-    axes[1, 0].set_xlabel('ADE'); axes[1, 0].set_ylabel('FDE')
-    axes[1, 0].grid(True, alpha=0.3)
-
-    axes[1, 1].set_title('ADE Improvement Over Initial (%)')
-    axes[1, 1].set_xlabel('Epoch'); axes[1, 1].set_ylabel('Improvement %')
-    axes[1, 1].axhline(y=0, color='gray', linestyle=':', alpha=0.5)
-    axes[1, 1].legend(fontsize=8); axes[1, 1].grid(True, alpha=0.3)
-
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "04_ade_fde.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表4] ADE/FDE: {path}")
+        s_data = [e for e in logger.history if e["stage"]==stage and "ADE" in e]
+        if not s_data: continue
+        epochs = [e["epoch"] for e in s_data]; vals = [e["ADE"] for e in s_data]
+        ax.plot(epochs, vals, 'o-', color=_COLORS.get(f'stage{stage}','#333'), markersize=4, lw=2, label=f'Stage {stage}')
+        best_i = vals.index(min(vals))
+        ax.annotate(f'{vals[best_i]:.3f}', xy=(epochs[best_i], vals[best_i]), fontsize=10, color='darkred')
+    ax.set_title('ADE (Average Displacement Error)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('ADE', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '04a_ade.png')
 
 
-def _make_physics_metrics_chart(logger: TrainingLogger, output_dir: str):
-    """图5: 物理指标 — 速度/加速度/高度违反率"""
-    has_physics = any("speed_violation" in e for e in logger.history)
-    if not has_physics:
-        print("[图表5] 无物理指标数据，跳过")
-        return
+def _chart_fde(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    for stage in sorted(set(e["stage"] for e in logger.history)):
+        s_data = [e for e in logger.history if e["stage"]==stage and "FDE" in e]
+        if not s_data: continue
+        epochs = [e["epoch"] for e in s_data]; vals = [e["FDE"] for e in s_data]
+        ax.plot(epochs, vals, 's--', color=_COLORS.get(f'stage{stage}','#333'), markersize=4, lw=2, label=f'Stage {stage}')
+        best_i = vals.index(min(vals))
+        ax.annotate(f'{vals[best_i]:.3f}', xy=(epochs[best_i], vals[best_i]), fontsize=10, color='darkred')
+    ax.set_title('FDE (Final Displacement Error)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('FDE', fontsize=12)
+    ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '04b_fde.png')
 
-    fig, axes = _plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('Physics Constraint Violations', fontsize=14, fontweight='bold')
 
-    all_epochs = list(range(1, len(logger.history) + 1))
+def _chart_ade_vs_fde(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    for stage in sorted(set(e["stage"] for e in logger.history)):
+        s_data = [e for e in logger.history if e["stage"]==stage and "ADE" in e and "FDE" in e]
+        if not s_data: continue
+        ax.scatter([e["ADE"] for e in s_data], [e["FDE"] for e in s_data], c=[e["epoch"] for e in s_data], cmap='viridis', s=40, alpha=0.7, label=f'S{stage}')
+    ax.set_title('ADE vs FDE', fontsize=14, fontweight='bold')
+    ax.set_xlabel('ADE', fontsize=12); ax.set_ylabel('FDE', fontsize=12); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '04c_ade_vs_fde.png')
 
-    metrics_config = [
-        ("speed_violation", "Speed Violation Rate", _COLORS['speed'], axes[0, 0]),
-        ("accel_violation", "Acceleration Violation Rate", _COLORS['accel'], axes[0, 1]),
-        ("height_violation", "Height Violation Rate", _COLORS['height'], axes[1, 0]),
-    ]
 
-    for key, title, color, ax in metrics_config:
-        if key in logger.history[0]:
-            vals = [e.get(key, 0) for e in logger.history]
-            ax.plot(all_epochs, vals, '-', color=color, linewidth=1.8, alpha=0.8)
-            ax.fill_between(all_epochs, 0, vals, alpha=0.1, color=color)
-            ax.set_title(title, fontsize=12, fontweight='bold')
-            ax.set_xlabel('Global Epoch'); ax.set_ylabel('Rate')
-            ax.grid(True, alpha=0.3)
-            if vals:
-                best_i = vals.index(min(vals))
-                ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i + 1, vals[best_i]),
-                            fontsize=9, color='darkred', fontweight='bold')
+def _chart_ade_improvement(logger, output_dir):
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    for stage in sorted(set(e["stage"] for e in logger.history)):
+        s_data = [e for e in logger.history if e["stage"]==stage and "ADE" in e]
+        if len(s_data) < 2: continue
+        vals = [e["ADE"] for e in s_data]; imp = [(vals[0]-v)/max(vals[0],1e-8)*100 for v in vals]
+        ax.plot([e["epoch"] for e in s_data], imp, '-', color=_COLORS.get(f'stage{stage}','#333'), lw=2, label=f'Stage {stage}')
+    ax.set_title('ADE Improvement Over Initial (%)', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Improvement %', fontsize=12)
+    ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5); ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '04d_ade_improvement.png')
 
-    ax = axes[1, 1]
-    if all(k in logger.history[0] for k in ["speed_violation", "accel_violation", "height_violation"]):
-        phys_scores = []
-        for e in logger.history:
-            score = 1.0 - (e.get("speed_violation", 0) + e.get("accel_violation", 0) + e.get("height_violation", 0)) / 3
-            phys_scores.append(max(0, score))
-        ax.plot(all_epochs, phys_scores, '-', color='#4CAF50', linewidth=2)
-        ax.fill_between(all_epochs, 0, phys_scores, alpha=0.15, color='#4CAF50')
-        ax.axhline(y=1.0, color='gray', linestyle=':', alpha=0.5)
-        ax.set_title('Composite Physics Score (↑ better)', fontsize=12, fontweight='bold')
-        ax.set_xlabel('Global Epoch'); ax.set_ylabel('Score'); ax.set_ylim(0, 1.05)
-        ax.grid(True, alpha=0.3)
 
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "05_physics_metrics.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表5] 物理指标: {path}")
+# ═══════════════════ 05 物理指标（单图）═══════════════════
 
+def _chart_physics_single(logger, output_dir, key, title, color, fname):
+    if key not in logger.history[0]: return
+    epochs = list(range(1, len(logger.history)+1))
+    vals = [e.get(key, 0) for e in logger.history]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    ax.plot(epochs, vals, '-', color=color, lw=2, alpha=0.85)
+    ax.fill_between(epochs, 0, vals, alpha=0.1, color=color)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Rate', fontsize=12)
+    ax.grid(True, alpha=0.3)
+    if vals: best_i = vals.index(min(vals)); ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i+1, vals[best_i]), fontsize=11, color='darkred', fontweight='bold')
+    fig.tight_layout(); _savefig(fig, output_dir, fname)
+
+
+def _chart_physics_score(logger, output_dir):
+    keys = ["speed_violation", "accel_violation", "height_violation"]
+    if not all(k in logger.history[0] for k in keys): return
+    epochs = list(range(1, len(logger.history)+1))
+    scores = [max(0, 1.0 - sum(e.get(k,0) for k in keys)/3) for e in logger.history]
+    fig, ax = _plt.subplots(figsize=_CHART_SIZE)
+    ax.plot(epochs, scores, '-', color='#4CAF50', lw=2)
+    ax.fill_between(epochs, 0, scores, alpha=0.15, color='#4CAF50')
+    ax.axhline(y=1.0, color='gray', linestyle=':', alpha=0.5)
+    ax.set_title('Composite Physics Score', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Score', fontsize=12); ax.set_ylim(0, 1.05)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout(); _savefig(fig, output_dir, '05d_physics_score.png')
+
+
+# ═══════════════════ 06 仪表盘（保留概览）═══════════════════
 
 def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
-    """图6: 综合仪表盘 — 一页展示所有关键指标"""
-    fig = _plt.figure(figsize=(20, 12))
+    """综合仪表盘 — 高 DPI 版本"""
+    fig = _plt.figure(figsize=(24, 14))
     gs = fig.add_gridspec(3, 4, hspace=0.35, wspace=0.3)
-    fig.suptitle('Phy-ODE-Diffusion Training Dashboard', fontsize=16, fontweight='bold', y=0.98)
-
-    all_epochs = list(range(1, len(logger.history) + 1))
+    fig.suptitle('Phy-ODE-Diffusion Training Dashboard', fontsize=18, fontweight='bold', y=0.98)
+    all_epochs = list(range(1, len(logger.history)+1))
     train_losses = [e["train_loss"] for e in logger.history]
     val_losses = [e["val_loss"] for e in logger.history]
 
-    # Row 0: 损失曲线全景
-    ax = fig.add_subplot(gs[0, :2])
+    ax = fig.add_subplot(gs[0,:2])
     for stage in sorted(set(e["stage"] for e in logger.history)):
-        idxs = [i for i, e in enumerate(logger.history) if e["stage"] == stage]
+        idxs = [i for i,e in enumerate(logger.history) if e["stage"]==stage]
         ep = [all_epochs[i] for i in idxs]
-        tr = [train_losses[i] for i in idxs]
-        vl = [val_losses[i] for i in idxs]
-        color = _COLORS.get(f'stage{stage}', '#333')
-        ax.plot(ep, tr, '-', color=color, linewidth=1.2, alpha=0.7)
-        ax.plot(ep, vl, '--', color=color, linewidth=1.5, alpha=0.9, label=f'S{stage} Val')
-    ax.set_title('Loss Overview (— Train, --- Val)', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Global Epoch'); ax.set_ylabel('Loss')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+        color = _COLORS.get(f'stage{stage}','#333')
+        ax.plot(ep, [train_losses[i] for i in idxs], '-', color=color, lw=1.2, alpha=0.7)
+        ax.plot(ep, [val_losses[i] for i in idxs], '--', color=color, lw=1.5, alpha=0.9, label=f'S{stage} Val')
+    ax.set_title('Loss Overview', fontsize=14, fontweight='bold'); ax.set_xlabel('Global Epoch'); ax.set_ylabel('Loss')
+    ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
 
-    # Row 0 right: 训练统计
-    ax = fig.add_subplot(gs[0, 2])
-    stats_text = "Training Statistics\n" + "─" * 25 + "\n"
+    ax = fig.add_subplot(gs[0,2]); ax.axis('off')
+    stats = "Training Statistics\n" + "─"*25 + "\n"
     for s in sorted(set(e["stage"] for e in logger.history)):
-        s_data = [e for e in logger.history if e["stage"] == s]
-        if s_data:
-            stats_text += f"Stage {s}:\n"
-            stats_text += f"  Epochs: {len(s_data)}\n"
-            stats_text += f"  Best Val: {min(e['val_loss'] for e in s_data):.4f}\n"
-            stats_text += f"  Final Val: {s_data[-1]['val_loss']:.4f}\n"
-            stats_text += f"  Avg Time: {sum(e['epoch_time_s'] for e in s_data)/len(s_data):.1f}s\n"
-    total_time = sum(e["epoch_time_s"] for e in logger.history)
-    stats_text += f"─" * 25 + f"\nTotal: {total_time/60:.1f} min\n"
-    stats_text += f"Best Overall: {logger.best_val_loss:.4f}"
-    ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=8,
-            verticalalignment='top', fontfamily='monospace',
+        sd = [e for e in logger.history if e["stage"]==s]
+        if sd: stats += f"Stage {s}:\n  Epochs: {len(sd)}\n  Best Val: {min(e['val_loss'] for e in sd):.4f}\n  Final: {sd[-1]['val_loss']:.4f}\n"
+    stats += f"─"*25 + f"\nTotal: {sum(e['epoch_time_s'] for e in logger.history)/60:.1f} min\nBest Overall: {logger.best_val_loss:.4f}"
+    ax.text(0.05, 0.95, stats, transform=ax.transAxes, fontsize=9, verticalalignment='top', fontfamily='monospace',
             bbox=dict(boxstyle='round', facecolor='#F5F5F5', alpha=0.8))
-    ax.axis('off')
 
-    # Row 0 right-right: 模型参数
-    ax = fig.add_subplot(gs[0, 3])
-    ax.axis('off')
-    model_text = "Model Architecture\n" + "─" * 25 + "\n"
-    model_text += "Transformer: 3 layers, 4 heads\n"
-    model_text += "d_feat=64, d_context=128\n"
-    model_text += "ODE: d_z=32, a_max=30\n"
-    model_text += "Diffusion: T=500, DDIM=50\n"
-    model_text += "GRU: obs_dim=32\n"
-    model_text += f"─" * 25 + "\n"
-    model_text += "Data: ctx=20, tgt=10\n"
-    ax.text(0.05, 0.95, model_text, transform=ax.transAxes, fontsize=8,
-            verticalalignment='top', fontfamily='monospace',
+    ax = fig.add_subplot(gs[0,3]); ax.axis('off')
+    model_text = "Model\n" + "─"*25 + "\nTransformer: 3L,4H\nd=64, ctx=128\nODE: dz=32, a=30\nDiffusion: T=500\nDDIM: 50 steps\nGRU: obs=32\nData: ctx=20,tgt=10"
+    ax.text(0.05,0.95, model_text, transform=ax.transAxes, fontsize=9, verticalalignment='top', fontfamily='monospace',
             bbox=dict(boxstyle='round', facecolor='#E3F2FD', alpha=0.8))
 
-    # Row 1: 学习曲线细节
-    ax = fig.add_subplot(gs[1, :2])
+    ax = fig.add_subplot(gs[1,:2])
     for stage in sorted(set(e["stage"] for e in logger.history)):
-        lrs = [e["lr"] for e in logger.history if e["stage"] == stage]
-        color = _COLORS.get(f'stage{stage}', '#333')
-        ax.semilogy(range(1, len(lrs) + 1), lrs, '-o', color=color, markersize=2,
-                     linewidth=1.2, label=f'Stage {stage} LR')
-    ax.set_title('Learning Rate Schedule (log scale)', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Epoch (within stage)'); ax.set_ylabel('LR')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+        lrs = [e["lr"] for e in logger.history if e["stage"]==stage]
+        ax.semilogy(range(1,len(lrs)+1), lrs, '-o', color=_COLORS.get(f'stage{stage}','#333'), markersize=3, lw=1.2, label=f'S{stage}')
+    ax.set_title('LR Schedule', fontsize=13, fontweight='bold'); ax.set_xlabel('Epoch'); ax.set_ylabel('LR')
+    ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
 
-    # Row 1 right: 时间分布
-    ax = fig.add_subplot(gs[1, 2:])
+    ax = fig.add_subplot(gs[1,2:])
     times_by_stage = {}
-    for e in logger.history:
-        s = e["stage"]
-        times_by_stage.setdefault(s, []).append(e["epoch_time_s"])
-    stage_labels = [f'Stage {s}' for s in sorted(times_by_stage.keys())]
-    totals = [sum(ts) / 60 for ts in times_by_stage.values()]
-    colors = [_COLORS.get(f'stage{s}', '#333') for s in sorted(times_by_stage.keys())]
-    ax.pie(totals, labels=stage_labels, autopct='%1.1f%%', colors=colors,
-           startangle=90, textprops={'fontsize': 10})
-    ax.set_title(f'Time Distribution ({sum(totals):.1f} min total)', fontsize=12, fontweight='bold')
+    for e in logger.history: times_by_stage.setdefault(e["stage"],[]).append(e["epoch_time_s"])
+    totals = [sum(ts)/60 for ts in times_by_stage.values()]
+    colors = [_COLORS.get(f'stage{s}','#333') for s in sorted(times_by_stage)]
+    ax.pie(totals, labels=[f'S{s}' for s in sorted(times_by_stage)], autopct='%1.1f%%', colors=colors, startangle=90, textprops={'fontsize':10})
+    ax.set_title(f'Time ({sum(totals):.1f} min)', fontsize=13, fontweight='bold')
 
-    # Row 2: 各阶段损失分布直方图
     for idx, s in enumerate(sorted(set(e["stage"] for e in logger.history))):
-        ax = fig.add_subplot(gs[2, idx] if idx < 3 else gs[2, 3])
-        s_vals = [e["val_loss"] for e in logger.history if e["stage"] == s]
-        color = _COLORS.get(f'stage{s}', '#333')
-        ax.hist(s_vals, bins=min(15, len(s_vals)), color=color, alpha=0.6, edgecolor='white')
-        ax.axvline(x=min(s_vals), color='red', linestyle='--', linewidth=1, label=f'Best: {min(s_vals):.4f}')
-        ax.axvline(x=s_vals[-1], color='orange', linestyle='--', linewidth=1, label=f'Final: {s_vals[-1]:.4f}')
-        ax.set_title(f'Stage {s} Loss Histogram', fontsize=11, fontweight='bold')
-        ax.set_xlabel('Val Loss'); ax.set_ylabel('Count')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3, axis='y')
+        ax = fig.add_subplot(gs[2,idx] if idx<3 else gs[2,3])
+        sv = [e["val_loss"] for e in logger.history if e["stage"]==s]
+        ax.hist(sv, bins=min(15,len(sv)), color=_COLORS.get(f'stage{s}','#333'), alpha=0.6, edgecolor='white')
+        ax.axvline(x=min(sv), color='red', linestyle='--', lw=1, label=f'Best:{min(sv):.4f}')
+        ax.axvline(x=sv[-1], color='orange', linestyle='--', lw=1, label=f'Final:{sv[-1]:.4f}')
+        ax.set_title(f'S{s} Loss Hist', fontsize=12, fontweight='bold'); ax.set_xlabel('Val Loss'); ax.legend(fontsize=8); ax.grid(True, alpha=0.3, axis='y')
 
-    _plt.tight_layout()
-    path = os.path.join(output_dir, "06_dashboard.png")
-    _plt.savefig(path, dpi=150, bbox_inches='tight')
-    _plt.close()
-    print(f"[图表6] 综合仪表盘: {path}")
+    fig.tight_layout(); _savefig(fig, output_dir, '06_dashboard.png')
 
+
+# ═══════════════════ 07 测试评价（单图）═══════════════════
+
+def _make_test_chart(metrics: dict, output_dir: str):
+    """测试集评价 — 4 张独立高分辨率图表"""
+    import matplotlib.pyplot as plt
+
+    # a) 精度指标
+    fig, ax = plt.subplots(figsize=_CHART_SIZE)
+    acc = {'Loss': metrics.get('test_loss',0), 'ADE': metrics.get('test_ADE',0), 'FDE': metrics.get('test_FDE',0)}
+    bars = ax.barh(list(acc.keys()), list(acc.values()), color=['#2196F3','#FF9800','#EF5350'], alpha=0.85, height=0.5)
+    for bar, val in zip(bars, acc.values()): ax.text(bar.get_width()+0.002, bar.get_y()+bar.get_height()/2, f'{val:.4f}', va='center', fontsize=12, fontweight='bold')
+    ax.set_title('Test Prediction Accuracy', fontsize=14, fontweight='bold'); ax.set_xlabel('Value', fontsize=12)
+    ax.grid(True, alpha=0.3, axis='x'); ax.set_xlim(0, max(acc.values())*1.2 if max(acc.values())>0 else 1)
+    fig.tight_layout(); _savefig(fig, output_dir, '07a_test_accuracy.png')
+
+    # b) 物理违反率
+    fig, ax = plt.subplots(figsize=_CHART_SIZE)
+    phy = {'Speed': metrics.get('test_speed_violation',0), 'Accel': metrics.get('test_accel_violation',0), 'Height': metrics.get('test_height_violation',0)}
+    bars = ax.barh(list(phy.keys()), list(phy.values()), color=['#FF7043','#AB47BC','#26C6DA'], alpha=0.85, height=0.5)
+    for bar, val in zip(bars, phy.values()): ax.text(bar.get_width()+0.002, bar.get_y()+bar.get_height()/2, f'{val:.4f}', va='center', fontsize=12, fontweight='bold')
+    ax.set_title('Test Physics Violations', fontsize=14, fontweight='bold'); ax.set_xlabel('Rate', fontsize=12)
+    ax.grid(True, alpha=0.3, axis='x'); ax.set_xlim(0, max(phy.values())*1.3 if max(phy.values())>0 else 1)
+    fig.tight_layout(); _savefig(fig, output_dir, '07b_test_physics.png')
+
+    # c) 文字概要
+    fig, ax = plt.subplots(figsize=_CHART_SIZE); ax.axis('off')
+    phy_score = 1.0 - sum(phy.values())/3
+    summary = "Test Evaluation Summary\n"+"─"*28+"\n"
+    for k, v in {**acc, **phy}.items(): summary += f"{k:<18} {v:.4f}\n"
+    summary += "─"*28 + f"\nPhysics Score:     {phy_score:.4f}"
+    ax.text(0.05, 0.95, summary, transform=ax.transAxes, fontsize=12, verticalalignment='top', fontfamily='monospace',
+            bbox=dict(boxstyle='round', facecolor='#F5F5F5', alpha=0.8))
+    fig.tight_layout(); _savefig(fig, output_dir, '07c_test_summary.png')
+
+    # d) 雷达图
+    fig = plt.figure(figsize=(8, 8)); ax = fig.add_subplot(111, projection='polar')
+    labels = ['1-ADE','1-FDE','1-Speed','1-Accel','1-Height','Physics']
+    vals_r = [max(0, 1-acc['ADE']/max(acc['ADE'],0.001)), max(0,1-acc['FDE']/max(acc['FDE'],0.001)),
+              max(0,1-phy['Speed']), max(0,1-phy['Accel']), max(0,1-phy['Height']), phy_score]
+    angles = [n*2*np.pi/len(labels) for n in range(len(labels))]; angles += angles[:1]; vals_r += vals_r[:1]
+    ax.fill(angles, vals_r, alpha=0.2, color='#4CAF50'); ax.plot(angles, vals_r, 'o-', lw=2, color='#4CAF50')
+    ax.set_xticks(angles[:-1]); ax.set_xticklabels(labels, fontsize=10)
+    ax.set_title('Test Radar', fontsize=14, fontweight='bold', pad=20); ax.set_ylim(0, 1.05)
+    fig.tight_layout(); _savefig(fig, output_dir, '07d_test_radar.png')
+
+
+# ═══════════════════ 图表入口 ═══════════════════
 
 def _plot_all_charts(logger: TrainingLogger, output_dir: str):
-    """生成全部 6 张图表"""
-    if not HAS_MPL:
-        print("[跳过] matplotlib 未安装")
-        return
-    if not logger.history:
-        print("[跳过] 训练历史为空")
-        return
-
+    """生成全部训练图表（高分辨率单图，适合论文）"""
+    if not HAS_MPL: print("[跳过] matplotlib 未安装"); return
+    if not logger.history: print("[跳过] 训练历史为空"); return
     os.makedirs(output_dir, exist_ok=True)
-    _make_loss_breakdown_chart(logger, output_dir)       # 01: 损失分解
-    _make_convergence_chart(logger, output_dir)            # 02: 收敛性分析
-    _make_stage_comparison_chart(logger, output_dir)       # 03: 阶段对比
-    _make_ade_fde_chart(logger, output_dir)                # 04: ADE/FDE
-    _make_physics_metrics_chart(logger, output_dir)        # 05: 物理指标
-    _make_training_summary_dashboard(logger, output_dir)   # 06: 综合仪表盘
 
+    # 01 损失曲线（每阶段一张）
+    for s in sorted(set(e["stage"] for e in logger.history)):
+        _chart_loss_stage(logger, output_dir, s, _COLORS.get(f'stage{s}','#333'))
+
+    # 02 收敛性（6 张单图）
+    _chart_global_loss(logger, output_dir)
+    _chart_overfitting(logger, output_dir)
+    _chart_improvement(logger, output_dir)
+    _chart_lr_schedule(logger, output_dir)
+    _chart_epoch_time(logger, output_dir)
+    _chart_cumulative_time(logger, output_dir)
+
+    # 03 阶段对比（3 张单图）
+    _chart_final_vs_best(logger, output_dir)
+    _chart_stage_radar(logger, output_dir)
+    _chart_stage_boxplot(logger, output_dir)
+
+    # 04 ADE/FDE（4 张单图，有数据时才生成）
+    if any("ADE" in e for e in logger.history):
+        _chart_ade(logger, output_dir)
+        _chart_fde(logger, output_dir)
+        _chart_ade_vs_fde(logger, output_dir)
+        _chart_ade_improvement(logger, output_dir)
+    else:
+        print("[图表04] 无 ADE/FDE 数据，跳过")
+
+    # 05 物理指标（4 张单图）
+    if logger.history and "speed_violation" in logger.history[0]:
+        _chart_physics_single(logger, output_dir, "speed_violation", "Speed Violation Rate", _COLORS['speed'], '05a_speed.png')
+        _chart_physics_single(logger, output_dir, "accel_violation", "Acceleration Violation Rate", _COLORS['accel'], '05b_accel.png')
+        _chart_physics_single(logger, output_dir, "height_violation", "Height Violation Rate", _COLORS['height'], '05c_height.png')
+        _chart_physics_score(logger, output_dir)
+    else:
+        print("[图表05] 无物理指标数据，跳过")
+
+    # 06 仪表盘概览
+    _make_training_summary_dashboard(logger, output_dir)
 
 def _save_training_summary(logger: TrainingLogger, config: dict, output_dir: str):
     """保存训练摘要 JSON"""

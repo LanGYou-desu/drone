@@ -89,16 +89,16 @@ python train/yolotrain/train.py \
 
 训练完成后产物位于 `train/yolotrain/train_result/`：
 
-| 文件 | 内容 |
-|------|------|
-| `models/drone_detect_YYYYMMDD_HHMMSS.pt` | 最佳模型副本 |
-| `models/drone_detect/weights/best.pt` | ultralytics 最佳权重 |
-| `01_loss_decomposition.png` | 训练损失分解曲线 |
-| `02_validation_metrics.png` | 验证 mAP/Precision/Recall |
-| `03_convergence_analysis.png` | 收敛性分析 |
-| `04_dashboard.png` | 综合仪表盘 |
-| `05_test_comparison.png` | 验证 vs 测试 mAP 对比 |
-| `training_summary.json` | 训练摘要 |
+| 类别 | 文件 | 内容 |
+|------|------|------|
+| 01 损失 | `01a_box_loss.png` ~ `01d_val_box_loss.png` | Box/Cls/DFL 损失 4 张 |
+| 02 指标 | `02a_precision.png` ~ `02d_mAP50_95.png` | Precision/Recall/mAP 4 张 |
+| 03 收敛 | `03a_improvement.png` ~ `03f_efficiency.png` | 改进率、过拟合、稳定度等 6 张 |
+| 04 概览 | `04_dashboard.png` | 综合仪表盘 |
+| 05 对比 | `05_test_comparison.png` | 验证 vs 测试 mAP 对比 |
+| JSON | `training_summary.json` | 训练摘要 |
+
+所有图表 DPI=300，单图单指标，适合论文发表。
 
 ## 测试集评价
 

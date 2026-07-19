@@ -214,20 +214,20 @@ python train/hybrid_predictor/train.py --stage all \
 
 ## 训练输出
 
-训练完成后生成 **7 张图表** + **3 个 JSON 日志**：
+训练完成后生成 **高分辨率单图**（DPI=300，适合论文）+ JSON 日志：
 
-| 文件 | 内容 |
-|------|------|
-| `01_loss_breakdown.png` | 各阶段 train/val 损失曲线 + 对数尺度 |
-| `02_convergence_analysis.png` | 全局损失、过拟合检测、LR 调度、耗时分布 |
-| `03_stage_comparison.png` | 阶段间柱状图 + 雷达图 + 箱线图对比 |
-| `04_ade_fde.png` | ADE/FDE 预测精度指标曲线 |
-| `05_physics_metrics.png` | 速度/加速度/高度违反率变化 |
-| `06_dashboard.png` | 综合仪表盘（一页概览） |
-| `07_test_evaluation.png` | 测试集指标柱状图 + 物理违反 + 雷达图 |
-| `training_history.json` | 每 epoch 详细指标 |
-| `training_summary.json` | 训练摘要（最优指标 + 配置 + 测试结果） |
-| `test_metrics.json` | 测试集 Loss/ADE/FDE/物理违反率 |
+| 类别 | 文件 | 内容 |
+|------|------|------|
+| 01 损失 | `01a_loss_s1.png` `01b_loss_s2.png` `01c_loss_s3.png` | 每阶段 train/val 损失曲线 |
+| 02 收敛 | `02a_global_loss.png` ~ `02f_cumulative_time.png` | 全局损失、过拟合、改进率、LR、耗时等 6 张 |
+| 03 对比 | `03a_final_vs_best.png` `03b_radar.png` `03c_boxplot.png` | 阶段间柱状图、雷达图、箱线图 |
+| 04 精度 | `04a_ade.png` ~ `04d_ade_improvement.png` | ADE/FDE 预测精度 4 张 |
+| 05 物理 | `05a_speed.png` ~ `05d_physics_score.png` | 速度/加速度/高度违反率 + 综合评分 |
+| 06 概览 | `06_dashboard.png` | 综合仪表盘（一页概览） |
+| 07 测试 | `07a_test_accuracy.png` ~ `07d_test_radar.png` | 测试集精度、物理、概要、雷达图 |
+| JSON | `training_history.json` | 每 epoch 详细指标 |
+| JSON | `training_summary.json` | 训练摘要（含测试结果） |
+| JSON | `test_metrics.json` | 测试集 Loss/ADE/FDE/物理违反率 |
 
 训练完成后所有产物均在 `train/hybrid_predictor/train_result/` 下：
 - `phy_ode_diffusion_best_s1.pt` — 阶段一最佳
