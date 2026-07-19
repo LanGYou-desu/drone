@@ -52,7 +52,6 @@ def start_recon(headless=False):
     """启动轨迹重建与分析模块"""
     from trajectory_reconstruction.app import create_app
     app = create_app()
-
     if headless:
         print('[recon] http://127.0.0.1:5000')
         app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)

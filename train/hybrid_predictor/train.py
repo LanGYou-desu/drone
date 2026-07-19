@@ -1511,7 +1511,7 @@ def main():
     if args.epochs:
         config["epochs_stage1"] = args.epochs
         config["epochs_stage2"] = args.epochs
-        config["epochs_stage3"] = max(10, args.epochs // 2)
+        config["epochs_stage3"] = args.epochs
     if args.lr:
         config["lr_stage1"] = args.lr
         config["lr_stage2"] = args.lr
