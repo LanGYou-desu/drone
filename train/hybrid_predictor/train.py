@@ -1595,6 +1595,7 @@ def main():
 
     # ── 测试集评价 ──────────────────────────────────────
     test_loader = build_test_loader(config)
+    test_metrics = None
     if test_loader is not None:
         # 加载最佳 checkpoint（优先级: s3 > s2 > s1）
         best_ckpt_path = None
@@ -1629,7 +1630,7 @@ def main():
     summary = _save_training_summary(logger, config, results_dir)
     summary["total_params"] = total_params
     summary["total_time_minutes"] = round(total_time / 60, 1)
-    if test_loader is not None and 'test_metrics' in dir():
+    if test_metrics is not None:
         summary["test_metrics"] = test_metrics
     with open(os.path.join(results_dir, "training_summary.json"), 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
