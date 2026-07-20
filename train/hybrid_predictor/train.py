@@ -82,6 +82,7 @@ DEFAULT_CONFIG = {
     "warmup_start_factor": 0.1,  # warmup 起始 LR = base_lr × factor
     # 标签平滑（回归任务：对目标位置加高斯噪声作为正则化）
     "label_smoothing": 0.005,     # 噪声标准差（相对于数据标准差的比例）
+    "checkpoint_interval": 10,    # 每隔 N 个 epoch 在阶段中保存一次检查点（0=仅阶段结束时保存）
     "dataset_dir": "train/hybrid_predictor/dataset",
     "output_dir": "train/hybrid_predictor/train_result/models",
     "device": "cuda:0",
@@ -977,6 +978,14 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
         if is_best:
             best_val_loss = val_loss
 
+        # 阶段中定期保存检查点
+        save_interval = config.get("checkpoint_interval", 0)
+        if save_interval > 0 and (is_best or epoch % save_interval == 0 or epoch == config["epochs_stage1"]):
+            _ckpt_out = os.path.join(_PROJECT_ROOT, config["output_dir"])
+            save_checkpoint(model, _ckpt_out, 1, epoch, val_loss,
+                            is_best=is_best, optimizer=optimizer, scheduler=scheduler,
+                            ade=ade, fde=fde)
+
         status = f"train={avg_train:.4f} val={val_loss:.4f} lr={lr:.2e}"
         if HAS_TQDM:
             epoch_iter.set_postfix_str(status + (" ★" if is_best else ""))
@@ -1135,6 +1144,14 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
         is_best = val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
+
+        # 阶段中定期保存检查点
+        save_interval = config.get("checkpoint_interval", 0)
+        if save_interval > 0 and (is_best or epoch % save_interval == 0 or epoch == config["epochs_stage2"]):
+            _ckpt_out = os.path.join(_PROJECT_ROOT, config["output_dir"])
+            save_checkpoint(model, _ckpt_out, 2, epoch, val_loss,
+                            is_best=is_best, optimizer=optimizer, scheduler=scheduler,
+                            ade=ade, fde=fde)
 
         status = f"train={avg_train:.4f} val={val_loss:.4f} lr={lr:.2e}"
         if HAS_TQDM:
@@ -1307,6 +1324,14 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
         if is_best:
             best_val_loss = val_loss
 
+        # 阶段中定期保存检查点
+        save_interval = config.get("checkpoint_interval", 0)
+        if save_interval > 0 and (is_best or epoch % save_interval == 0 or epoch == config["epochs_stage3"]):
+            _ckpt_out = os.path.join(_PROJECT_ROOT, config["output_dir"])
+            save_checkpoint(model, _ckpt_out, 3, epoch, val_loss,
+                            is_best=is_best, optimizer=optimizer, scheduler=scheduler,
+                            ade=ade, fde=fde)
+
         status = f"train={avg_train:.4f} val={val_loss:.4f} ss={ss_prob:.2f}"
         if HAS_TQDM:
             epoch_iter.set_postfix_str(status + (" ★" if is_best else ""))
@@ -1339,6 +1364,8 @@ def main():
     parser.add_argument("--warmup-factor", type=float, default=None, help="warmup 起始 LR 因子")
     parser.add_argument("--label-smoothing", type=float, default=None,
                         help="标签平滑噪声标准差比例")
+    parser.add_argument("--checkpoint-interval", type=int, default=None,
+                        help="阶段中保存检查点的间隔（epoch），0=仅阶段结束时保存")
     parser.add_argument("--no-charts", action="store_true", help="跳过图表生成")
     args = parser.parse_args()
 
@@ -1378,6 +1405,8 @@ def main():
         config["warmup_start_factor"] = args.warmup_factor
     if args.label_smoothing is not None:
         config["label_smoothing"] = args.label_smoothing
+    if args.checkpoint_interval is not None:
+        config["checkpoint_interval"] = args.checkpoint_interval
 
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(f"[DEVICE] {device}")
@@ -1451,11 +1480,22 @@ def main():
     if test_loader is not None:
         # 加载最佳 checkpoint（优先级: s3 > s2 > s1）
         best_ckpt_path = None
+        best_ckpt_loss = float('inf')
         for _s in (3, 2, 1):
-            _p = os.path.join(out_dir, f"phy_ode_diffusion_best_s{_s}.pt")
-            if os.path.isfile(_p):
-                best_ckpt_path = _p
+            _best_p = os.path.join(out_dir, f"phy_ode_diffusion_best_s{_s}.pt")
+            if os.path.isfile(_best_p):
+                best_ckpt_path = _best_p
                 break
+        # 若无 best，从普通 checkpoint 中按 loss 最低选取
+        if best_ckpt_path is None:
+            for _f in _pt_glob.glob(os.path.join(out_dir, "phy_ode_diffusion_s*.pt")):
+                try:
+                    _loss = float(_f.rsplit('_v', 1)[-1].rstrip('.pt'))
+                    if _loss < best_ckpt_loss:
+                        best_ckpt_loss = _loss
+                        best_ckpt_path = _f
+                except (ValueError, IndexError):
+                    pass
         if best_ckpt_path is not None:
             test_model = create_model(config, device)
             test_ckpt = torch.load(best_ckpt_path, map_location=device)

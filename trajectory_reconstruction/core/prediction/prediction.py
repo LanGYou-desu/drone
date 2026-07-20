@@ -27,7 +27,7 @@ def _get_model_path() -> str:
     if not os.path.isdir(model_dir):
         return os.path.join(model_dir, "phy_ode_diffusion.pt")
 
-    # 优先查找最佳模型
+    # 优先查找最佳模型（stage 越大越好）
     best_files = sorted(
         [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_best")],
         reverse=True,
@@ -35,12 +35,16 @@ def _get_model_path() -> str:
     if best_files:
         return os.path.join(model_dir, best_files[0])
 
-    # 次选最新带描述的检查点
-    all_files = sorted(
-        [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")],
-        reverse=True,
-    )
+    # 次选带描述的检查点，按 loss 升序取最优（文件名格式: ..._v{loss}.pt）
+    all_files = [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")]
     if all_files:
+        def _parse_loss(fname: str) -> float:
+            try:
+                # 从 "phy_ode_diffusion_s1_e50_v0.1234.pt" 中提取 loss
+                return float(fname.rsplit('_v', 1)[-1].rstrip('.pt'))
+            except (ValueError, IndexError):
+                return float('inf')
+        all_files.sort(key=_parse_loss)
         return os.path.join(model_dir, all_files[0])
 
     # 回退到旧命名
