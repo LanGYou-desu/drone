@@ -92,6 +92,25 @@ async function saveSection(section) {
     } catch (err) { showToast('保存失败', true); }
 }
 
+// ── 加载模型列表 ─────────────────────────────────
+
+async function loadModelList() {
+    try {
+        var r = await fetch('/api/detection/models');
+        var data = await r.json();
+        var sel = document.getElementById('detModel');
+        if (!data.success || !data.models || !data.models.length) {
+            sel.innerHTML = '<option value="">无可用模型</option>';
+            return;
+        }
+        sel.innerHTML = data.models.map(function(m) {
+            return '<option value="' + m.path + '">' + m.name + ' (' + m.size_mb + 'MB)</option>';
+        }).join('');
+    } catch (e) {
+        document.getElementById('detModel').innerHTML = '<option value="">加载失败</option>';
+    }
+}
+
 // ── 加载配置 ─────────────────────────────────────
 
 async function loadConfig() {
@@ -141,8 +160,10 @@ function showToast(msg, isError) {
 
 // ── 初始化 ──────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function () {
-    updateThemeUI(); loadConfig();
+document.addEventListener('DOMContentLoaded', async function () {
+    updateThemeUI();
+    await loadModelList();       // 先加载模型列表
+    await loadConfig();           // 再加载配置（会选中当前模型）
     var cs = document.getElementById('detConfidence');
     if (cs) cs.addEventListener('input', function(){document.getElementById('confLabel').textContent = parseFloat(this.value).toFixed(2);});
     var ns = document.getElementById('detNms');

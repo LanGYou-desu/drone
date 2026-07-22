@@ -35,6 +35,25 @@ def _cleanup_uploads(upload_dir: str = None):
                 pass
 
 
+# ── 模型列表 ──────────────────────────────────
+
+@api_detection_bp.route('/models', methods=['GET'])
+def list_models():
+    """列出 models/yolo/ 中所有可用的 YOLO 模型"""
+    try:
+        models_dir = os.path.join(_PROJECT_ROOT, 'models', 'yolo')
+        if not os.path.isdir(models_dir):
+            return jsonify({'success': True, 'models': []})
+        models = []
+        for f in sorted(os.listdir(models_dir)):
+            if f.endswith('.pt'):
+                fpath = os.path.join(models_dir, f)
+                size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 1)
+                models.append({'name': f, 'path': f'models/yolo/{f}', 'size_mb': size_mb})
+        return jsonify({'success': True, 'models': models})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ── 启动 / 停止 / 暂停 ──────────────────────────
 
 @api_detection_bp.route('/start', methods=['POST'])
