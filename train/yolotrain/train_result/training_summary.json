@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-07-22 17:41:04",
+  "config": {
+    "data": "train/yolotrain/dataset/data.yaml",
+    "model": "yolov8n.pt",
+    "epochs": "120",
+    "imgsz": "1280",
+    "batch": "16",
+    "device": "cpu",
+    "freeze": "None",
+    "lr": "0.01",
+    "resume": "False",
+    "name": "drone_detect",
+    "workers": "8",
+    "seed": "42",
+    "export": "None",
+    "format": "onnx",
+    "val": "False",
+    "no_charts": "False"
+  },
+  "best_metrics": {
+    "metrics/mAP50(B)": {
+      "best": 0.9158,
+      "epoch": 

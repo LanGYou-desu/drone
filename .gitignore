@@ -35,11 +35,14 @@ runs/
 train/yolotrain/dataset/data/
 train/yolotrain/dataset/test/
 train/yolotrain/dataset/train/
+train/yolotrain/dataset/valid/
 
 # Hybrid predictor synthetic dataset (large binaries, not tracked)
 train/hybrid_predictor/dataset/data/
 train/hybrid_predictor/dataset/train/
 train/hybrid_predictor/dataset/valid/
+train/hybrid_predictor/dataset/test/
+
 
 # PDF
 *.pdf
