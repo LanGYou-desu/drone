@@ -69,6 +69,7 @@ DEFAULT_CONFIG = {
     "ctx_len": 20,
     "tgt_len": 10,
     "batch_size": 32,
+    "num_workers": 4,
     "lr_stage1": 1e-3,
     "lr_stage2": 1e-3,
     "lr_stage3": 1e-4,
@@ -625,9 +626,13 @@ def _make_loaders(train_trajs, valid_trajs, config):
     )
     return (
         DataLoader(train_set, batch_size=config["batch_size"], shuffle=True,
-                   collate_fn=collate_fn, drop_last=True),
+                   collate_fn=collate_fn, drop_last=True,
+                   num_workers=config.get("num_workers", 4),
+                   pin_memory=True, prefetch_factor=2),
         DataLoader(val_set, batch_size=config["batch_size"], shuffle=False,
-                   collate_fn=collate_fn, drop_last=False),
+                   collate_fn=collate_fn, drop_last=False,
+                   num_workers=config.get("num_workers", 2),
+                   pin_memory=True),
     )
 
 
@@ -1368,6 +1373,8 @@ def main():
                         help="1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch", type=int, default=32)
+    parser.add_argument("--workers", type=int, default=None,
+                        help="DataLoader 多进程数，默认4")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--resume", type=str, default=None)
@@ -1400,6 +1407,8 @@ def main():
     config["ctx_len"] = args.ctx_len
     config["tgt_len"] = args.tgt_len
     config["batch_size"] = args.batch
+    if args.workers is not None:
+        config["num_workers"] = args.workers
     config["device"] = args.device
 
     if args.epochs:
