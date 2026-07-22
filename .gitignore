@@ -31,6 +31,11 @@ reports/
 # Ultralytics runs (deprecated — 训练输出已迁移到 train/*/train_result/)
 runs/
 
+# YOLO training data (large binaries, not tracked)
+train/yolotrain/dataset/data/
+train/yolotrain/dataset/test/
+train/yolotrain/dataset/train/
+
 # PDF
 *.pdf
 轨迹预测预测算法.txt
