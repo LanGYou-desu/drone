@@ -22,32 +22,39 @@ _model_device: str = "cpu"
 
 
 def _get_model_path() -> str:
-    """返回最新/最佳模型权重路径，优先查找带描述的最佳检查点"""
+    """返回最新/最佳模型权重路径，优先查找: best/ > models/hybrid_predictor/ > train_result/best/"""
+    # 1. 训练统一管理目录 train_result/best/
+    best_central = os.path.join(_PROJECT_ROOT, "train", "hybrid_predictor", "train_result", "best")
+    if os.path.isdir(best_central):
+        best_files = sorted(
+            [f for f in os.listdir(best_central) if f.startswith("phy_ode_diffusion_best")],
+            reverse=True,
+        )
+        if best_files:
+            return os.path.join(best_central, best_files[0])
+
+    # 2. 推理目录 models/hybrid_predictor/
     model_dir = os.path.join(_PROJECT_ROOT, "models", "hybrid_predictor")
-    if not os.path.isdir(model_dir):
-        return os.path.join(model_dir, "phy_ode_diffusion.pt")
+    if os.path.isdir(model_dir):
+        best_files = sorted(
+            [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_best")],
+            reverse=True,
+        )
+        if best_files:
+            return os.path.join(model_dir, best_files[0])
 
-    # 优先查找最佳模型（stage 越大越好）
-    best_files = sorted(
-        [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_best")],
-        reverse=True,
-    )
-    if best_files:
-        return os.path.join(model_dir, best_files[0])
+        # 次选带描述的检查点，按 loss 升序取最优
+        all_files = [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")]
+        if all_files:
+            def _parse_loss(fname: str) -> float:
+                try:
+                    return float(fname.rsplit('_v', 1)[-1].rstrip('.pt'))
+                except (ValueError, IndexError):
+                    return float('inf')
+            all_files.sort(key=_parse_loss)
+            return os.path.join(model_dir, all_files[0])
 
-    # 次选带描述的检查点，按 loss 升序取最优（文件名格式: ..._v{loss}.pt）
-    all_files = [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")]
-    if all_files:
-        def _parse_loss(fname: str) -> float:
-            try:
-                # 从 "phy_ode_diffusion_s1_e50_v0.1234.pt" 中提取 loss
-                return float(fname.rsplit('_v', 1)[-1].rstrip('.pt'))
-            except (ValueError, IndexError):
-                return float('inf')
-        all_files.sort(key=_parse_loss)
-        return os.path.join(model_dir, all_files[0])
-
-    # 回退到旧命名
+    # 3. 回退到旧命名
     return os.path.join(model_dir, "phy_ode_diffusion.pt")
 
 

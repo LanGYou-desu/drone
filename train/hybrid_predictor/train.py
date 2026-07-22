@@ -751,9 +751,16 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
     torch.save(ckpt, latest_path)
 
     if is_best:
-        best_path = os.path.join(out_dir, f"phy_ode_diffusion_best_s{stage}.pt")
+        best_name = f"phy_ode_diffusion_best_s{stage}.pt"
+        best_path = os.path.join(out_dir, best_name)
         torch.save(ckpt, best_path)
         print(f"    -> 最佳模型: {best_path}")
+
+        # 同步到统一管理目录 train_result/best/
+        _best_central = os.path.join(_RESULTS_DIR, "best")
+        os.makedirs(_best_central, exist_ok=True)
+        shutil.copy2(best_path, os.path.join(_best_central, best_name))
+
     return latest_path
 
 
@@ -1473,10 +1480,32 @@ def main():
 
     t_total_start = time.time()
 
-    # --stage 语义: 恢复时自动跳过已完成的阶段
+    # --stage 语义: 1=阶段一, 2=阶段一二, 3/all=全部
     run_s1 = args.stage in ("1", "2", "all") and resumed_stage < 1
     run_s2 = args.stage in ("2", "all") and resumed_stage < 2
     run_s3 = args.stage in ("3", "all") and resumed_stage < 3
+
+    # 自动加载已完成的前阶段最佳模型（避免重复训练）
+    def _load_best_from_central(ckpt_name: str) -> bool:
+        _cp = os.path.join(_RESULTS_DIR, "best", ckpt_name)
+        if os.path.isfile(_cp):
+            _ckpt = torch.load(_cp, map_location=device)
+            model.load_state_dict(_ckpt["model_state_dict"])
+            model.diffusion.scheduler.to(device)
+            print(f"[AUTO-LOAD] {ckpt_name} (val_loss={_ckpt.get('val_loss', '?'):.4f})")
+            return True
+        return False
+
+    if not args.resume and run_s2 and run_s1 and args.stage != "all":
+        # --stage 2: 有历史阶段一最佳模型 → 跳过阶段一
+        if _load_best_from_central("phy_ode_diffusion_best_s1.pt"):
+            run_s1 = False
+
+    if not args.resume and run_s3 and run_s2 and args.stage != "all":
+        # --stage 3: 有历史阶段二最佳模型 → 跳过阶段一二
+        if _load_best_from_central("phy_ode_diffusion_best_s2.pt"):
+            run_s1 = False
+            run_s2 = False
 
     if run_s1:
         train_stage1(model, train_loader, val_loader, config, device, logger, resume_ckpt)
