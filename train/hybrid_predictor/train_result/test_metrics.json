@@ -1,0 +1,8 @@
+{
+  "test_loss": 0.015774,
+  "test_ADE": 0.029533,
+  "test_FDE": 0.023156,
+  "test_speed_violation": 0.0,
+  "test_accel_violation": 2.237949,
+  "test_height_violation": 0.0
+}
