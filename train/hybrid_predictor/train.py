@@ -24,6 +24,7 @@ import os
 import sys
 import json
 import argparse
+import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -997,6 +998,13 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
     save_checkpoint(model, out_dir, 1, config["epochs_stage1"], best_val_loss,
                     is_best=True, optimizer=optimizer, scheduler=scheduler)
 
+    # 加载阶段一最佳模型（而非最后一个 epoch），作为阶段二的起点
+    _best_s1 = os.path.join(out_dir, "phy_ode_diffusion_best_s1.pt")
+    if os.path.isfile(_best_s1):
+        _ckpt = torch.load(_best_s1, map_location=torch.device('cpu'))
+        model.load_state_dict(_ckpt["model_state_dict"])
+        print(f"  [LOAD] 已加载阶段一最佳模型 (val_loss={_ckpt.get('val_loss', '?'):.4f})")
+
     for param in model.diffusion.parameters():
         param.requires_grad = True
 
@@ -1162,6 +1170,13 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
     out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
     save_checkpoint(model, out_dir, 2, config["epochs_stage2"], best_val_loss,
                     is_best=True, optimizer=optimizer, scheduler=scheduler)
+
+    # 加载阶段二最佳模型，作为阶段三的起点
+    _best_s2 = os.path.join(out_dir, "phy_ode_diffusion_best_s2.pt")
+    if os.path.isfile(_best_s2):
+        _ckpt = torch.load(_best_s2, map_location=torch.device('cpu'))
+        model.load_state_dict(_ckpt["model_state_dict"])
+        print(f"  [LOAD] 已加载阶段二最佳模型 (val_loss={_ckpt.get('val_loss', '?'):.4f})")
 
     for param in model.parameters():
         param.requires_grad = True
@@ -1413,14 +1428,19 @@ def main():
     print(f"[TQDM] {'可用' if HAS_TQDM else '不可用（pip install tqdm）'}")
     print(f"[图表] {'可用' if HAS_MPL else '不可用（pip install matplotlib）'}")
 
+    # 创建本次运行的输出目录（带时间戳，避免覆盖历史结果）
+    _run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
+    _run_dir = os.path.join(_RESULTS_DIR, _run_id)
+    out_dir = os.path.join(_run_dir, "models")
+    os.makedirs(out_dir, exist_ok=True)
+    config["output_dir"] = os.path.relpath(out_dir, _PROJECT_ROOT).replace("\\", "/")
+    print(f"[输出] 本次训练结果: {_run_dir}")
+
     # 数据
     train_loader, val_loader = build_dataloaders(config)
 
-    # 模型
     # 日志器
     logger = TrainingLogger()
-    out_dir = os.path.join(_PROJECT_ROOT, config["output_dir"])
-    os.makedirs(out_dir, exist_ok=True)
 
     resumed_stage = 0
     resume_ckpt = None
@@ -1472,7 +1492,7 @@ def main():
         save_checkpoint(model, out_dir, 0, 0, final_loss, is_best=True)
 
     # ── 输出图表和日志到 train/hybrid_predictor/train_result/ ──
-    results_dir = str(_RESULTS_DIR)
+    results_dir = _run_dir
 
     # ── 测试集评价 ──────────────────────────────────────
     test_loader = build_test_loader(config)
@@ -1526,6 +1546,16 @@ def main():
         summary["test_metrics"] = test_metrics
     with open(os.path.join(results_dir, "training_summary.json"), 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
+
+    # 将最佳模型复制到推理目录
+    _infer_dir = os.path.join(_PROJECT_ROOT, "models", "hybrid_predictor")
+    os.makedirs(_infer_dir, exist_ok=True)
+    for _f in os.listdir(out_dir):
+        if _f.startswith("phy_ode_diffusion_best") or _f.startswith("phy_ode_diffusion_s"):
+            _src = os.path.join(out_dir, _f)
+            _dst = os.path.join(_infer_dir, _f)
+            shutil.copy2(_src, _dst)
+            print(f"[复制] {_f} -> models/hybrid_predictor/")
 
     print(f"\n所有输出已保存到: {results_dir}")
     print("训练完成！")

@@ -364,6 +364,8 @@ def main():
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42,
                         help="随机种子，确保训练可复现")
+    parser.add_argument("--test-only", action="store_true",
+                        help="仅用测试集评估已有模型，不训练")
     parser.add_argument("--export", type=str, default=None)
     parser.add_argument("--format", type=str, default="onnx",
                         choices=["onnx", "engine", "tflite", "openvino"])
@@ -391,6 +393,99 @@ def main():
     except ImportError:
         HAS_TQDM = False
         print("[提示] tqdm 未安装，进度条不可用。pip install tqdm")
+
+    # ── 仅测试模式 ──
+    if args.test_only:
+        os.makedirs(_RESULTS_DIR, exist_ok=True)
+
+        # data.yaml 转为绝对路径（ultralytics 需要）
+        args.data = os.path.abspath(args.data)
+
+        # 找到模型文件
+        model_path = args.model
+        if not os.path.isfile(model_path):
+            # 尝试 train_result 中的 best.pt
+            alt = os.path.join(_RESULTS_DIR, "models", "weights", "best.pt")
+            if os.path.isfile(alt):
+                model_path = alt
+                print(f"使用模型: {model_path}")
+            else:
+                print(f"错误: 模型文件不存在: {model_path}")
+                sys.exit(1)
+
+        model = YOLO(model_path)
+
+        # 检查测试集
+        from pathlib import Path
+        _data_dir = Path(args.data).parent
+        _test_dir = _data_dir / "test" / "images"
+        if not _test_dir.is_dir() or not any(
+            f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
+            for f in _test_dir.iterdir()
+        ):
+            print("错误: test/images/ 中没有图片，无法评估")
+            sys.exit(1)
+
+        print(f"\n{'='*50}")
+        print("在测试集上评估模型")
+        print(f"{'='*50}")
+
+        # 切到数据集目录（ultralytics 要求 path 相对 yaml 所在目录）
+        _prev_cwd = os.getcwd()
+        os.chdir(_data_dir)
+
+        try:
+            # 验证集评估
+            print("\n[1/2] 验证集评估...")
+            val_metrics = model.val(data=args.data, imgsz=args.imgsz, device=args.device)
+            val_map50 = val_metrics.box.map50
+            val_map50_95 = val_metrics.box.map
+            print(f"  mAP@0.5:      {val_map50:.4f}")
+            print(f"  mAP@0.5:0.95: {val_map50_95:.4f}")
+
+            # 测试集评估
+            print("\n[2/2] 测试集评估...")
+            import yaml as _yaml_lib
+            _orig_cfg = {}
+            try:
+                with open(args.data, 'r', encoding='utf-8') as _f:
+                    _orig_cfg = _yaml_lib.safe_load(_f) or {}
+            except Exception:
+                pass
+            _ds_cfg = {
+                'path': _orig_cfg.get('path', '.'),
+                'train': 'test/images',
+                'val': 'test/images',
+            }
+            if 'names' in _orig_cfg:
+                _ds_cfg['names'] = _orig_cfg['names']
+            elif 'nc' in _orig_cfg:
+                _ds_cfg['nc'] = _orig_cfg['nc']
+            _test_yaml = str(_data_dir / "_test_eval.yaml")
+            with open(_test_yaml, 'w') as _f:
+                _yaml_lib.dump(_ds_cfg, _f)
+
+            try:
+                test_metrics = model.val(data=_test_yaml, imgsz=args.imgsz, device=args.device)
+                test_map50 = test_metrics.box.map50
+                test_map50_95 = test_metrics.box.map
+                print(f"  mAP@0.5:      {test_map50:.4f}")
+                print(f"  mAP@0.5:0.95: {test_map50_95:.4f}")
+
+                # 生成对比图
+                _make_test_comparison_chart(
+                    val_map50, val_map50_95,
+                    test_map50, test_map50_95,
+                    _RESULTS_DIR,
+                )
+                print(f"\n图表已保存到 {_RESULTS_DIR}/05_test_comparison.png")
+            finally:
+                if os.path.isfile(_test_yaml):
+                    os.remove(_test_yaml)
+        finally:
+            os.chdir(_prev_cwd)
+
+        sys.exit(0)
 
     # ── 导出模式 ──
     if args.export:
@@ -573,12 +668,12 @@ def main():
                 # 构建测试集 data yaml（复用验证集路径，替换为测试集）
                 import yaml as _yaml_lib
                 try:
-                    with open(args.data, 'r') as _f:
+                    with open(args.data, 'r', encoding='utf-8') as _f:
                         _ds_cfg = _yaml_lib.safe_load(_f)
                 except Exception:
                     _ds_cfg = {}
+                _ds_cfg['train'] = 'test/images'
                 _ds_cfg['val'] = 'test/images'
-                _ds_cfg['test'] = 'test/images'
                 _test_yaml = os.path.join(_data_yaml_dir, "_test_eval.yaml")
                 with open(_test_yaml, 'w') as _f:
                     _yaml_lib.dump(_ds_cfg, _f)
