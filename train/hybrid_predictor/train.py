@@ -1673,8 +1673,10 @@ def main():
             return build_dataloaders(config)
         return default_loader
 
-    def _stage_charts(stage_label: str):
-        """阶段结束后立即生成图表（若未禁用）"""
+    def _stage_finish(stage_label: str):
+        """阶段结束后立即保存训练历史和图表（若未禁用）"""
+        os.makedirs(_run_dir, exist_ok=True)
+        logger.save(_run_dir)  # 先存 JSON，确保中途崩溃也有数据
         if not args.no_charts and HAS_MPL and logger.history:
             print(f"\n[图表] {stage_label}完成，生成阶段图表...")
             _plot_all_charts(logger, _run_dir)
@@ -1682,17 +1684,17 @@ def main():
     if run_s1:
         _loader = _stage_loader(1, (train_loader, val_loader))
         train_stage1(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
-        _stage_charts("阶段一")
+        _stage_finish("阶段一")
 
     if run_s2:
         _loader = _stage_loader(2, (train_loader, val_loader))
         train_stage2(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
-        _stage_charts("阶段二")
+        _stage_finish("阶段二")
 
     if run_s3:
         _loader = _stage_loader(3, (train_loader, val_loader))
         train_stage3(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
-        _stage_charts("阶段三")
+        _stage_finish("阶段三")
 
     total_time = time.time() - t_total_start
     print(f"\n{'='*60}")
