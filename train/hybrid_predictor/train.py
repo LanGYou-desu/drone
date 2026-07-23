@@ -1502,7 +1502,44 @@ def main():
     parser.add_argument("--checkpoint-interval", type=int, default=None,
                         help="阶段中保存检查点的间隔（epoch），0=仅阶段结束时保存")
     parser.add_argument("--no-charts", action="store_true", help="跳过图表生成")
+    parser.add_argument("--charts-only", type=str, default=None, metavar="DIR",
+                        help="仅从已有 training_history.json 重新生成图表（不训练）。"
+                             "传入训练结果目录路径或 JSON 文件路径")
     args = parser.parse_args()
+
+    # ── 仅生成图表模式 ──────────────────────────────────
+    if args.charts_only:
+        if not HAS_MPL:
+            print("[错误] matplotlib 未安装，无法生成图表")
+            sys.exit(1)
+        _charts_path = args.charts_only
+        # 如果是目录，拼接 training_history.json
+        if os.path.isdir(_charts_path):
+            _json_path = os.path.join(_charts_path, "training_history.json")
+        else:
+            _json_path = _charts_path
+        if not os.path.isfile(_json_path):
+            print(f"[错误] 找不到训练历史文件: {_json_path}")
+            sys.exit(1)
+        with open(_json_path, 'r', encoding='utf-8') as f:
+            _hist_data = json.load(f)
+        logger = TrainingLogger()
+        logger.history = _hist_data.get("history", [])
+        logger.stage_labels = _hist_data.get("stage_labels", {})
+        if not logger.history:
+            print("[错误] 训练历史为空")
+            sys.exit(1)
+        _out_dir = os.path.dirname(_json_path)
+        print(f"[图表] 从 {_json_path} 重新生成图表 → {_out_dir}")
+        _plot_all_charts(logger, _out_dir)
+        # 测试图表（若有 test_metrics.json）
+        _test_json = os.path.join(_out_dir, "test_metrics.json")
+        if os.path.isfile(_test_json):
+            with open(_test_json, 'r', encoding='utf-8') as f:
+                _test_metrics = json.load(f)
+            _make_test_chart(_test_metrics, _out_dir)
+        print("图表生成完成！")
+        return
 
     config = DEFAULT_CONFIG.copy()
 
