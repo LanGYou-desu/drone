@@ -1566,6 +1566,13 @@ def main():
         logger = TrainingLogger()
         logger.history = _hist_data.get("history", [])
         logger.stage_labels = _hist_data.get("stage_labels", {})
+        # 支持按阶段筛选（--stage 1/2/3）
+        _filter_stage = args.stage if args.stage != "all" else None
+        if _filter_stage is not None:
+            _s = int(_filter_stage)
+            logger.history = [e for e in logger.history if e.get("stage") == _s]
+            logger.stage_labels = {_s: logger.stage_labels.get(str(_s), f"Stage {_s}")}
+            print(f"[图表] 仅生成阶段 {_s} 的图表")
         if not logger.history:
             print("[错误] 训练历史为空")
             sys.exit(1)
