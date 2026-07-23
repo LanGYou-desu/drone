@@ -244,11 +244,10 @@ class GuidedDiffusion(nn.Module):
         noise_pred = self.noise_net(x_tau, tau, h_prior, dt)
         diff_loss = F.mse_loss(noise_pred, noise)
 
-        # 物理正则：反标准化后在原始空间计算，梯度正确缩放
+        # 物理正则：反标准化后在原始空间计算，梯度通过 1/p_std 缩放正确回传
         phy_loss = 0.0
         if p_mean is not None and p_std is not None:
-            with torch.no_grad():
-                x0_pred_norm = self.scheduler.predict_x0(x_tau, tau, noise_pred)
+            x0_pred_norm = self.scheduler.predict_x0(x_tau, tau, noise_pred)
             # 反标准化到物理空间
             x0_pred_phys = x0_pred_norm * p_std + p_mean
             prev_p_phys = prev_p * p_std + p_mean

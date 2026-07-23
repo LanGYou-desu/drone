@@ -78,6 +78,22 @@ class PhyODEDiffusion(nn.Module):
         self.max_tilt = max_tilt
         self.g = g
 
+        # 保存完整架构配置（用于推理时重建模型）
+        self._model_config = {
+            "d_feat": d_feat, "d_context": d_context,
+            "n_head": n_head, "n_layers": n_layers,
+            "dim_feedforward": dim_feedforward, "dropout": dropout,
+            "d_z": d_z, "a_max": a_max, "ode_hidden_dim": ode_hidden_dim,
+            "obs_hidden_dim": obs_hidden_dim,
+            "n_diffusion_steps": n_diffusion_steps,
+            "n_inference_steps": n_inference_steps,
+            "tau_emb_dim": tau_emb_dim, "dt_emb_dim": dt_emb_dim,
+            "diff_hidden_dim": diff_hidden_dim, "guidance_eta": guidance_eta,
+            "v_max": v_max, "z_min": z_min, "z_max": z_max,
+            "v_v_up": v_v_up, "v_v_down": v_v_down,
+            "max_tilt": max_tilt, "g": g,
+        }
+
         # 子模块
         self.transformer = TransformerEncoder(
             d_feat=d_feat,
@@ -287,16 +303,11 @@ class PhyODEDiffusion(nn.Module):
         return pred_positions, pred_times_list
 
     def get_model_info(self) -> dict:
-        """返回模型元信息"""
+        """返回模型元信息（含完整架构参数，用于推理时重建模型）"""
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         return {
             "total_params": total_params,
             "trainable_params": trainable_params,
-            "d_context": self.d_context,
-            "d_z": self.d_z,
-            "state_dim": self.state_dim,
-            "v_max": self.v_max,
-            "a_max": self.a_max,
-            "z_min": self.z_min,
+            **self._model_config,
         }

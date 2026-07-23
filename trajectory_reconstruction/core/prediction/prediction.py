@@ -114,17 +114,34 @@ def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
         except Exception:
             dyn_cfg = {}
 
+        # 从检查点读取架构参数（兜底为默认值）
+        mc = ckpt.get("model_info", {})
         model = PhyODEDiffusion(
-            v_max=h_cfg.get("v_max", dyn_cfg.get("v_h_max", 30.0)),
-            a_max=h_cfg.get("a_max", 30.0),
-            z_min=h_cfg.get("z_min", dyn_cfg.get("min_alt", 0.0)),
-            z_max=h_cfg.get("z_max", dyn_cfg.get("max_alt", 120.0)),
-            v_v_up=h_cfg.get("v_v_up", dyn_cfg.get("v_v_up", 5.0)),
-            v_v_down=h_cfg.get("v_v_down", dyn_cfg.get("v_v_down", 3.0)),
-            max_tilt=h_cfg.get("max_tilt", dyn_cfg.get("max_tilt", 35.0)),
-            g=dyn_cfg.get("g", 9.81),
-            guidance_eta=h_cfg.get("guidance_eta", 0.1),
-            n_inference_steps=h_cfg.get("inference_steps", 50),
+            # 架构参数：优先使用检查点中保存的值
+            d_feat=mc.get("d_feat", 64),
+            d_context=mc.get("d_context", 128),
+            n_head=mc.get("n_head", 4),
+            n_layers=mc.get("n_layers", 3),
+            dim_feedforward=mc.get("dim_feedforward", 256),
+            dropout=mc.get("dropout", 0.1),
+            d_z=mc.get("d_z", 32),
+            ode_hidden_dim=mc.get("ode_hidden_dim", 64),
+            obs_hidden_dim=mc.get("obs_hidden_dim", 32),
+            n_diffusion_steps=mc.get("n_diffusion_steps", 500),
+            tau_emb_dim=mc.get("tau_emb_dim", 16),
+            dt_emb_dim=mc.get("dt_emb_dim", 16),
+            diff_hidden_dim=mc.get("diff_hidden_dim", 128),
+            # 物理约束参数：推理时可覆盖（config.json → hybrid_model 优先）
+            v_max=h_cfg.get("v_max", mc.get("v_max", dyn_cfg.get("v_h_max", 30.0))),
+            a_max=h_cfg.get("a_max", mc.get("a_max", 30.0)),
+            z_min=h_cfg.get("z_min", mc.get("z_min", dyn_cfg.get("min_alt", 0.0))),
+            z_max=h_cfg.get("z_max", mc.get("z_max", dyn_cfg.get("max_alt", 120.0))),
+            v_v_up=h_cfg.get("v_v_up", mc.get("v_v_up", dyn_cfg.get("v_v_up", 5.0))),
+            v_v_down=h_cfg.get("v_v_down", mc.get("v_v_down", dyn_cfg.get("v_v_down", 3.0))),
+            max_tilt=h_cfg.get("max_tilt", mc.get("max_tilt", dyn_cfg.get("max_tilt", 35.0))),
+            g=h_cfg.get("g", mc.get("g", dyn_cfg.get("g", 9.81))),
+            guidance_eta=h_cfg.get("guidance_eta", mc.get("guidance_eta", 0.1)),
+            n_inference_steps=h_cfg.get("inference_steps", mc.get("n_inference_steps", 50)),
         )
         model.load_state_dict(ckpt["model_state_dict"])
         model.to(device_obj)

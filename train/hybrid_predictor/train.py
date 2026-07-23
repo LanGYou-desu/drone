@@ -107,7 +107,10 @@ DEFAULT_CONFIG = {
     "guidance_eta": 0.1,
     "v_max": 30.0,
     "z_min": 0.0,
+    "z_max": 120.0,
     "obs_hidden_dim": 32,
+    # 物理损失权重（阶段二/三中 physics_loss 的相对权重）
+    "physics_weight": 0.01,
 }
 
 
@@ -774,6 +777,7 @@ def evaluate_test(model, test_loader, device, out_dir: str):
     total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
     total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
     n_batches, n_viol = 0, 0
+    max_a_h = model.g * np.tan(np.radians(model.max_tilt))
 
     with torch.no_grad():
         for batch in test_loader:
@@ -789,21 +793,31 @@ def evaluate_test(model, test_loader, device, out_dir: str):
             for j in range(b["tgt_pos"].shape[1]):
                 dt_step = b["tgt_t"][:, j] - t_now
                 h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
-                p_pred = h_prior[:, :3]
-                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
+                # 使用完整扩散采样进行预测（而非仅 ODE 先验）
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
+                p_mean_t = b.get("p_mean")
+                p_std_t = b.get("p_std")
+                p_pred = model.diffusion.guided_sampling(
+                    h_prior, dt_step, prev_p, p_mean=p_mean_t, p_std=p_std_t)
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
-                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :])
+                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
+                    p_mean=p_mean_t, p_std=p_std_t)
                 diff_loss += loss_dict["diff_loss"]
 
                 if b.get("p_std") is not None:
                     p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
                     prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
-                    v_norm = torch.norm((p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1), dim=-1)
-                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
-                    a_h = v_norm / dt_step.clamp(min=1e-3)
-                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
-                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    # 水平速度（XZ 平面），与 _physics_cost 一致
+                    v_h = torch.norm(v_phys[:, [0, 2]], dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_h - model.v_max).mean().item()
+                    # 水平加速度：a_h = v_h / dt，与 g·tan(max_tilt) 比较
+                    a_h = v_h / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - max_a_h).mean().item()
+                    # 高度违反：同时检查下限和上限
+                    total_hgt_v += (torch.nn.functional.relu(model.z_min - p_phys[:, 1]) +
+                                    torch.nn.functional.relu(p_phys[:, 1] - model.z_max)).mean().item()
                     n_viol += 1
 
                 h = model.state_manager.update(h_prior, dt_step,
@@ -1027,6 +1041,7 @@ def _validate_stage1(model, val_loader, device):
     total_mse, total_ade, total_fde = 0.0, 0.0, 0.0
     total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
     n_batches, n_viol = 0, 0
+    max_a_h = model.g * np.tan(np.radians(model.max_tilt))
     with torch.no_grad():
         for batch in val_loader:
             b = _to_device(batch, device)
@@ -1045,17 +1060,20 @@ def _validate_stage1(model, val_loader, device):
                 mse += torch.nn.functional.mse_loss(p_pred, b["tgt_pos"][:, j, :])
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
 
-                # 物理违反率（反标准化到原始空间）
+                # 物理违反率（反标准化到原始空间，与 _physics_cost 一致）
                 if b.get("p_std") is not None:
                     p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
                     prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
                     v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
-                    v_norm = torch.norm(v_phys, dim=-1)
-                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
-                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
-                    # 加速度违反率（修复：此前 total_acc_v 从未被更新，恒为 0）
-                    a_h = v_norm / dt_step.clamp(min=1e-3)
-                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
+                    # 水平速度（XZ 平面），与 _physics_cost 一致
+                    v_h = torch.norm(v_phys[:, [0, 2]], dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_h - model.v_max).mean().item()
+                    # 水平加速度：a_h = v_h / dt，与 g·tan(max_tilt) 比较
+                    a_h = v_h / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - max_a_h).mean().item()
+                    # 高度违反：同时检查下限和上限
+                    total_hgt_v += (torch.nn.functional.relu(model.z_min - p_phys[:, 1]) +
+                                    torch.nn.functional.relu(p_phys[:, 1] - model.z_max)).mean().item()
                     n_viol += 1
 
                 h = model.state_manager.update(h_prior, dt_step,
@@ -1125,24 +1143,26 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                 t_now = b["ctx_t"][:, -1]
 
             diff_loss_total = 0.0
+            phy_loss_total = 0.0
             count = 0
             for j in range(b["tgt_pos"].shape[1]):
                 dt_step = b["tgt_t"][:, j] - t_now
                 with torch.no_grad():
                     h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
-                tgt_smooth = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
-                                           config["label_smoothing"])
+                # 扩散模型学习去噪纯净样本，不应用标签平滑
                 loss_dict = model.diffusion.compute_loss(
-                    h_prior, dt_step, prev_p, tgt_smooth)
+                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
+                    p_mean=b.get("p_mean"), p_std=b.get("p_std"))
                 diff_loss_total += loss_dict["diff_loss"]
+                phy_loss_total += loss_dict["physics_loss"]
                 with torch.no_grad():
                     h = model.state_manager.update(h_prior, dt_step,
                                                    b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
                 t_now = b["tgt_t"][:, j]
                 count += 1
 
-            loss = diff_loss_total / max(count, 1)
+            loss = (diff_loss_total + config.get("physics_weight", 0.01) * phy_loss_total) / max(count, 1)
             # 反向传播与参数更新
             optimizer.zero_grad()
             loss.backward()
@@ -1195,11 +1215,13 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
 
 def _validate_stage2(model, val_loader, device):
-    """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)"""
+    """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)。
+    使用完整扩散采样进行预测，而非仅 ODE 先验。"""
     model.eval()
     total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
     total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
     n_batches, n_viol = 0, 0
+    max_a_h = model.g * np.tan(np.radians(model.max_tilt))
     with torch.no_grad():
         for batch in val_loader:
             b = _to_device(batch, device)
@@ -1213,28 +1235,100 @@ def _validate_stage2(model, val_loader, device):
             for j in range(b["tgt_pos"].shape[1]):
                 dt_step = b["tgt_t"][:, j] - t_now
                 h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
-                p_pred = h_prior[:, :3]
-                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
+                # 使用完整扩散采样进行预测
+                p_mean_t = b.get("p_mean"); p_std_t = b.get("p_std")
+                p_pred = model.diffusion.guided_sampling(
+                    h_prior, dt_step, prev_p, p_mean=p_mean_t, p_std=p_std_t)
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
-                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :])
+                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
+                    p_mean=p_mean_t, p_std=p_std_t)
                 diff_loss += loss_dict["diff_loss"]
 
-                # 物理违反
+                # 物理违反（与 _physics_cost 一致）
                 if b.get("p_std") is not None:
                     p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
                     prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
-                    v_norm = torch.norm((p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1), dim=-1)
-                    total_spd_v += torch.nn.functional.relu(v_norm - model.v_max).mean().item()
-                    a_h = v_norm / dt_step.clamp(min=1e-3)
-                    total_acc_v += torch.nn.functional.relu(a_h - model.a_max).mean().item()
-                    total_hgt_v += torch.nn.functional.relu(model.z_min - p_phys[:, 1]).mean().item()
+                    v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    v_h = torch.norm(v_phys[:, [0, 2]], dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_h - model.v_max).mean().item()
+                    a_h = v_h / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - max_a_h).mean().item()
+                    total_hgt_v += (torch.nn.functional.relu(model.z_min - p_phys[:, 1]) +
+                                    torch.nn.functional.relu(p_phys[:, 1] - model.z_max)).mean().item()
                     n_viol += 1
 
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
                 prev_pos = b["tgt_pos"][:, j, :]
                 t_now = b["tgt_t"][:, j]
+                count += 1
+            total_loss += (diff_loss / max(count, 1)).item()
+            if preds:
+                errs = torch.norm(torch.stack(preds, 1) - torch.stack(tgts, 1), dim=-1)
+                total_ade += errs.mean().item()
+                total_fde += errs[:, -1].mean().item()
+            n_batches += 1
+    model.train()
+    n = max(n_batches, 1); nv = max(n_viol, 1)
+    return (total_loss / n, total_ade / n, total_fde / n,
+            total_spd_v / nv, total_acc_v / nv, total_hgt_v / nv)
+
+
+def _validate_stage3(model, val_loader, device):
+    """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)。
+    使用完整扩散采样 + 自回归状态更新，模拟实际推理行为。"""
+    model.eval()
+    total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
+    total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
+    n_batches, n_viol = 0, 0
+    max_a_h = model.g * np.tan(np.radians(model.max_tilt))
+    with torch.no_grad():
+        for batch in val_loader:
+            b = _to_device(batch, device)
+            c = model.transformer(b["ctx_t"], b["ctx_dt"], b["ctx_pos"], b["ctx_vel"])
+            h = model.state_manager.init_state(b["ctx_pos"][:, -1, :],
+                                                b["ctx_vel"][:, -1, :], c)
+            t_now = b["ctx_t"][:, -1]
+            diff_loss, count = 0.0, 0
+            preds, tgts = [], []
+            prev_pos = b["ctx_pos"][:, -1, :]
+
+            for j in range(b["tgt_pos"].shape[1]):
+                dt_step = b["tgt_t"][:, j] - t_now
+                h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
+                p_mean_t = b.get("p_mean"); p_std_t = b.get("p_std")
+                # 使用完整扩散采样（模拟推理行为）
+                p_pred = model.diffusion.guided_sampling(
+                    h_prior, dt_step, prev_pos, p_mean=p_mean_t, p_std=p_std_t)
+                preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
+                # 自回归：用预测位置（非真实值）估计速度并更新状态
+                v_pred = (p_pred - prev_pos) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                h = model.state_manager.update(h_prior, dt_step, p_pred, v_pred)
+                prev_pos = p_pred
+                t_now = b["tgt_t"][:, j]
+
+                # 扩散损失（仅用于参考，不参与 ADE/FDE 计算）
+                prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
+                loss_dict = model.diffusion.compute_loss(
+                    h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
+                    p_mean=p_mean_t, p_std=p_std_t)
+                diff_loss += loss_dict["diff_loss"]
+
+                # 物理违反
+                if b.get("p_std") is not None:
+                    p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
+                    prev_phys = prev_pos * b["p_std"] + b.get("p_mean", 0)
+                    v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    v_h = torch.norm(v_phys[:, [0, 2]], dim=-1)
+                    total_spd_v += torch.nn.functional.relu(v_h - model.v_max).mean().item()
+                    a_h = v_h / dt_step.clamp(min=1e-3)
+                    total_acc_v += torch.nn.functional.relu(a_h - max_a_h).mean().item()
+                    total_hgt_v += (torch.nn.functional.relu(model.z_min - p_phys[:, 1]) +
+                                    torch.nn.functional.relu(p_phys[:, 1] - model.z_max)).mean().item()
+                    n_viol += 1
+
                 count += 1
             total_loss += (diff_loss / max(count, 1)).item()
             if preds:
@@ -1295,6 +1389,7 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                                                 b["ctx_vel"][:, -1, :], c)
             t_now = b["ctx_t"][:, -1]
             diff_loss_total = 0.0
+            phy_loss_total = 0.0
             count = 0
             last_pos = b["ctx_pos"][:, -1, :]
 
@@ -1304,22 +1399,25 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                 use_gt = torch.rand(1).item() > ss_prob
 
                 if use_gt or j == 0:
-                    p_obs = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
-                                          config["label_smoothing"])
+                    # 教师强制：使用真实位置（不做平滑，扩散模型需要纯净目标）
+                    p_obs = b["tgt_pos"][:, j, :]
                     v_obs = b["tgt_vel"][:, j, :]
                 else:
                     # 使用 ODE 先验位置（轻量），而非完整扩散采样（昂贵且不参与梯度）
                     p_obs = h_prior[:, :3].detach()
                     v_obs = (p_obs - last_pos) / dt_step.clamp(min=1e-3).unsqueeze(-1)
 
-                loss_dict = model.diffusion.compute_loss(h_prior, dt_step, last_pos, p_obs)
+                loss_dict = model.diffusion.compute_loss(
+                    h_prior, dt_step, last_pos, p_obs,
+                    p_mean=b.get("p_mean"), p_std=b.get("p_std"))
                 diff_loss_total += loss_dict["diff_loss"]
+                phy_loss_total += loss_dict["physics_loss"]
                 h = model.state_manager.update(h_prior, dt_step, p_obs, v_obs)
                 last_pos = p_obs
                 t_now = b["tgt_t"][:, j]
                 count += 1
 
-            loss = diff_loss_total / max(count, 1)
+            loss = (diff_loss_total + config.get("physics_weight", 0.01) * phy_loss_total) / max(count, 1)
             optimizer.zero_grad()
             loss.backward()
             if not _check_nan(loss, 3, epoch):
@@ -1338,7 +1436,7 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage2(model, val_loader, device)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage3(model, val_loader, device)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
