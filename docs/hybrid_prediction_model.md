@@ -370,6 +370,8 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 阶段一完成后自动保存完整检查点（含优化器/调度器状态）。
 
+> **验证方式**（`_validate_stage1`）：使用 ODE 先验位置 `h_prior[:, :3]` 作为预测值，GRU 用真实轨迹更新（教师强制）。物理违反率反标准化到原始空间（m/s）后计算，速度/加速度取水平分量，高度同时检查上下限。
+
 #### 阶段二：训练扩散模型
 
 | 参数 | 值 |
@@ -379,9 +381,12 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 | 损失函数 | $\mathcal{L}_{\text{diff}} = \text{MSE}(\mathbf{\epsilon}_{\text{pred}}, \mathbf{\epsilon}_{\text{true}}) + \lambda_{\text{phy}} \cdot \mathcal{C}(\mathbf{p}_{\text{phys}})$ |
 | 物理正则 | 传入 `p_mean/p_std` 在原始物理空间计算，梯度通过 1/p_std 正确缩放回传 |
 | 物理权重 | `physics_weight=0.01`，可在 config.json → training 中调整 |
+| 验证指标 | Diff Loss + ADE + FDE + Speed/Accel/Height 违反率 |
 | 学习率 | Warmup(3 epochs, 起始 0.1×) + Cosine 退火 |
 
 阶段二完成后自动保存完整检查点。
+
+> **验证方式**（`_validate_stage2`）：使用完整扩散采样 `guided_sampling()` 作为预测值（DDIM 50 步 + 物理引导），GRU 用真实轨迹更新（教师强制）。因此验证较慢，每个预测点需跑完整去噪过程。
 
 #### 阶段三（可选）：联合微调
 
@@ -395,6 +400,8 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 | NaN 保护 | 跳过 NaN 梯度更新；检测到全 epoch NaN 时提前终止并保存 |
 
 > **注意**: 阶段三使用 ODE 先验位置（`h_prior[:, :3]`）而非扩散采样作为计划采样的生成样本，因为扩散采样在训练中不参与梯度回传却消耗大量计算。
+
+> **验证方式**（`_validate_stage3`）：使用完整扩散采样 + **自回归** GRU 更新（用预测位置估计速度，不回退真实值）。与 `_validate_stage2` 的最大区别是模拟真实推理的闭环行为，因此验证 loss 会高于阶段二，但更能反映实际部署精度。
 
 ### 4.3 Warmup 学习率策略
 
