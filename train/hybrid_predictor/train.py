@@ -992,10 +992,18 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
                 tgt_s = _label_smooth(b["tgt_pos"][:, j, :], b["p_std"],
                                      config["label_smoothing"])
                 mse_loss += torch.nn.functional.mse_loss(p_pred, tgt_s)
+                # 物理违反损失：反标准化后在原始空间计算，与验证/推理一致
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
-                v_pred = (p_pred - prev_p) / dt_step.clamp(min=1e-3).unsqueeze(-1)
-                v_norm = torch.norm(v_pred, dim=-1)
-                phy_loss += torch.nn.functional.relu(v_norm - model.v_max).mean()
+                if b.get("p_std") is not None:
+                    p_phys = p_pred * b["p_std"] + b.get("p_mean", 0)
+                    prev_phys = prev_p * b["p_std"] + b.get("p_mean", 0)
+                    v_phys = (p_phys - prev_phys) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    v_h = torch.norm(v_phys[:, [0, 2]], dim=-1)
+                    phy_loss += torch.nn.functional.relu(v_h - model.v_max).mean()
+                else:
+                    v_pred = (p_pred - prev_p) / dt_step.clamp(min=1e-3).unsqueeze(-1)
+                    v_norm = torch.norm(v_pred, dim=-1)
+                    phy_loss += torch.nn.functional.relu(v_norm - model.v_max).mean()
                 h = model.state_manager.update(h_prior, dt_step,
                                                b["tgt_pos"][:, j, :], b["tgt_vel"][:, j, :])
                 t_now = t_next
