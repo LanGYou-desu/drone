@@ -156,10 +156,16 @@ Phy-ODE-Diffusion 模型训练的完整参数。训练脚本启动时优先从 `
 ### 训练命令示例
 
 ```bash
-# 使用 config.json 中所有默认值
+# 使用 config.json 中所有默认值（6层Transformer, d_z=64, ode_hidden=128）
 python train/hybrid_predictor/train.py --stage 2 --device cuda:0
 
-# 命令行覆盖特定参数
+# 各阶段独立控制轮数和批次
+python train/hybrid_predictor/train.py --stage all \
+    --epochs-s1 100 --epochs-s2 100 --epochs-s3 20 \
+    --batch-s1 128 --batch-s2 128 --batch-s3 64 \
+    --device cuda:0
+
+# 命令行覆盖特定参数（--epochs 统一设置所有阶段）
 python train/hybrid_predictor/train.py --stage 2 --epochs 30 --batch 16 --device cuda:0
 
 # 关闭 label_smoothing 和 warmup

@@ -130,28 +130,44 @@ python train/yolotrain/train.py \
 
 ### 轨迹预测模型 (Phy-ODE-Diffusion)
 
+> 模型架构：6 层 Transformer 编码器 + 物理结构 ODE (d_z=64) + 物理引导扩散，~482K 参数
+
 ```bash
 # 1. 生成合成训练数据（或放入 .dat 格式真实数据到 dataset/train/）
 python train/hybrid_predictor/generate_synthetic.py 200
 
-# 2. 阶段一+二训练（推荐，稳定收敛）
-python train/hybrid_predictor/train.py --stage 2 --epochs 40 --batch 64 --device cuda:0
+# 2. 阶段一+二训练（推荐 --stage 2）
+python train/hybrid_predictor/train.py --stage 2 \
+    --epochs-s1 100 --epochs-s2 100 \
+    --batch-s1 128 --batch-s2 128 \
+    --device cuda:0
 
 # 3. 阶段三联合微调（可选）
-python train/hybrid_predictor/train.py --stage 3 --epochs 20 --batch 32 --device cuda:0
+python train/hybrid_predictor/train.py --stage 3 \
+    --epochs-s3 20 --batch-s3 64 --device cuda:0
 
-# 4. 恢复训练（自动跳过已完成阶段，恢复优化器/调度器状态）
-python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
+# 4. 全部三阶段一键训练（各阶段独立参数）
+python train/hybrid_predictor/train.py --stage all \
+    --epochs-s1 100 --epochs-s2 100 --epochs-s3 20 \
+    --batch-s1 128 --batch-s2 128 --batch-s3 64 \
+    --device cuda:0
+
+# 5. 恢复训练（自动跳过已完成阶段，恢复优化器/调度器状态）
+python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/best/phy_ode_diffusion_best_s2.pt
 ```
 
-每阶段结束自动保存完整检查点（含优化器/调度器状态），命名格式 `phy_ode_diffusion_s{stage}_e{epoch}_v{loss}.pt`。
-最佳模型单独保存为 `phy_ode_diffusion_best_s{stage}.pt`，不被覆盖。
-NaN 异常自动跳过梯度更新，阶段三检测到 NaN 自动提前终止并保存。
+**训练特性：**
+- 每阶段结束自动保存完整检查点（含优化器/调度器状态）
+- 最佳模型单独保存为 `phy_ode_diffusion_best_s{stage}.pt` 不被覆盖
+- 每阶段结束后立即生成训练图表（01~06），及时掌握训练进展
+- `--epochs-sN` / `--batch-sN` 独立控制各阶段轮次和批次大小
+- NaN 异常自动跳过梯度更新，阶段三检测到 NaN 自动提前终止
+- 物理约束损失在阶段二/三中参与梯度回传（`physics_weight=0.01`）
 
-训练评估指标：**MSE + ADE + FDE**，图表包含损失分解、收敛性分析、阶段对比（含雷达图）、综合仪表盘。
+**评估指标：** MSE + ADE + FDE + Speed/Accel/Height 物理违反率（含上下限）。
 
-预测服务自动查找最新/最佳权重文件（优先级：`best_s*` > `s*_e*` > 旧命名）。
-`config.json` → `hybrid_model` 可在设置页面直接调整物理约束参数。
+预测服务自动查找最新/最佳权重文件（优先级：`best_s*` > `s*_e*`）。
+`config.json` → `hybrid_model` 可在设置页面直接调整推理物理约束参数。
 
 > 详细数学原理和训练方法见 [`docs/hybrid_prediction_model.md`](docs/hybrid_prediction_model.md)
 
