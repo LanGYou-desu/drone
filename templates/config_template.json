@@ -10,35 +10,34 @@
             "name": "可见光",
             "color": "#ff6b6b",
             "visible": true,
-            "weight": 1.0,
-            "enabled": true
+            "enabled": true,
+            "weight": 1.0
         },
         "infrared": {
             "name": "红外",
             "color": "#4ecdc4",
             "visible": true,
-            "weight": 1.0,
-            "enabled": true
+            "enabled": true,
+            "weight": 1.0
         },
         "radar": {
             "name": "雷达",
             "color": "#ffe66d",
             "visible": true,
-            "weight": 1.0,
-            "enabled": true
+            "enabled": true,
+            "weight": 1.0
         },
         "self": {
             "name": "自选",
             "color": "#FF9500",
             "visible": true,
-            "weight": 1.0,
-            "enabled": true
+            "enabled": true,
+            "weight": 1.0
         },
         "synthetic": {
             "name": "综合",
             "color": "#ffffff",
             "visible": true,
-            "weight": 1.0,
             "enabled": true
         }
     },
@@ -48,8 +47,57 @@
         "default_points": 20,
         "time_step": 0.3
     },
+    "drone_dynamics": {
+        "g": 9.81,
+        "v_h_max": 20.0,
+        "v_v_up": 5.0,
+        "v_v_down": 3.0,
+        "max_tilt": 35.0,
+        "max_alt": 120.0,
+        "min_alt": 1.0,
+        "thrust_max": 25.0,
+        "thrust_hover": 9.81
+    },
+    "training": {
+        "ctx_len": 20,
+        "tgt_len": 10,
+        "batch_size": 32,
+        "lr_stage1": 0.001,
+        "lr_stage2": 0.001,
+        "lr_stage3": 0.0001,
+        "weight_decay": 0.0001,
+        "epochs_stage1": 50,
+        "epochs_stage2": 100,
+        "epochs_stage3": 20,
+        "warmup_epochs_s1": 5,
+        "warmup_epochs_s2": 3,
+        "warmup_epochs_s3": 2,
+        "warmup_start_factor": 0.1,
+        "label_smoothing": 0.005,
+        "n_layers": 6,
+        "d_z": 64,
+        "ode_hidden_dim": 128,
+        "v_max": 30.0,
+        "a_max": 30.0,
+        "z_min": 0.0,
+        "z_max": 120.0,
+        "physics_weight": 0.01
+    },
+    "hybrid_model": {
+        "enabled": true,
+        "v_max": 25.0,
+        "a_max": 20.0,
+        "z_min": 5.0,
+        "z_max": 120.0,
+        "v_v_up": 5.0,
+        "v_v_down": 3.0,
+        "max_tilt": 35.0,
+        "guidance_eta": 0.15,
+        "inference_steps": 80,
+        "device": "cuda:0"
+    },
     "theme": "dark",
-    "camera_speed": 0.12,
+    "camera_speed": 0.1,
     "capture_weights": {
         "height": 1.0,
         "speed": 1.0,
@@ -57,25 +105,80 @@
         "curvature": 1.0
     },
     "detection": {
-        "model": "models/yolo/yolov8n.pt",
-        "confidence_threshold": 0.5,
-        "nms_threshold": 0.45,
-        "frame_interval": 5,
+        "model": "models/yolo/detect.pt",
+        "confidence_threshold": 0.2,
+        "nms_threshold": 0.2,
+        "frame_interval": 3,
         "tracker": "bytetrack",
-        "input_width": 640,
-        "input_height": 640,
-        "device": "auto",
+        "input_width": 1280,
+        "input_height": 960,
+        "device": "cuda:0",
         "auto_save": true,
-        "target_classes": [4, 14]
+        "target_classes": [0],
+        "target_class_id": 0
     },
-    "stereo": {
-        "focal_length_px": 0,
-        "baseline": 1.0,
-        "fov_horizontal": 90.0,
-        "fov_vertical": 60.0,
-        "resolution_width": 1920,
-        "resolution_height": 1080,
-        "tilt_angle": 0.0,
-        "convergence_angle": 0.0
+    "platforms": {
+        "visible": {
+            "focal_length_px": 0,
+            "baseline": 1,
+            "fov_horizontal": 90,
+            "fov_vertical": 60,
+            "resolution_width": 1920,
+            "resolution_height": 1080,
+            "pos_x": 0,
+            "pos_y": 0,
+            "pos_z": 0,
+            "pitch": 0,
+            "yaw": 0,
+            "roll": 0
+        },
+        "infrared": {
+            "baseline": 1.2,
+            "convergence_angle": 0,
+            "focal_length_px": 0,
+            "fov_horizontal": 60,
+            "fov_vertical": 45,
+            "pitch": 5,
+            "pos_x": 2,
+            "pos_y": 1.5,
+            "pos_z": 0,
+            "resolution_height": 480,
+            "resolution_width": 640,
+            "roll": 0,
+            "tilt_angle": 5,
+            "yaw": 0
+        },
+        "radar": {
+            "baseline": 2,
+            "convergence_angle": 0,
+            "focal_length_px": 0,
+            "fov_horizontal": 120,
+            "fov_vertical": 90,
+            "pitch": 0,
+            "pos_x": -2,
+            "pos_y": 1.5,
+            "pos_z": 0,
+            "resolution_height": 768,
+            "resolution_width": 1024,
+            "roll": 0,
+            "tilt_angle": 0,
+            "yaw": 90
+        },
+        "self": {
+            "baseline": 1,
+            "convergence_angle": 0,
+            "focal_length_px": 0,
+            "fov_horizontal": 90,
+            "fov_vertical": 60,
+            "pitch": 0,
+            "pos_x": 0,
+            "pos_y": 1.5,
+            "pos_z": 0,
+            "resolution_height": 1080,
+            "resolution_width": 1920,
+            "roll": 0,
+            "tilt_angle": 0,
+            "yaw": 0
+        }
     }
 }

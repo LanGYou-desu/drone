@@ -87,7 +87,7 @@ $$\mathbf{e}_i = \text{TimeEmbedding}(t_i) = \big[\sin(\omega_1 t_i), \cos(\omeg
 
 #### Transformer Encoder
 
-采用 **Pre-LN (Pre-Layer Normalization)** 架构：输入 token 为 $\mathbf{f}_i + \mathbf{e}_i$，前置可学习的 CLS token，通过 3 层 Transformer Encoder（4 头注意力，GELU 激活，Pre-LN 结构，batch_first）。Pre-LN 比 Post-LN 训练更稳定，梯度从顶层直通底层。取 CLS token 输出经 Tanh 投影：
+采用 **Pre-LN (Pre-Layer Normalization)** 架构：输入 token 为 $\mathbf{f}_i + \mathbf{e}_i$，前置可学习的 CLS token，通过 6 层 Transformer Encoder（4 头注意力，GELU 激活，Pre-LN 结构，batch_first）。Pre-LN 比 Post-LN 训练更稳定，梯度从顶层直通底层。取 CLS token 输出经 Tanh 投影：
 
 $$\mathbf{c} = \text{MLP}_{\text{ctx}}\big(\text{Transformer}(\text{CLS}, \mathbf{f}_1+\mathbf{e}_1, \dots, \mathbf{f}_N+\mathbf{e}_N)_{\text{CLS}}\big) \in \mathbb{R}^{d_c}$$
 
@@ -103,7 +103,7 @@ $$\mathbf{c} = \text{MLP}_{\text{ctx}}\big(\text{Transformer}(\text{CLS}, \mathb
 
 $$\mathbf{h}(t) = [\mathbf{p}(t), \mathbf{v}(t), \mathbf{z}(t)]^\top \in \mathbb{R}^{6 + d_z}$$
 
-其中 $\mathbf{p}, \mathbf{v} \in \mathbb{R}^3$，$\mathbf{z} \in \mathbb{R}^{d_z}$ 为 $d_z = 32$ 维潜在特征。
+其中 $\mathbf{p}, \mathbf{v} \in \mathbb{R}^3$，$\mathbf{z} \in \mathbb{R}^{d_z}$ 为 $d_z = 64$ 维潜在特征。
 
 #### 连续时间动力学（神经常微分方程）
 
@@ -294,12 +294,12 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 | 模块 | 参数量 |
 |------|--------|
-| Transformer Encoder (3 layers, 4 heads, d_feat=64) | ~60,000 |
-| Physics ODE (MLP_a + MLP_z, d_z=32) | ~12,000 |
-| ODE State Manager (GRU + ObsEncoder 10→32) | ~8,000 |
-| Noise Prediction Net (4-layer MLP, hidden=128) | ~40,000 |
-| 其他 (嵌入/投影/归一化) | ~15,000 |
-| **总计** | **~255,000** |
+| Transformer Encoder (6 layers, 4 heads, d_feat=64) | ~120,000 |
+| Physics ODE (MLP_a + MLP_z, d_z=64, hidden=128) | ~50,000 |
+| ODE State Manager (GRU + ObsEncoder 10→32) | ~20,000 |
+| Noise Prediction Net (4-layer MLP, hidden=128) | ~55,000 |
+| 其他 (嵌入/投影/归一化) | ~237,000 |
+| **总计** | **~482,000** |
 
 ---
 
@@ -378,8 +378,8 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 | 训练模块 | Diffusion（NoisePredictionNet） |
 | 冻结模块 | Transformer、Physics ODE、GRU（全部参数） |
 | 损失函数 | $\mathcal{L}_{\text{diff}} = \text{MSE}(\mathbf{\epsilon}_{\text{pred}}, \mathbf{\epsilon}_{\text{true}}) + \lambda_{\text{phy}} \cdot \mathcal{C}(\mathbf{p}_{\text{phys}})$ |
-| 标签平滑 | 对 x0_gt 添加自适应高斯噪声 |
-| 物理正则 | 传入 `p_mean/p_std` 在原始物理空间计算，梯度通过 1/p_std 正确缩放 |
+| 物理正则 | 传入 `p_mean/p_std` 在原始物理空间计算，梯度通过 1/p_std 正确缩放回传 |
+| 物理权重 | `physics_weight=0.01`，可在 config.json → training 中调整 |
 | 学习率 | Warmup(3 epochs, 起始 0.1×) + Cosine 退火 |
 
 阶段二完成后自动保存完整检查点。
@@ -432,7 +432,7 @@ CLI 参数：`--warmup-s1 5 --warmup-s2 3 --warmup-s3 2 --warmup-factor 0.1`
 | **FDE** | $\|\hat{\mathbf{p}}_{N+K} - \mathbf{p}_{N+K}\|$ | 最终位移误差（终点精度） |
 | **Speed Violation** | $\max(0, \|\mathbf{v}\| - v_{\max})$ | 速度约束违反 |
 | **Accel Violation** | $\max(0, \|\mathbf{a}\| - a_{\max})$ | 加速度约束违反 |
-| **Height Violation** | $\max(0, z_{\min} - z)$ | 高度约束违反 |
+| **Height Violation** | $\max(0, z_{\min} - z) + \max(0, z - z_{\max})$ | 高度约束违反（下限+上限） |
 
 ### 4.5 恢复训练
 
@@ -473,7 +473,7 @@ trajectory_reconstruction/core/prediction/
     │
     ├── transformer.py                      # 不规则时间序列编码
     │   ├── ContinuousTimeEncoding          # 连续时间正弦位置编码
-    │   └── TransformerEncoder              # 3层 Transformer + CLS token
+    │   └── TransformerEncoder              # 6层 Transformer + CLS token
     │
     ├── physics_ode.py                      # 物理 ODE 动力学
     │   ├── PhysicsODEFunc                  # f_θ: dp/dt=v, dv/dt=a_max·tanh, dz/dt=MLP
@@ -587,14 +587,17 @@ train/hybrid_predictor/train_result/models/
 | `d_feat` | 64 | Transformer 特征维度 |
 | `d_context` | 128 | 上下文向量维度 |
 | `n_head` | 4 | 注意力头数 |
-| `n_layers` | 3 | Transformer 层数 |
+| `n_layers` | 6 | Transformer 层数 |
 | `dim_feedforward` | 256 | FFN 维度 |
-| `d_z` | 32 | ODE 潜在特征维度 |
+| `d_z` | 64 | ODE 潜在特征维度 |
+| `ode_hidden_dim` | 128 | ODE MLP 隐藏层维度 |
 | `n_diffusion_steps` | 500 | 训练时扩散步数 |
 | `n_inference_steps` | 50 | 推理时 DDIM 步数 |
 | `a_max` | 30.0 | 加速度软限幅 (m/s²) |
 | `v_max` | 30.0 | 速度约束 (m/s) |
-| `z_min` | 0.0 | 高度约束 (m) |
+| `z_min` | 0.0 | 高度下限 (m) |
+| `z_max` | 120.0 | 高度上限 (m) |
+| `physics_weight` | 0.01 | 物理损失权重（阶段二/三） |
 
 ---
 
@@ -791,6 +794,48 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 **问题**: ADE/FDE 和物理违反率仅在日志中记录，未可视化。
 
 **方案**: 验证时反标准化后在原始空间计算物理违反率，全部 6 项指标（MSE/ADE/FDE/Speed/Accel/Height）通过 6 张图表可视化。
+
+### 扩散评估使用完整管道（2026-07）
+
+**问题**: 阶段二/三验证和测试评估使用 ODE 先验 `h_prior[:, :3]` 而非完整扩散采样计算 ADE/FDE，导致基于错误指标选择"最佳"模型。
+
+**方案**: `_validate_stage2/stage3` 和 `evaluate_test` 改用 `guided_sampling()` 进行位置预测。新增 `_validate_stage3` 使用自回归状态更新模拟真实推理。
+
+### 物理损失梯度修复
+
+**问题**: `compute_loss()` 中 `torch.no_grad()` 阻止物理约束代价梯度回传，且阶段二/三调用方忽略 `physics_loss`——扩散模型训练中物理正则完全无效。
+
+**方案**: 移除 `no_grad()` 使梯度正确回传，阶段二/三损失中加入 `physics_weight * phy_loss`。权重默认 0.01，可在配置中调整。
+
+### 高度约束完整检查
+
+**问题**: 三个评估函数仅检查 `z_min`（下限），不检查 `z_max`（上限），而 `_physics_cost()` 正确检查两者。
+
+**方案**: 所有评估函数增加 `relu(p[:, 1] - z_max)` 上限检查。
+
+### 加速度违反公式对齐
+
+**问题**: 评估函数使用全速度大小 `v_norm/dt` 计算加速度，与 `_physics_cost()` 的水平分量 `v_h/dt` 不一致。
+
+**方案**: 统一使用水平速度分量 `v_h = norm(v[:, [0,2]])` 计算加速度，与 `g·tan(max_tilt)` 比较。
+
+### 扩散目标标签平滑移除
+
+**问题**: 阶段二对扩散目标应用标签平滑（高斯噪声），对去噪扩散模型概念上不正确。
+
+**方案**: 阶段二/三的扩散目标移除标签平滑，仅阶段一确定性回归保留。
+
+### 检查点保存完整架构参数
+
+**问题**: `load_hybrid_model()` 仅传物理参数，架构参数依赖默认值，非默认架构训练后加载失败。
+
+**方案**: `PhyODEDiffusion` 保存 `_model_config`，`get_model_info()` 扩展为完整参数，推理时从检查点读取。
+
+### 模型容量提升
+
+**问题**: 原 3 层 Transformer + d_z=32 + ode_hidden=64（~255K 参数）容量有限。
+
+**方案**: 增至 6 层 Transformer + d_z=64 + ode_hidden=128（~482K 参数），显著增强时序建模和动力学学习能力。
 
 ---
 
