@@ -140,7 +140,7 @@ $$\mathbf{h}^- = \text{ODESolve}(f_\theta, \mathbf{h}, t, t+\Delta t)$$
 $$\mathbf{u} = \text{Encoder}(\Delta t, \mathbf{p}_{\text{obs}}, \mathbf{v}_{\text{obs}}, \mathbf{a}_{\text{obs}})$$
 $$\mathbf{h}_{\text{new}} = \text{GRU}(\mathbf{h}^-, \mathbf{u})$$
 
-其中 $\mathbf{a}_{\text{obs}} = (\mathbf{v}_{\text{obs}} - \mathbf{v}_{\text{prev}}) / \Delta t$（由相邻速度差分得到）。这种 **先演化-后更新** 的设计类似 Kalman 滤波的预测-校正框架。
+其中加速度通道预留为 $\mathbf{0}$（实际未计算速度差分）。这种 **先演化-后更新** 的设计类似 Kalman 滤波的预测-校正框架。
 
 ---
 
@@ -160,7 +160,7 @@ $\tau \in [0, T-1]$，$T = 500$，$\bar{\alpha}_\tau$ 由余弦调度定义。
 
 $$\mathcal{L}_{\text{diff}} = \mathbb{E}_{\tau, \mathbf{\epsilon}}\left[ \|\mathbf{\epsilon}_\phi(\mathbf{x}_\tau, \tau, \mathbf{h}^-, \Delta t) - \mathbf{\epsilon}\|^2 \right]$$
 
-网络结构：输入 $\mathbf{x}_\tau(3) + \tau\text{-emb}(16) + \mathbf{h}^-(38) + \Delta t\text{-emb}(16)$ → 条件投影 → 4 层 MLP($128 \to 128 \to 128 \to 3$)，最后一层初始化为零。
+网络结构：输入 $\mathbf{x}_\tau(3) + \tau\text{-emb}(16) + \mathbf{h}^-(70) + \Delta t\text{-emb}(16)$ → 条件投影 → 4 层 MLP($128 \to 128 \to 128 \to 3$)，最后一层初始化为零。
 
 **物理正则**：训练时若提供归一化统计量 $(\mathbf{p}_{\text{mean}}, \mathbf{p}_{\text{std}})$，则反标准化后在原始物理空间计算约束代价，梯度通过 $1/\mathbf{p}_{\text{std}}$ 正确缩放回传。
 
@@ -250,7 +250,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
                           ┌────────────────▼───────────────────┐
                           │  ODE State Manager                  │
                           │  ┌────────────────────────────────┐ │
-                          │  │ Init: [p_N, v_N, MLP(c)]       │ │
+                          │  │ Init: MLP([p_N, v_N, c]) → h₀       │ │
                           │  │        ┌───────────────────┐   │ │
                           │  │        │ Physics ODE Func   │   │ │
                           │  │        │ dp/dt = v          │   │ │
@@ -436,7 +436,7 @@ CLI 参数：`--warmup-s1 5 --warmup-s2 3 --warmup-s3 2 --warmup-factor 0.1`
 | **MSE** | $\frac{1}{K}\sum\|\hat{\mathbf{p}}_k - \mathbf{p}_k\|^2$ | 均方位置误差（阶段一/三） |
 | **ADE** | $\frac{1}{K}\sum_{k=1}^{K}\|\hat{\mathbf{p}}_{N+k} - \mathbf{p}_{N+k}\|$ | 平均位移误差 |
 | **FDE** | $\|\hat{\mathbf{p}}_{N+K} - \mathbf{p}_{N+K}\|$ | 最终位移误差（终点精度） |
-| **Speed Violation** | $\max(0, \|\mathbf{v}\| - v_{\max})$ | 速度约束违反 |
+| **Speed Violation** | $\max(0, \|\mathbf{v}_{xz}\| - v_{\max})$ | 水平速度约束违反（XZ 平面） |
 | **Accel Violation** | $\max(0, \|\mathbf{a}\| - a_{\max})$ | 加速度约束违反 |
 | **Height Violation** | $\max(0, z_{\min} - z) + \max(0, z - z_{\max})$ | 高度约束违反（下限+上限） |
 
@@ -585,7 +585,7 @@ train/hybrid_predictor/train_result/models/
 | `warmup_start_factor` | 0.1 | warmup 起始 LR = base_lr × factor |
 | `label_smoothing` | 0.005 | 标签平滑噪声系数（0=关闭） |
 
-### 模型超参（`PhyODEDiffusion.__init__`）
+### 模型超参（训练默认值，可由 config.json → training 覆盖）
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
