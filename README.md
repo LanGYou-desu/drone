@@ -24,7 +24,7 @@ python main.py recog         # 仅轨迹识别 → :5001
 
 ## 项目结构
 
-```
+```text
 drone/
 ├── main.py                              # 统一入口
 ├── config.json                          # 运行时配置

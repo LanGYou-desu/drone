@@ -236,7 +236,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 ## 3. 模型架构
 
-```
+```text
                           ┌────────────────────────────────────┐
 历史轨迹                    │  Transformer Encoder               │
 {(t_i, p_i)} ──────────►  │  ┌─────────────────────────────┐   │
@@ -250,7 +250,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
                           ┌────────────────▼───────────────────┐
                           │  ODE State Manager                  │
                           │  ┌────────────────────────────────┐ │
-                          │  │ Init: MLP([p_N, v_N, c]) → h₀       │ │
+                          │  │ Init: MLP([p_N, v_N, c]) → h₀    │ │
                           │  │        ┌───────────────────┐   │ │
                           │  │        │ Physics ODE Func   │   │ │
                           │  │        │ dp/dt = v          │   │ │
@@ -326,7 +326,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 #### 滑动窗口采样
 
-```
+```text
 轨迹: [p₁, p₂, ..., p_N]
       ├── ctx_len ──┤├─ tgt_len ─┤
 窗口: [p₁, ..., p_C] [p_{C+1}, ..., p_{C+M}]
@@ -415,7 +415,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 **调度曲线**：
 
-```
+```text
 LR
 │  warmup (线性增长)     cosine 退火
 │  ╱                     ╲
@@ -450,7 +450,7 @@ CLI 参数：`--warmup-s1 5 --warmup-s2 3 --warmup-s3 2 --warmup-factor 0.1`
 4. 从 `checkpoint["epoch"] + 1` 继续训练
 5. 自动跳过已完成的阶段（`resumed_stage` 检测）
 
-```
+```bash
 # 从阶段二最佳模型恢复
 python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor/train_result/models/phy_ode_diffusion_best_s2.pt
 ```
@@ -459,7 +459,7 @@ python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor
 
 ## 5. 代码结构
 
-```
+```text
 trajectory_reconstruction/core/prediction/
 ├── prediction.py                           # 预测入口
 │   ├── generate_prediction()               # 线性外推（兜底，始终可用）
