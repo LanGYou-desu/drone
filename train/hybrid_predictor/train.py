@@ -1636,17 +1636,26 @@ def main():
             return build_dataloaders(config)
         return default_loader
 
+    def _stage_charts(stage_label: str):
+        """阶段结束后立即生成图表（若未禁用）"""
+        if not args.no_charts and HAS_MPL and logger.history:
+            print(f"\n[图表] {stage_label}完成，生成阶段图表...")
+            _plot_all_charts(logger, _run_dir)
+
     if run_s1:
         _loader = _stage_loader(1, (train_loader, val_loader))
         train_stage1(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
+        _stage_charts("阶段一")
 
     if run_s2:
         _loader = _stage_loader(2, (train_loader, val_loader))
         train_stage2(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
+        _stage_charts("阶段二")
 
     if run_s3:
         _loader = _stage_loader(3, (train_loader, val_loader))
         train_stage3(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
+        _stage_charts("阶段三")
 
     total_time = time.time() - t_total_start
     print(f"\n{'='*60}")
@@ -1701,14 +1710,7 @@ def main():
     history_path = logger.save(results_dir)
     print(f"[日志] 训练历史: {history_path}")
 
-    # 生成多种评价指标图表
-    if not args.no_charts and HAS_MPL:
-        print(f"\n{'='*50}")
-        print("  生成训练图表")
-        print(f"{'='*50}")
-        _plot_all_charts(logger, results_dir)
-
-    # 保存摘要
+    # 图表已在各阶段完成后生成，此处仅保存摘要
     summary = _save_training_summary(logger, config, results_dir)
     summary["total_params"] = total_params
     summary["total_time_minutes"] = round(total_time / 60, 1)
