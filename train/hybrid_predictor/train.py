@@ -93,7 +93,7 @@ DEFAULT_CONFIG = {
     "d_feat": 64,
     "d_context": 128,
     "n_head": 4,
-    "n_layers": 3,
+    "n_layers": 6,
     "dim_feedforward": 256,
     "dropout": 0.1,
     "d_z": 32,
