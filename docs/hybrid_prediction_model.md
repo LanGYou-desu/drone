@@ -140,7 +140,7 @@ $$\mathbf{h}^- = \text{ODESolve}(f_\theta, \mathbf{h}, t, t+\Delta t)$$
 $$\mathbf{u} = \text{Encoder}(\Delta t, \mathbf{p}_{\text{obs}}, \mathbf{v}_{\text{obs}}, \mathbf{a}_{\text{obs}})$$
 $$\mathbf{h}_{\text{new}} = \text{GRU}(\mathbf{h}^-, \mathbf{u})$$
 
-其中加速度通道预留为 $\mathbf{0}$（实际未计算速度差分）。这种 **先演化-后更新** 的设计类似 Kalman 滤波的预测-校正框架。
+其中 $\mathbf{a}_{\text{obs}} = (\mathbf{v}_{\text{obs}} - \mathbf{v}_{\text{prior}}) / \Delta t$，由观测速度与 ODE 先验速度差分得到。这种 **先演化-后更新** 的设计类似 Kalman 滤波的预测-校正框架。
 
 ---
 

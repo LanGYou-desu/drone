@@ -105,7 +105,10 @@ class ODEStateManager(nn.Module):
     ) -> torch.Tensor:
         """
         GRU 融合虚拟观测 → 后验状态 h_new
+        加速度由 (v_obs - v_prior) / dt 计算，无需外部传入。
         """
-        u = self.obs_encoder(dt, p_obs, v_obs)    # (B, obs_hidden_dim)
-        h_new = self.gru(u, h_prior)              # (B, state_dim)
+        v_prior = h_prior[:, 3:6]  # ODE 先验速度
+        a_obs = (v_obs - v_prior) / dt.clamp(min=1e-3).unsqueeze(-1)
+        u = self.obs_encoder(dt, p_obs, v_obs, a_obs)  # 10 维全部有效
+        h_new = self.gru(u, h_prior)
         return h_new
