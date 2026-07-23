@@ -1481,7 +1481,11 @@ def main():
     parser.add_argument("--epochs-s1", type=int, default=None, help="阶段一轮数")
     parser.add_argument("--epochs-s2", type=int, default=None, help="阶段二轮数")
     parser.add_argument("--epochs-s3", type=int, default=None, help="阶段三轮数")
-    parser.add_argument("--batch", type=int, default=32)
+    parser.add_argument("--batch", type=int, default=32,
+                        help="统一设置批次大小（快捷方式）")
+    parser.add_argument("--batch-s1", type=int, default=None, help="阶段一批次大小")
+    parser.add_argument("--batch-s2", type=int, default=None, help="阶段二批次大小")
+    parser.add_argument("--batch-s3", type=int, default=None, help="阶段三批次大小")
     parser.add_argument("--workers", type=int, default=None,
                         help="DataLoader 多进程数，默认4")
     parser.add_argument("--device", type=str, default="cuda:0")
@@ -1516,6 +1520,12 @@ def main():
     config["ctx_len"] = args.ctx_len
     config["tgt_len"] = args.tgt_len
     config["batch_size"] = args.batch
+    if args.batch_s1 is not None:
+        config["batch_size_s1"] = args.batch_s1
+    if args.batch_s2 is not None:
+        config["batch_size_s2"] = args.batch_s2
+    if args.batch_s3 is not None:
+        config["batch_size_s3"] = args.batch_s3
     if args.workers is not None:
         config["num_workers"] = args.workers
     config["device"] = args.device
@@ -1616,14 +1626,27 @@ def main():
             run_s1 = False
             run_s2 = False
 
+    # 按阶段应用独立的 batch_size（若配置了 batch_sN 则重建 loader）
+    def _stage_loader(stage: int, default_loader):
+        key = f"batch_size_s{stage}"
+        if key in config:
+            bs = config[key]
+            print(f"[Stage {stage}] 使用专属 batch_size={bs}")
+            config["batch_size"] = bs
+            return build_dataloaders(config)
+        return default_loader
+
     if run_s1:
-        train_stage1(model, train_loader, val_loader, config, device, logger, resume_ckpt)
+        _loader = _stage_loader(1, (train_loader, val_loader))
+        train_stage1(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
 
     if run_s2:
-        train_stage2(model, train_loader, val_loader, config, device, logger, resume_ckpt)
+        _loader = _stage_loader(2, (train_loader, val_loader))
+        train_stage2(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
 
     if run_s3:
-        train_stage3(model, train_loader, val_loader, config, device, logger, resume_ckpt)
+        _loader = _stage_loader(3, (train_loader, val_loader))
+        train_stage3(model, _loader[0], _loader[1], config, device, logger, resume_ckpt)
 
     total_time = time.time() - t_total_start
     print(f"\n{'='*60}")
