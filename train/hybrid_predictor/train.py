@@ -1476,7 +1476,11 @@ def main():
     parser.add_argument("--stage", type=str, default="all",
                         choices=["1", "2", "3", "all"],
                         help="1=仅阶段一, 2=阶段一→二, 3=仅阶段三, all=全部")
-    parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--epochs", type=int, default=None,
+                        help="统一设置三个阶段轮数（快捷方式）")
+    parser.add_argument("--epochs-s1", type=int, default=None, help="阶段一轮数")
+    parser.add_argument("--epochs-s2", type=int, default=None, help="阶段二轮数")
+    parser.add_argument("--epochs-s3", type=int, default=None, help="阶段三轮数")
     parser.add_argument("--batch", type=int, default=32)
     parser.add_argument("--workers", type=int, default=None,
                         help="DataLoader 多进程数，默认4")
@@ -1516,10 +1520,17 @@ def main():
         config["num_workers"] = args.workers
     config["device"] = args.device
 
+    # 轮次：--epochs 统一设置，--epochs-s1/2/3 可单独覆盖
     if args.epochs:
         config["epochs_stage1"] = args.epochs
         config["epochs_stage2"] = args.epochs
         config["epochs_stage3"] = args.epochs
+    if args.epochs_s1 is not None:
+        config["epochs_stage1"] = args.epochs_s1
+    if args.epochs_s2 is not None:
+        config["epochs_stage2"] = args.epochs_s2
+    if args.epochs_s3 is not None:
+        config["epochs_stage3"] = args.epochs_s3
     if args.lr:
         config["lr_stage1"] = args.lr
         config["lr_stage2"] = args.lr
