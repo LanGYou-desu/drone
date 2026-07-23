@@ -195,15 +195,19 @@ def _chart_loss_stage(logger, output_dir, stage, color):
     train_vals = [e["train_loss"] for e in data]
     val_vals = [e["val_loss"] for e in data]
     fig, ax = _plt.subplots(figsize=_CHART_SIZE)
-    ax.semilogy(epochs, train_vals, '-', color=color, lw=2, alpha=0.85, label='Train')
-    ax.semilogy(epochs, val_vals, '--', color=_COLORS['val'], lw=2, alpha=0.85, label='Val')
+    ax.plot(epochs, train_vals, '-', color=color, lw=2, alpha=0.85, label='Train')
+    ax.plot(epochs, val_vals, '--', color=_COLORS['val'], lw=2, alpha=0.85, label='Val')
+    # y 轴上限裁剪：取验证loss最大值的3倍，避免训练loss过大压扁验证曲线
+    y_max = max(val_vals) * 3 if val_vals else None
+    if y_max and y_max > 0:
+        ax.set_ylim(0, y_max)
     best_i = min(range(len(data)), key=lambda i: data[i]["val_loss"])
     ax.axvline(x=epochs[best_i], color=_COLORS['best'], linestyle=':', alpha=0.5, lw=1)
     ax.annotate(f'Best: {data[best_i]["val_loss"]:.4f}', xy=(epochs[best_i], data[best_i]["val_loss"]),
                 xytext=(10, 15), textcoords='offset points', fontsize=11,
                 arrowprops=dict(arrowstyle='->', lw=1, color=_COLORS['best']), color=_COLORS['best'], fontweight='bold')
-    ax.set_title(f'Stage {stage} — Training Loss (log scale)', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Loss (log)', fontsize=12)
+    ax.set_title(f'Stage {stage} — Training Loss', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
     fig.tight_layout(); _savefig(fig, output_dir, f'01{chr(96+stage)}_loss_s{stage}.png')
 
@@ -216,11 +220,14 @@ def _chart_global_loss(logger, output_dir):
     val_losses = [e["val_loss"] for e in logger.history]
     boundaries = [i for i, e in enumerate(logger.history) if i == 0 or e["stage"] != logger.history[i-1]["stage"]]
     fig, ax = _plt.subplots(figsize=_CHART_SIZE)
-    ax.semilogy(all_epochs, train_losses, '-', color=_COLORS['train'], lw=1.5, alpha=0.8, label='Train')
-    ax.semilogy(all_epochs, val_losses, '-', color=_COLORS['val'], lw=1.5, alpha=0.8, label='Val')
+    ax.plot(all_epochs, train_losses, '-', color=_COLORS['train'], lw=1.5, alpha=0.8, label='Train')
+    ax.plot(all_epochs, val_losses, '-', color=_COLORS['val'], lw=1.5, alpha=0.8, label='Val')
     for b in boundaries[1:]: ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, lw=0.8)
-    ax.set_title('Global Loss Curve (log scale)', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Loss (log)', fontsize=12)
+    # y 轴上限裁剪
+    if val_losses:
+        ax.set_ylim(0, max(val_losses) * 3)
+    ax.set_title('Global Loss Curve', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
     fig.tight_layout(); _savefig(fig, output_dir, '02a_global_loss.png')
 
@@ -462,6 +469,8 @@ def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str,
         ax.plot(ep, [train_losses[i] for i in idxs], '-', color=color, lw=1.2, alpha=0.7)
         ax.plot(ep, [val_losses[i] for i in idxs], '--', color=color, lw=1.5, alpha=0.9, label=f'S{stage} Val')
     ax.set_title('Loss Overview', fontsize=14, fontweight='bold'); ax.set_xlabel('Global Epoch'); ax.set_ylabel('Loss')
+    if val_losses:
+        ax.set_ylim(0, max(val_losses) * 3)  # 裁剪y轴，确保验证曲线可见
     ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
 
     ax = fig.add_subplot(gs[0,2]); ax.axis('off')
