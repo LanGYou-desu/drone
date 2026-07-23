@@ -69,7 +69,10 @@ drone/
 │   │   └── train_result/                #   训练结果图表和日志
 │   └── hybrid_predictor/                # 轨迹预测模型训练
 │       ├── dataset/                     #   数据集目录
-│       │   └── data/                    #   统一数据目录（.npz 优先级）
+│       │   ├── train/                   #   训练轨迹 (.npz / .dat)
+│       │   ├── valid/                   #   验证轨迹
+│       │   ├── test/                    #   测试轨迹（可选）
+│       │   └── data/                    #   后备数据目录
 │       ├── dataset.py                   #   数据加载 + 滑动窗口采样
 │       ├── generate_synthetic.py        #   四旋翼动力学轨迹生成器
 │       ├── train.py                     #   分阶段训练脚本（含进度条+6张图表）

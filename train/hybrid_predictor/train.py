@@ -108,6 +108,10 @@ DEFAULT_CONFIG = {
     "v_max": 30.0,
     "z_min": 0.0,
     "z_max": 120.0,
+    "v_v_up": 5.0,
+    "v_v_down": 3.0,
+    "max_tilt": 35.0,
+    "g": 9.81,
     "obs_hidden_dim": 32,
     # 物理损失权重（阶段二/三中 physics_loss 的相对权重）
     "physics_weight": 0.01,
@@ -436,8 +440,11 @@ def _chart_physics_score(logger, output_dir):
 
 # ═══════════════════ 06 仪表盘（保留概览）═══════════════════
 
-def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
+def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str,
+                                     config: dict = None):
     """综合仪表盘 — 高 DPI 版本"""
+    if config is None:
+        config = {}
     fig = _plt.figure(figsize=(24, 14))
     gs = fig.add_gridspec(3, 4, hspace=0.35, wspace=0.3)
     fig.suptitle('Phy-ODE-Diffusion Training Dashboard', fontsize=18, fontweight='bold', y=0.98)
@@ -465,7 +472,14 @@ def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str):
             bbox=dict(boxstyle='round', facecolor='#F5F5F5', alpha=0.8))
 
     ax = fig.add_subplot(gs[0,3]); ax.axis('off')
-    model_text = "Model\n" + "─"*25 + "\nTransformer: 3L,4H\nd=64, ctx=128\nODE: dz=32, a=30\nDiffusion: T=500\nDDIM: 50 steps\nGRU: obs=32\nData: ctx=20,tgt=10"
+    model_text = ("Model\n" + "─"*25 +
+        f"\nTransformer: {config.get('n_layers',6)}L,{config.get('n_head',4)}H"
+        f"\nd={config.get('d_feat',64)}, ctx={config.get('d_context',128)}"
+        f"\nODE: dz={config.get('d_z',64)}, a={config.get('a_max',30)}"
+        f"\nDiffusion: T={config.get('n_diffusion_steps',500)}"
+        f"\nDDIM: {config.get('n_inference_steps',50)} steps"
+        f"\nGRU: obs={config.get('obs_hidden_dim',32)}"
+        f"\nData: ctx={config.get('ctx_len',20)},tgt={config.get('tgt_len',10)}")
     ax.text(0.05,0.95, model_text, transform=ax.transAxes, fontsize=9, verticalalignment='top', fontfamily='monospace',
             bbox=dict(boxstyle='round', facecolor='#E3F2FD', alpha=0.8))
 
@@ -543,10 +557,12 @@ def _make_test_chart(metrics: dict, output_dir: str):
 
 # ═══════════════════ 图表入口 ═══════════════════
 
-def _plot_all_charts(logger: TrainingLogger, output_dir: str):
+def _plot_all_charts(logger: TrainingLogger, output_dir: str, config: dict = None):
     """生成全部训练图表（高分辨率单图，适合论文）"""
     if not HAS_MPL: print("[跳过] matplotlib 未安装"); return
     if not logger.history: print("[跳过] 训练历史为空"); return
+    if config is None:
+        config = {}
     os.makedirs(output_dir, exist_ok=True)
 
     # 01 损失曲线（每阶段一张）
@@ -585,7 +601,7 @@ def _plot_all_charts(logger: TrainingLogger, output_dir: str):
         print("[图表05] 无物理指标数据，跳过")
 
     # 06 仪表盘概览
-    _make_training_summary_dashboard(logger, output_dir)
+    _make_training_summary_dashboard(logger, output_dir, config)
 
 def _save_training_summary(logger: TrainingLogger, config: dict, output_dir: str):
     """保存训练摘要 JSON"""
@@ -723,6 +739,11 @@ def create_model(config: dict, device: torch.device) -> PhyODEDiffusion:
         guidance_eta=config.get("guidance_eta", 0.1),
         v_max=config.get("v_max", 30.0),
         z_min=config.get("z_min", 0.0),
+        z_max=config.get("z_max", 120.0),
+        v_v_up=config.get("v_v_up", 5.0),
+        v_v_down=config.get("v_v_down", 3.0),
+        max_tilt=config.get("max_tilt", 35.0),
+        g=config.get("g", 9.81),
         obs_hidden_dim=config.get("obs_hidden_dim", 32),
     )
     model.to(device)

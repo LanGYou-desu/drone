@@ -174,7 +174,7 @@ python train/hybrid_predictor/train.py --stage 2 --warmup-s1 0 --warmup-s2 0 --l
 
 ---
 
-## 六、检测 UI 与采集
+## 七、检测 UI 与采集
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -192,7 +192,7 @@ python train/hybrid_predictor/train.py --stage 2 --warmup-s1 0 --warmup-s2 0 --l
 
 ---
 
-## 六、detection — YOLO 目标检测参数
+## 八、detection — YOLO 目标检测参数
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -210,7 +210,7 @@ python train/hybrid_predictor/train.py --stage 2 --warmup-s1 0 --warmup-s2 0 --l
 
 ---
 
-## 七、platforms — 各平台双目相机参数
+## 九、platforms — 各平台双目相机参数
 
 每个平台（visible/infrared/radar/self）独立配置，字段如下：
 

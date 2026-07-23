@@ -242,7 +242,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 {(t_i, p_i)} ──────────►  │  ┌─────────────────────────────┐   │
                           │  │ ContinuousTimeEncoding(t_i)  │   │
                           │  │ InputProj(dt_i, p_i, v_i)   │   │
-                          │  │ CLS → 3×Self-Attn (4 heads) │   │
+                          │  │ CLS → 6×Self-Attn (4 heads) │   │
                           │  └─────────────────────────────┘   │
                           │             ↓ c ∈ R¹²⁸             │
                           └────────────────┬───────────────────┘
@@ -294,11 +294,10 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 | 模块 | 参数量 |
 |------|--------|
-| Transformer Encoder (6 layers, 4 heads, d_feat=64) | ~120,000 |
-| Physics ODE (MLP_a + MLP_z, d_z=64, hidden=128) | ~50,000 |
-| ODE State Manager (GRU + ObsEncoder 10→32) | ~20,000 |
-| Noise Prediction Net (4-layer MLP, hidden=128) | ~55,000 |
-| 其他 (嵌入/投影/归一化) | ~237,000 |
+| Transformer Encoder (6 layers, 4 heads, d_feat=64) | ~309,000 |
+| Physics ODE (MLP_a + MLP_z, d_z=64, hidden=128) | ~60,000 |
+| ODE State Manager (GRU + ObsEncoder + Init Proj) | ~50,000 |
+| Noise Prediction Net (4-layer MLP, hidden=128) | ~64,000 |
 | **总计** | **~482,000** |
 
 ---
@@ -468,8 +467,7 @@ trajectory_reconstruction/core/prediction/
     │   ├── __init__()                      # 子模块组装
     │   ├── forward()                       # 训练前向（教师强制，接收 p_mean/p_std）
     │   ├── predict()                       # 推理（自回归 + 反标准化 + NaN保护）
-    │   ├── _estimate_kinematics()          # 速度/加速度估计（纯函数，无跨模块依赖）
-    │   └── get_model_info()                # 模型元信息
+    │   └── get_model_info()                # 完整模型元信息（含架构参数）
     │
     ├── transformer.py                      # 不规则时间序列编码
     │   ├── ContinuousTimeEncoding          # 连续时间正弦位置编码
@@ -514,7 +512,7 @@ train/hybrid_predictor/
 │   ├── _to_device()                        # 批次设备转移
 │   ├── build_dataloaders()                 # 数据加载器构建
 │   ├── train_stage1/2/3()                  # 三阶段训练（支持 resume_ckpt）
-│   ├── _validate_stage1/2()                # 验证函数（返回 MSE+ADE+FDE）
+│   ├── _validate_stage1/2/3()              # 验证函数（返回 loss+ADE+FDE+物理违反率）
 │   └── _plot_all_charts()                  # 5张训练图表生成
 └── train_result/                           # 训练输出（图表+日志）
 
@@ -781,7 +779,7 @@ python train/hybrid_predictor/train.py --stage 2 --epochs 5 --batch 32 --device 
 
 **问题**: 回归任务没有分类任务中的标签平滑机制，模型可能过拟合精确坐标。
 
-**方案**: 对目标位置添加自适应高斯噪声（σ = `label_smoothing` × p_std），噪声幅度与数据尺度匹配，在所有阶段的目标上应用。
+**方案**: 对目标位置添加自适应高斯噪声（σ = `label_smoothing` × p_std），噪声幅度与数据尺度匹配。仅在阶段一确定性回归中使用，阶段二/三扩散目标不做平滑。
 
 ### Warmup 学习率调度
 
