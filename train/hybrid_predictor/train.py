@@ -509,7 +509,8 @@ def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str,
 
     for idx, s in enumerate(sorted(set(e["stage"] for e in logger.history))):
         ax = fig.add_subplot(gs[2,idx] if idx<3 else gs[2,3])
-        sv = [e["val_loss"] for e in logger.history if e["stage"]==s]
+        sv = [e["val_loss"] for e in logger.history if e["stage"]==s and e["val_loss"] == e["val_loss"]]
+        if not sv: continue
         ax.hist(sv, bins=min(15,len(sv)), color=_COLORS.get(f'stage{s}','#333'), alpha=0.6, edgecolor='white')
         ax.axvline(x=min(sv), color='red', linestyle='--', lw=1, label=f'Best:{min(sv):.4f}')
         ax.axvline(x=sv[-1], color='orange', linestyle='--', lw=1, label=f'Final:{sv[-1]:.4f}')
