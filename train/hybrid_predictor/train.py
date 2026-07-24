@@ -1830,15 +1830,18 @@ def main():
                         best_ckpt_path = _f
                 except (ValueError, IndexError):
                     pass
+        _vsteps = config.get("val_inference_steps", 10)
         if best_ckpt_path is not None:
             test_model = create_model(config, device)
             test_ckpt = torch.load(best_ckpt_path, map_location=device)
             test_model.load_state_dict(test_ckpt["model_state_dict"])
             test_model.diffusion.scheduler.to(device)
-            test_metrics = evaluate_test(test_model, test_loader, device, results_dir)
+            test_metrics = evaluate_test(test_model, test_loader, device,
+                                          results_dir, val_steps=_vsteps)
         else:
             # 无最佳模型时用当前模型直接评估
-            test_metrics = evaluate_test(model, test_loader, device, results_dir)
+            test_metrics = evaluate_test(model, test_loader, device,
+                                          results_dir, val_steps=_vsteps)
     os.makedirs(results_dir, exist_ok=True)
 
     # 保存训练历史 JSON
