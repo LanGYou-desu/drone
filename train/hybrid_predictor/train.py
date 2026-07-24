@@ -101,12 +101,14 @@ DEFAULT_CONFIG = {
     "ode_hidden_dim": 128,
     "n_diffusion_steps": 500,
     "n_inference_steps": 50,
+    "val_inference_steps": 10,     # 验证时DDIM步数（远小于训练/推理，加速评估）
     "tau_emb_dim": 16,
     "dt_emb_dim": 16,
     "diff_hidden_dim": 128,
     "guidance_eta": 0.1,
-    "v_max": 30.0,
-    "z_min": 0.0,
+    "v_max": 20.0,                  # 最大水平速度 (m/s)，对齐 drone_dynamics
+    "a_max": 10.0,                  # 最大加速度 (m/s²)，基于 g·tan(35°)≈6.9 适当放宽
+    "z_min": 1.0,
     "z_max": 120.0,
     "v_v_up": 5.0,
     "v_v_down": 3.0,
@@ -833,7 +835,7 @@ def save_checkpoint(model, out_dir, stage, epoch, val_loss, is_best=False,
     return latest_path
 
 
-def evaluate_test(model, test_loader, device, out_dir: str):
+def evaluate_test(model, test_loader, device, out_dir: str, val_steps: int = 10):
     """在测试集上评估最终模型，输出详细指标并写入 JSON。"""
     print(f"\n{'='*60}")
     print("  测试集评价")
@@ -864,7 +866,8 @@ def evaluate_test(model, test_loader, device, out_dir: str):
                 p_mean_t = b.get("p_mean")
                 p_std_t = b.get("p_std")
                 p_pred = model.diffusion.guided_sampling(
-                    h_prior, dt_step, prev_p, p_mean=p_mean_t, p_std=p_std_t)
+                    h_prior, dt_step, prev_p, n_steps=val_steps,
+                    p_mean=p_mean_t, p_std=p_std_t)
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
                     h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
@@ -1247,7 +1250,9 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
 
         scheduler.step()
         avg_train = total_loss / max(len(train_loader), 1)
-        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage2(model, val_loader, device)
+        _vsteps = config.get("val_inference_steps", 10)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage2(
+            model, val_loader, device, val_steps=_vsteps)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
@@ -1288,9 +1293,9 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
         param.requires_grad = True
 
 
-def _validate_stage2(model, val_loader, device):
+def _validate_stage2(model, val_loader, device, val_steps: int = 10):
     """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)。
-    使用完整扩散采样进行预测，而非仅 ODE 先验。"""
+    使用扩散采样进行预测，val_steps 控制验证速度（默认10步）。"""
     model.eval()
     total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
     total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
@@ -1310,10 +1315,11 @@ def _validate_stage2(model, val_loader, device):
                 dt_step = b["tgt_t"][:, j] - t_now
                 h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
                 prev_p = b["ctx_pos"][:, -1, :] if j == 0 else b["tgt_pos"][:, j-1, :]
-                # 使用完整扩散采样进行预测
+                # 使用扩散采样进行预测（验证用少步数加速）
                 p_mean_t = b.get("p_mean"); p_std_t = b.get("p_std")
                 p_pred = model.diffusion.guided_sampling(
-                    h_prior, dt_step, prev_p, p_mean=p_mean_t, p_std=p_std_t)
+                    h_prior, dt_step, prev_p, n_steps=val_steps,
+                    p_mean=p_mean_t, p_std=p_std_t)
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
                     h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
@@ -1350,9 +1356,9 @@ def _validate_stage2(model, val_loader, device):
             total_spd_v / nv, total_acc_v / nv, total_hgt_v / nv)
 
 
-def _validate_stage3(model, val_loader, device):
+def _validate_stage3(model, val_loader, device, val_steps: int = 10):
     """返回 (diff_loss, ADE, FDE, speed_viol, accel_viol, height_viol)。
-    使用完整扩散采样 + 自回归状态更新，模拟实际推理行为。"""
+    使用扩散采样 + 自回归状态更新，val_steps 控制验证速度。"""
     model.eval()
     total_loss, total_ade, total_fde = 0.0, 0.0, 0.0
     total_spd_v, total_acc_v, total_hgt_v = 0.0, 0.0, 0.0
@@ -1373,9 +1379,10 @@ def _validate_stage3(model, val_loader, device):
                 dt_step = b["tgt_t"][:, j] - t_now
                 h_prior = model.state_manager.evolve(h, t_now, b["tgt_t"][:, j])
                 p_mean_t = b.get("p_mean"); p_std_t = b.get("p_std")
-                # 使用完整扩散采样（模拟推理行为）
+                # 使用扩散采样（验证用少步数加速，模拟推理行为）
                 p_pred = model.diffusion.guided_sampling(
-                    h_prior, dt_step, prev_pos, p_mean=p_mean_t, p_std=p_std_t)
+                    h_prior, dt_step, prev_pos, n_steps=val_steps,
+                    p_mean=p_mean_t, p_std=p_std_t)
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 # 自回归：用预测位置（非真实值）估计速度并更新状态
                 v_pred = (p_pred - prev_pos) / dt_step.clamp(min=1e-3).unsqueeze(-1)
@@ -1510,7 +1517,9 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
             print(f"\n[警告] Stage 3 Epoch {epoch}: NaN，提前终止阶段三")
             break
 
-        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage3(model, val_loader, device)
+        _vsteps = config.get("val_inference_steps", 10)
+        val_loss, ade, fde, spd_v, acc_v, hgt_v = _validate_stage3(
+            model, val_loader, device, val_steps=_vsteps)
         epoch_time = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
