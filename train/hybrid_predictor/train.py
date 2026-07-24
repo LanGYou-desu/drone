@@ -1612,8 +1612,9 @@ def main():
             print("[错误] 训练历史为空")
             sys.exit(1)
         _out_dir = os.path.dirname(_json_path)
+        _stage_only = _filter_stage is not None
         print(f"[图表] 从 {_json_path} 重新生成图表 → {_out_dir}")
-        _plot_all_charts(logger, _out_dir)
+        _plot_all_charts(logger, _out_dir, stages_only=_stage_only)
         # 测试图表（若有 test_metrics.json）
         _test_json = os.path.join(_out_dir, "test_metrics.json")
         if os.path.isfile(_test_json):
