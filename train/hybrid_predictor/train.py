@@ -198,9 +198,7 @@ def _chart_loss_stage(logger, output_dir, stage, color):
     ax.plot(epochs, train_vals, '-', color=color, lw=2, alpha=0.85, label='Train')
     ax.plot(epochs, val_vals, '--', color=_COLORS['val'], lw=2, alpha=0.85, label='Val')
     # y 轴上限裁剪：取验证loss最大值的3倍，避免训练loss过大压扁验证曲线
-    y_max = max(val_vals) * 2 if val_vals else None
-    if y_max and y_max > 0:
-        ax.set_ylim(0, y_max)
+    ax.set_ylim(0, 0.8)
     best_i = min(range(len(data)), key=lambda i: data[i]["val_loss"])
     ax.axvline(x=epochs[best_i], color=_COLORS['best'], linestyle=':', alpha=0.5, lw=1)
     ax.annotate(f'Best: {data[best_i]["val_loss"]:.4f}', xy=(epochs[best_i], data[best_i]["val_loss"]),
@@ -225,7 +223,7 @@ def _chart_global_loss(logger, output_dir, suffix: str = ""):
     for b in boundaries[1:]: ax.axvline(x=b, color='gray', linestyle='--', alpha=0.4, lw=0.8)
     # y 轴上限裁剪
     if val_losses:
-        ax.set_ylim(0, max(val_losses) * 2)
+        ax.set_ylim(0, 0.8)
     ax.set_title('Global Loss Curve', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
@@ -470,7 +468,7 @@ def _make_training_summary_dashboard(logger: TrainingLogger, output_dir: str,
         ax.plot(ep, [val_losses[i] for i in idxs], '--', color=color, lw=1.5, alpha=0.9, label=f'S{stage} Val')
     ax.set_title('Loss Overview', fontsize=14, fontweight='bold'); ax.set_xlabel('Global Epoch'); ax.set_ylabel('Loss')
     if val_losses:
-        ax.set_ylim(0, max(val_losses) * 2)  # 裁剪y轴，确保验证曲线可见
+        ax.set_ylim(0, 0.8)  # 固定y轴上限，确保验证曲线可见
     ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
 
     ax = fig.add_subplot(gs[0,2]); ax.axis('off')
