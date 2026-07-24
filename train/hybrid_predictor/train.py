@@ -214,7 +214,7 @@ def _chart_loss_stage(logger, output_dir, stage, color):
 
 # ═══════════════════ 02 收敛性分析（单图）═══════════════════
 
-def _chart_global_loss(logger, output_dir):
+def _chart_global_loss(logger, output_dir, suffix: str = ""):
     all_epochs = list(range(1, len(logger.history) + 1))
     train_losses = [e["train_loss"] for e in logger.history]
     val_losses = [e["val_loss"] for e in logger.history]
@@ -229,10 +229,10 @@ def _chart_global_loss(logger, output_dir):
     ax.set_title('Global Loss Curve', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Loss', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '02a_global_loss.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02a_global_loss{suffix}.png')
 
 
-def _chart_overfitting(logger, output_dir):
+def _chart_overfitting(logger, output_dir, suffix: str = ""):
     all_epochs = list(range(1, len(logger.history) + 1))
     ratios = [e["val_loss"] / max(e["train_loss"], 1e-8) for e in logger.history]
     fig, ax = _plt.subplots(figsize=_CHART_SIZE)
@@ -242,10 +242,10 @@ def _chart_overfitting(logger, output_dir):
     ax.set_title('Val/Train Ratio (Overfitting Detection)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Ratio', fontsize=12)
     ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '02b_overfitting.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02b_overfitting{suffix}.png')
 
 
-def _chart_improvement(logger, output_dir):
+def _chart_improvement(logger, output_dir, suffix: str = ""):
     fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     for stage in sorted(set(e["stage"] for e in logger.history)):
         losses = [e["val_loss"] for e in logger.history if e["stage"] == stage]
@@ -256,10 +256,10 @@ def _chart_improvement(logger, output_dir):
     ax.set_xlabel('Epoch (within stage)', fontsize=12); ax.set_ylabel('Improvement %', fontsize=12)
     ax.axhline(y=0, color='gray', linestyle=':', alpha=0.5)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '02c_improvement.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02c_improvement{suffix}.png')
 
 
-def _chart_lr_schedule(logger, output_dir):
+def _chart_lr_schedule(logger, output_dir, suffix: str = ""):
     fig, ax = _plt.subplots(figsize=_CHART_SIZE)
     for stage in sorted(set(e["stage"] for e in logger.history)):
         lrs = [e["lr"] for e in logger.history if e["stage"] == stage]
@@ -267,10 +267,10 @@ def _chart_lr_schedule(logger, output_dir):
     ax.set_title('Learning Rate Schedule', fontsize=14, fontweight='bold')
     ax.set_xlabel('Epoch (within stage)', fontsize=12); ax.set_ylabel('LR', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '02d_lr_schedule.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02d_lr_schedule{suffix}.png')
 
 
-def _chart_epoch_time(logger, output_dir):
+def _chart_epoch_time(logger, output_dir, suffix: str = ""):
     all_epochs = list(range(1, len(logger.history) + 1))
     times = [e["epoch_time_s"] for e in logger.history]
     colors_t = [_COLORS.get(f'stage{e["stage"]}','#333') for e in logger.history]
@@ -281,10 +281,10 @@ def _chart_epoch_time(logger, output_dir):
     ax.set_title('Epoch Training Time', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Time (s)', fontsize=12)
     ax.legend(fontsize=11); ax.grid(True, alpha=0.3, axis='y')
-    fig.tight_layout(); _savefig(fig, output_dir, '02e_epoch_time.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02e_epoch_time{suffix}.png')
 
 
-def _chart_cumulative_time(logger, output_dir):
+def _chart_cumulative_time(logger, output_dir, suffix: str = ""):
     all_epochs = list(range(1, len(logger.history) + 1))
     times = [e["epoch_time_s"] for e in logger.history]
     cum_times = [sum(times[:i+1]) / 60 for i in range(len(times))]
@@ -296,7 +296,7 @@ def _chart_cumulative_time(logger, output_dir):
     ax.set_title('Cumulative Training Time', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Time (min)', fontsize=12)
     ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '02f_cumulative_time.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'02f_cumulative_time{suffix}.png')
 
 
 # ═══════════════════ 03 阶段对比（单图）═══════════════════
@@ -418,7 +418,7 @@ def _chart_ade_improvement(logger, output_dir):
 
 # ═══════════════════ 05 物理指标（单图）═══════════════════
 
-def _chart_physics_single(logger, output_dir, key, title, color, fname):
+def _chart_physics_single(logger, output_dir, key, title, color, fname, suffix: str = ""):
     if key not in logger.history[0]: return
     epochs = list(range(1, len(logger.history)+1))
     vals = [e.get(key, 0) for e in logger.history]
@@ -429,10 +429,10 @@ def _chart_physics_single(logger, output_dir, key, title, color, fname):
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Rate', fontsize=12)
     ax.grid(True, alpha=0.3)
     if vals: best_i = vals.index(min(vals)); ax.annotate(f'{vals[best_i]:.4f}', xy=(best_i+1, vals[best_i]), fontsize=11, color='darkred', fontweight='bold')
-    fig.tight_layout(); _savefig(fig, output_dir, fname)
+    fig.tight_layout(); _savefig(fig, output_dir, fname.replace('.png', '') + suffix + '.png')
 
 
-def _chart_physics_score(logger, output_dir):
+def _chart_physics_score(logger, output_dir, suffix: str = ''):
     keys = ["speed_violation", "accel_violation", "height_violation"]
     if not all(k in logger.history[0] for k in keys): return
     epochs = list(range(1, len(logger.history)+1))
@@ -444,7 +444,7 @@ def _chart_physics_score(logger, output_dir):
     ax.set_title('Composite Physics Score', fontsize=14, fontweight='bold')
     ax.set_xlabel('Global Epoch', fontsize=12); ax.set_ylabel('Score', fontsize=12); ax.set_ylim(0, 1.05)
     ax.grid(True, alpha=0.3)
-    fig.tight_layout(); _savefig(fig, output_dir, '05d_physics_score.png')
+    fig.tight_layout(); _savefig(fig, output_dir, f'05d_physics_score{suffix}.png')
 
 
 # ═══════════════════ 06 仪表盘（保留概览）═══════════════════
@@ -568,32 +568,55 @@ def _make_test_chart(metrics: dict, output_dir: str):
 
 # ═══════════════════ 图表入口 ═══════════════════
 
-def _plot_all_charts(logger: TrainingLogger, output_dir: str, config: dict = None):
-    """生成全部训练图表（高分辨率单图，适合论文）"""
+def _filtered_logger(logger: TrainingLogger, stage: int) -> TrainingLogger:
+    """返回仅包含指定阶段数据的临时日志器（用于分阶段图表）"""
+    tmp = TrainingLogger()
+    tmp.history = [e for e in logger.history if e["stage"] == stage]
+    tmp.stage_labels = {stage: logger.stage_labels.get(str(stage), f"Stage {stage}")}
+    return tmp
+
+def _plot_all_charts(logger: TrainingLogger, output_dir: str, config: dict = None,
+                     stages_only: bool = False):
+    """生成全部训练图表。
+
+    Args:
+        stages_only: True=仅生成各阶段独立图表（01/02/04/05 按阶段分开），
+                     跳过跨阶段对比图（03/06）。False=生成全部图表。
+    """
     if not HAS_MPL: print("[跳过] matplotlib 未安装"); return
     if not logger.history: print("[跳过] 训练历史为空"); return
     if config is None:
         config = {}
     os.makedirs(output_dir, exist_ok=True)
 
+    stages = sorted(set(e["stage"] for e in logger.history))
+    # stages_only 模式下跳过跨阶段对比图(03)和仪表盘(06)
+    cross_stage = not stages_only
+
     # 01 损失曲线（每阶段一张）
-    for s in sorted(set(e["stage"] for e in logger.history)):
+    for s in stages:
         _chart_loss_stage(logger, output_dir, s, _COLORS.get(f'stage{s}','#333'))
 
-    # 02 收敛性（6 张单图）
-    _chart_global_loss(logger, output_dir)
-    _chart_overfitting(logger, output_dir)
-    _chart_improvement(logger, output_dir)
-    _chart_lr_schedule(logger, output_dir)
-    _chart_epoch_time(logger, output_dir)
-    _chart_cumulative_time(logger, output_dir)
+    # 02 收敛性 — 每阶段独立出图
+    for s in stages:
+        _l = _filtered_logger(logger, s)
+        _sfx = f'_s{s}'
+        _chart_global_loss(_l, output_dir, _sfx)
+        _chart_overfitting(_l, output_dir, _sfx)
+        _chart_improvement(_l, output_dir, _sfx)
+        _chart_lr_schedule(_l, output_dir, _sfx)
+        _chart_epoch_time(_l, output_dir, _sfx)
+        _chart_cumulative_time(_l, output_dir, _sfx)
 
-    # 03 阶段对比（3 张单图）
-    _chart_final_vs_best(logger, output_dir)
-    _chart_stage_radar(logger, output_dir)
-    _chart_stage_boxplot(logger, output_dir)
+    # 03 阶段对比（跨阶段，仅全局模式）
+    if cross_stage and len(stages) >= 2:
+        _chart_final_vs_best(logger, output_dir)
+        _chart_stage_radar(logger, output_dir)
+        _chart_stage_boxplot(logger, output_dir)
+    elif not cross_stage:
+        print("[图表03] 阶段对比图仅在全局模式下生成，跳过")
 
-    # 04 ADE/FDE（4 张单图，有数据时才生成）
+    # 04 ADE/FDE（每阶段独立出图）
     if any("ADE" in e for e in logger.history):
         _chart_ade(logger, output_dir)
         _chart_fde(logger, output_dir)
@@ -602,17 +625,29 @@ def _plot_all_charts(logger: TrainingLogger, output_dir: str, config: dict = Non
     else:
         print("[图表04] 无 ADE/FDE 数据，跳过")
 
-    # 05 物理指标（4 张单图）
+    # 05 物理指标 — 每阶段独立出图
     if logger.history and "speed_violation" in logger.history[0]:
-        _chart_physics_single(logger, output_dir, "speed_violation", "Speed Violation Rate", _COLORS['speed'], '05a_speed.png')
-        _chart_physics_single(logger, output_dir, "accel_violation", "Acceleration Violation Rate", _COLORS['accel'], '05b_accel.png')
-        _chart_physics_single(logger, output_dir, "height_violation", "Height Violation Rate", _COLORS['height'], '05c_height.png')
-        _chart_physics_score(logger, output_dir)
+        for s in stages:
+            _l = _filtered_logger(logger, s)
+            _sfx = f'_s{s}'
+            _chart_physics_single(_l, output_dir, "speed_violation",
+                                  f"Speed Violation Rate (Stage {s})",
+                                  _COLORS['speed'], '05a_speed.png', _sfx)
+            _chart_physics_single(_l, output_dir, "accel_violation",
+                                  f"Acceleration Violation Rate (Stage {s})",
+                                  _COLORS['accel'], '05b_accel.png', _sfx)
+            _chart_physics_single(_l, output_dir, "height_violation",
+                                  f"Height Violation Rate (Stage {s})",
+                                  _COLORS['height'], '05c_height.png', _sfx)
+            _chart_physics_score(_l, output_dir, _sfx)
     else:
         print("[图表05] 无物理指标数据，跳过")
 
-    # 06 仪表盘概览
-    _make_training_summary_dashboard(logger, output_dir, config)
+    # 06 仪表盘概览（仅全局模式）
+    if cross_stage:
+        _make_training_summary_dashboard(logger, output_dir, config)
+    else:
+        print("[图表06] 仪表盘仅在全局模式下生成，跳过")
 
 def _save_training_summary(logger: TrainingLogger, config: dict, output_dir: str):
     """保存训练摘要 JSON"""
@@ -1721,14 +1756,12 @@ def main():
         return default_loader
 
     def _stage_finish(stage_label: str, stage_num: int):
-        """阶段结束后保存 JSON + 仅生成该阶段独立图表"""
+        """阶段结束后保存 JSON + 生成该阶段所有独立图表"""
         os.makedirs(_run_dir, exist_ok=True)
         logger.save(_run_dir)
         if not args.no_charts and HAS_MPL and logger.history:
             print(f"\n[图表] {stage_label}完成，生成阶段图表...")
-            # 仅生成该阶段的独立损失图，不生成全局混合图
-            _chart_loss_stage(logger, _run_dir, stage_num,
-                              _COLORS.get(f'stage{stage_num}', '#333'))
+            _plot_all_charts(logger, _run_dir, config, stages_only=True)
 
     if run_s1:
         _loader = _stage_loader(1, (train_loader, val_loader))
