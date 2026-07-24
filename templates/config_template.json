@@ -82,7 +82,12 @@
         "a_max": 10.0,
         "z_min": 1.0,
         "z_max": 120.0,
-        "physics_weight": 0.01
+        "physics_weight": 0.01,
+        "guidance_eta": 0.1,
+        "v_v_up": 5.0,
+        "v_v_down": 3.0,
+        "max_tilt": 35.0,
+        "g": 9.81
     },
     "hybrid_model": {
         "enabled": true,
