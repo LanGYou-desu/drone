@@ -362,6 +362,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 | 训练模块 | Transformer Encoder、Physics ODE、GRU |
 | 冻结模块 | Diffusion（全部参数） |
 | 损失函数 | $\mathcal{L} = \text{MSE}(\mathbf{h}^-[:3], \mathbf{p}_{\text{gt}}) + 0.1 \cdot \mathcal{L}_{\text{phy}}$ |
+| 物理损失 | 反标准化后在原始空间计算水平速度违反 `relu(v_h - v_max)`，v_max=20 m/s |
 | 标签平滑 | 对目标位置添加自适应高斯噪声（σ = `label_smoothing` × p_std），正则化防过拟合 |
 | 学习率 | Warmup(5 epochs, 起始 0.1×) + Cosine 退火 |
 | 优化器 | AdamW，weight_decay=$1 \times 10^{-4}$ |
@@ -370,7 +371,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 阶段一完成后自动保存完整检查点（含优化器/调度器状态）。
 
-> **验证方式**（`_validate_stage1`）：使用 ODE 先验位置 `h_prior[:, :3]` 作为预测值，GRU 用真实轨迹更新（教师强制）。物理违反率反标准化到原始空间（m/s）后计算，速度/加速度取水平分量，高度同时检查上下限。
+> **验证方式**（`_validate_stage1`）：使用 ODE 先验位置 `h_prior[:, :3]` 作为预测值，GRU 用真实轨迹更新（教师强制）。物理违反率反标准化到原始空间（m/s）后计算，速度/加速度取水平分量（`v_h = norm(v_xz)`，`a_h = v_h/dt` 对标 `g·tan(max_tilt)`），高度同时检查上下限。
 
 #### 阶段二：训练扩散模型
 
@@ -386,7 +387,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 阶段二完成后自动保存完整检查点。
 
-> **验证方式**（`_validate_stage2`）：使用完整扩散采样 `guided_sampling()` 作为预测值（DDIM 50 步 + 物理引导），GRU 用真实轨迹更新（教师强制）。因此验证较慢，每个预测点需跑完整去噪过程。
+> **验证方式**（`_validate_stage2`）：使用扩散采样 `guided_sampling()` 作为预测值，GRU 用真实轨迹更新（教师强制）。默认仅用 `val_inference_steps=10` 步 DDIM 加速验证（可通过训练配置调整），物理违反率计算方式与阶段一相同。
 
 #### 阶段三（可选）：联合微调
 
@@ -401,7 +402,7 @@ $$\mathcal{C}_z = \lambda_z \max(0, z_{\min} - y)^2 + \lambda_{z,\max} \max(0, y
 
 > **注意**: 阶段三使用 ODE 先验位置（`h_prior[:, :3]`）而非扩散采样作为计划采样的生成样本，因为扩散采样在训练中不参与梯度回传却消耗大量计算。
 
-> **验证方式**（`_validate_stage3`）：使用完整扩散采样 + **自回归** GRU 更新（用预测位置估计速度，不回退真实值）。与 `_validate_stage2` 的最大区别是模拟真实推理的闭环行为，因此验证 loss 会高于阶段二，但更能反映实际部署精度。
+> **验证方式**（`_validate_stage3`）：使用扩散采样 + **自回归** GRU 更新（用预测位置估计速度，不回退真实值），同样用 `val_inference_steps` 加速。模拟真实推理的闭环行为，验证 loss 会高于阶段二（教师强制），但更能反映实际部署精度。
 
 ### 4.3 Warmup 学习率策略
 
@@ -598,9 +599,10 @@ train/hybrid_predictor/train_result/models/
 | `ode_hidden_dim` | 128 | ODE MLP 隐藏层维度 |
 | `n_diffusion_steps` | 500 | 训练时扩散步数 |
 | `n_inference_steps` | 50 | 推理时 DDIM 步数 |
-| `a_max` | 30.0 | 加速度软限幅 (m/s²) |
-| `v_max` | 30.0 | 速度约束 (m/s) |
-| `z_min` | 0.0 | 高度下限 (m) |
+| `val_inference_steps` | 10 | 验证时 DDIM 步数（远小于推理以加速） |
+| `a_max` | 10.0 | 加速度约束 (m/s²)，基于 `g·tan(35°)≈6.9` 适当放宽 |
+| `v_max` | 20.0 | 水平速度约束 (m/s)，对齐 drone_dynamics |
+| `z_min` | 1.0 | 高度下限 (m)，对齐 drone_dynamics |
 | `z_max` | 120.0 | 高度上限 (m) |
 | `physics_weight` | 0.01 | 物理损失权重（阶段二/三） |
 

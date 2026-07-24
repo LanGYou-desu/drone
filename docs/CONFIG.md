@@ -147,9 +147,10 @@ Phy-ODE-Diffusion 模型训练的完整参数。训练脚本启动时优先从 `
 | `n_layers` | int | 6 | Transformer 编码器层数 |
 | `d_z` | int | 64 | ODE 隐状态潜在特征维度 |
 | `ode_hidden_dim` | int | 128 | ODE 内部 MLP 隐藏层维度 |
-| `v_max` | float | 30.0 | 训练用最大水平速度 (m/s) |
-| `a_max` | float | 30.0 | 训练用最大加速度 (m/s²) |
-| `z_min` | float | 0.0 | 训练用高度下限 (m) |
+| `val_inference_steps` | int | 10 | 验证时 DDIM 步数，远小于推理步数以加速评估 |
+| `v_max` | float | 20.0 | 训练用最大水平速度 (m/s)，对齐 drone_dynamics |
+| `a_max` | float | 10.0 | 训练用最大加速度 (m/s²) |
+| `z_min` | float | 1.0 | 训练用高度下限 (m)，对齐 drone_dynamics |
 | `z_max` | float | 120.0 | 训练用高度上限 (m) |
 | `physics_weight` | float | 0.01 | 阶段二/三物理损失权重 |
 
