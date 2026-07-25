@@ -325,6 +325,8 @@ class GuidedDiffusion(nn.Module):
                 self.scheduler.sqrt_one_minus_alphas_cumprod, tau,
             )
             x0_pred_norm = (x_tau_grad - sqrt_1ma * noise_pred_grad) / sqrt_a.clamp(min=1e-8)
+            # 裁剪极端值防止梯度爆炸（早期DDIM步 sqrt_a 极小）
+            x0_pred_norm = torch.clamp(x0_pred_norm, -100.0, 100.0)
 
             if p_mean is not None and p_std is not None:
                 x0_pred = x0_pred_norm * p_std + p_mean
@@ -335,6 +337,8 @@ class GuidedDiffusion(nn.Module):
 
             cost = self._physics_cost(x0_pred, prev, dt)
             grad = torch.autograd.grad(cost.sum(), x_tau_grad)[0]
+            # 裁剪梯度幅度防止引导信号过大
+            grad = torch.clamp(grad, -1.0, 1.0)
             scale = sqrt_1ma.detach()
             return self.guidance_eta * scale * grad.detach()
 
