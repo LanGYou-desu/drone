@@ -868,6 +868,8 @@ def evaluate_test(model, test_loader, device, out_dir: str, val_steps: int = 10)
                 p_pred = model.diffusion.guided_sampling(
                     h_prior, dt_step, prev_p, n_steps=val_steps,
                     p_mean=p_mean_t, p_std=p_std_t)
+                if torch.isnan(p_pred).any():
+                    p_pred = h_prior[:, :3]  # NaN 回退到 ODE 先验
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
                     h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
@@ -1320,6 +1322,9 @@ def _validate_stage2(model, val_loader, device, val_steps: int = 10):
                 p_pred = model.diffusion.guided_sampling(
                     h_prior, dt_step, prev_p, n_steps=val_steps,
                     p_mean=p_mean_t, p_std=p_std_t)
+                # NaN 保护：回退到 ODE 先验位置
+                if torch.isnan(p_pred).any():
+                    p_pred = h_prior[:, :3]
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 loss_dict = model.diffusion.compute_loss(
                     h_prior, dt_step, prev_p, b["tgt_pos"][:, j, :],
@@ -1383,6 +1388,8 @@ def _validate_stage3(model, val_loader, device, val_steps: int = 10):
                 p_pred = model.diffusion.guided_sampling(
                     h_prior, dt_step, prev_pos, n_steps=val_steps,
                     p_mean=p_mean_t, p_std=p_std_t)
+                if torch.isnan(p_pred).any():
+                    p_pred = h_prior[:, :3]  # NaN 回退到 ODE 先验
                 preds.append(p_pred); tgts.append(b["tgt_pos"][:, j, :])
                 # 自回归：用预测位置（非真实值）估计速度并更新状态
                 v_pred = (p_pred - prev_pos) / dt_step.clamp(min=1e-3).unsqueeze(-1)
