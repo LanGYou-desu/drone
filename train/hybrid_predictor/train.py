@@ -101,7 +101,7 @@ DEFAULT_CONFIG = {
     "ode_hidden_dim": 128,
     "n_diffusion_steps": 500,
     "n_inference_steps": 50,
-    "val_inference_steps": 10,     # 验证时DDIM步数（远小于训练/推理，加速评估）
+    "val_inference_steps": 25,     # 验证时DDIM步数（小于推理50步，兼顾速度与稳定性）
     "tau_emb_dim": 16,
     "dt_emb_dim": 16,
     "diff_hidden_dim": 128,

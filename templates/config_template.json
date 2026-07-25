@@ -77,7 +77,7 @@
         "n_layers": 6,
         "d_z": 64,
         "ode_hidden_dim": 128,
-        "val_inference_steps": 10,
+        "val_inference_steps": 25,
         "v_max": 20.0,
         "a_max": 10.0,
         "z_min": 1.0,
