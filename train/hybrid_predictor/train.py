@@ -1080,7 +1080,7 @@ def train_stage1(model, train_loader, val_loader, config, device, logger: Traini
                          extra={"ADE": ade, "FDE": fde,
                                 "speed_violation": spd_v, "accel_violation": acc_v,
                                 "height_violation": hgt_v})
-        is_best = val_loss < best_val_loss
+        is_best = (val_loss == val_loss) and val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
 
@@ -1262,7 +1262,7 @@ def train_stage2(model, train_loader, val_loader, config, device, logger: Traini
                          extra={"ADE": ade, "FDE": fde,
                                 "speed_violation": spd_v, "accel_violation": acc_v,
                                 "height_violation": hgt_v})
-        is_best = val_loss < best_val_loss
+        is_best = (val_loss == val_loss) and val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
 
@@ -1535,7 +1535,8 @@ def train_stage3(model, train_loader, val_loader, config, device, logger: Traini
                                 "speed_violation": spd_v, "accel_violation": acc_v,
                                 "height_violation": hgt_v,
                                 "scheduled_sampling_prob": round(ss_prob, 3)})
-        is_best = val_loss < best_val_loss
+        # NaN 保护：val_loss 为 NaN 时跳过最佳模型判断
+        is_best = (val_loss == val_loss) and val_loss < best_val_loss
         if is_best:
             best_val_loss = val_loss
 
