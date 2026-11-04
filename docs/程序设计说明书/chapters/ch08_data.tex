@@ -1,0 +1,194 @@
+% ============================================================
+%  第八章  数据结构设计
+% ============================================================
+\section{数据结构设计}
+
+系统的数据分为四类：轨迹数据（文件）、运行时状态（内存）、配置数据（JSON）与备份元数据（JSON）。本章逐一给出格式定义。
+
+\subsection{轨迹数据文件}
+
+\subsubsection{主格式 .npz}
+
+轨迹以 NumPy 压缩归档保存，包含两个数组：
+
+\begin{table}[H]
+\centering
+\caption{轨迹文件 .npz 的结构}
+\label{tab:npz}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily}p{2.2cm}>{\ttfamily}p{2.4cm}>{\ttfamily}p{2.0cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+键名 & 形状 / 类型 & 单位 & 含义 \\
+\midrule
+positions & (N, 3) float32 & m & 三维坐标，列顺序为 $x$（右）、$y$（上）、$z$（前） \\
+timestamps & (N,) float32 & s & 各点时间戳，单调不减 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+读写由 \code{np.savez} / \code{np.load} 完成，文件扩展名统一为 \file{.npz}。选择该格式的理由是：二进制读写快、精度可控、可直接被训练脚本消费，且无需引入数据库。
+
+\subsubsection{兼容格式 .dat}
+
+纯文本，每行四个以空白分隔的浮点数：
+
+\begin{lstlisting}[style=sh, caption={轨迹文本格式示例（data/fact/visible.dat）}]
+12.3456 -3.2100 150.0000 0.0000
+12.5120 -3.1850 150.1230 0.3000
+12.6890 -3.1420 150.2450 0.6000
+\end{lstlisting}
+
+读取时忽略空行，字段不足四个的行被跳过；解析失败的行不会中断整个文件，仅被忽略并返回已解析的部分。该格式用于人工准备数据、外部脚本导出与旧数据迁移。
+
+\subsubsection{格式优先级}
+
+加载器对同一“基名”按 \file{.npz} $\rightarrow$ \file{.dat} 的顺序尝试；恢复备份时若发现同名 \file{.dat} 与 \file{.npz} 并存，会主动删除被遮蔽的 \file{.npz}，确保恢复内容生效。
+
+\subsection{平台标识与文件映射}
+
+系统使用固定的平台标识串联前后端、配置与文件。映射关系如表~\ref{tab:platform} 所示。
+
+\begin{table}[H]
+\centering
+\caption{平台标识与文件映射}
+\label{tab:platform}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily\scriptsize}p{1.9cm}>{\scriptsize}p{1.7cm}>{\raggedright\ttfamily\scriptsize}p{3.4cm}>{\raggedright\ttfamily\scriptsize}p{3.1cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+标识 & 中文名 & 事实数据文件 & 预测数据文件 & 说明 \\
+\midrule
+visible & 可见光 & visible.npz & predict\_visible.npz & 默认平台 \\
+infrared & 红外 & infrared.npz & predict\_infrared.npz & 默认平台 \\
+radar & 雷达 & radar.npz & predict\_radar.npz & 默认平台 \\
+self & 自选 & self.npz & predict\_self.npz & 上传数据后动态出现 \\
+synthetic & 综合 & 不落盘 & predict\_synthetic.npz & 融合结果，运行期生成 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{运行时状态结构}
+
+\subsubsection{平台状态字典}
+
+全局字典 \code{detection_methods} 的每一项结构如下：
+
+\begin{lstlisting}[style=py, caption={平台状态字典的字段}]
+{
+  "name":       str,      # 显示名称，如 "可见光"
+  "color":      str,      # 十六进制颜色，如 "#ff6b6b"
+  "visible":    bool,     # 是否在界面显示
+  "enabled":    bool,     # 是否参与合成与预测
+  "weight":     float,    # 融合权重（synthetic 无此字段）
+  "points":     [[x, y, z], ...],   # 三维坐标序列
+  "timestamps": [t, ...],           # 与 points 等长的时间戳
+}
+\end{lstlisting}
+
+\subsubsection{检测对象}
+
+\begin{table}[H]
+\centering
+\caption{检测与跟踪相关的数据结构}
+\label{tab:detstruct}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily\scriptsize}p{3.4cm}>{\scriptsize}p{1.1cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+字段 & 类型 & 含义 \\
+\midrule
+\multicolumn{3}{@{}l}{\heiti Detection（单帧检测结果）} \\
+bbox & list & $[x_1,y_1,x_2,y_2]$ 像素坐标（左上、右下） \\
+confidence & float & 置信度，$[0,1]$ \\
+class\_id & int & 类别编号 \\
+class\_name & str & 类别名称 \\
+\midrule
+\multicolumn{3}{@{}l}{\heiti Track（单目标轨迹）} \\
+track\_id & int & 跟踪 ID \\
+positions / timestamps\_3d & list & 三维点及其时间戳（一一对应） \\
+positions\_2d / timestamps & list & 二维中心点及其时间戳 \\
+bboxes / confidences & list & 逐帧检测框与置信度 \\
+first\_seen / last\_seen & float & 首次与最近一次出现时间 \\
+is\_active & bool & 是否活跃 \\
+frames\_since\_update & int & 连续未更新帧数 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{会话结构}
+
+\code{DetectionSession} 由“可序列化字段”与“运行时对象”两部分组成。前者通过 \code{to_dict()} 暴露给前端，后者仅在服务端使用：
+
+\begin{table}[H]
+\centering
+\caption{检测会话的字段划分}
+\label{tab:session}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{2.4cm}>{\ttfamily}p{6.0cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+类别 & 字段 & 说明 \\
+\midrule
+可序列化 & session\_id, status, progress & 会话编号、状态、进度 \\
+ & current\_frame\_a/b, total\_frames & 双路帧号与总帧数 \\
+ & track\_count, points\_3d & 活跃目标数、三维点数 \\
+ & platform\_id, source\_a/b & 目标平台与视频源 \\
+ & started\_at, finished\_at, error\_message & 时间与错误信息 \\
+\midrule
+运行时 & \_detector, \_tracker, \_stereo & 检测器、跟踪器、三角测量器 \\
+ & \_thread, \_pause\_event, \_stop\_event & 后台线程与控制事件 \\
+ & \_frame\_a, \_frame\_b & 最新预览帧（JPEG 字节串） \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{备份元数据}
+
+每个快照目录下的 \file{manifest.json} 描述该快照的内容：
+
+\begin{lstlisting}[style=json, caption={备份清单 manifest.json 示例}]
+{
+  "created": "2026-10-28 12:53:49",
+  "label": "可见光+红外+雷达",
+  "methods": {
+    "visible":  {"name": "可见光", "color": "#ff6b6b", "point_count": 60},
+    "infrared": {"name": "红外",   "color": "#4ecdc4", "point_count": 60},
+    "radar":    {"name": "雷达",   "color": "#ffe66d", "point_count": 60}
+  },
+  "files": {
+    "fact":    ["visible.npz", "infrared.npz", "radar.npz"],
+    "predict": ["predict_visible.npz"],
+    "memory":  ["visible.npz", "infrared.npz", "radar.npz"]
+  }
+}
+\end{lstlisting}
+
+检测模块的备份使用同一结构（见 \file{data_bridge.py}），只是 \code{predict} 为空，从而两个模块的备份列表可以互认。
+
+\subsection{配置结构}
+
+配置文件分为十个顶层节，结构与用途如表~\ref{tab:conftree} 所示。完整字段说明见附录~B。
+
+\begin{table}[H]
+\centering
+\caption{配置文件的顶层结构}
+\label{tab:conftree}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{4.2cm}>{\raggedright\scriptsize}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+节名 & 主要内容 & 使用方 \\
+\midrule
+ai & 接口地址、密钥、模型名 & AI 策略 \\
+detection\_methods & 五个平台的名称、颜色、权重、可见性 & 全部页面 \\
+prediction\_settings & 预测点数上下限、默认点数、步长 & 预测页 \\
+capture\_weights & 捕捉评分四项权重 & 分析页 \\
+hybrid\_model & 混合模型开关、物理约束、设备 & 预测服务 \\
+drone\_dynamics & 四旋翼动力学参数 & 训练与物理约束 \\
+training & 训练超参（层数、维度、学习率、轮数） & 训练脚本 \\
+detection & YOLO 模型路径、阈值、跟踪器、输入尺寸 & 检测服务 \\
+platforms & 各平台双目内参、外参与位姿 & 检测服务 \\
+theme / camera\_speed & 界面默认主题、相机移动速度 & 前端 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{报告文件}
+
+AI 策略生成的报告以 Markdown 保存，文件名由 \code{strategy_} 前缀与 14 位时间戳组成，扩展名为 \code{.md}。内容包含：生成时间、参与平台列表、策略正文（由大模型返回）。报告保存在 \file{reports/} 目录，不参与数据融合，仅供查阅与归档。

@@ -85,6 +85,7 @@ class YOLODetector:
         self.target_classes = target_classes
         self.tracker_type = tracker_type
         self._model = None
+        self._class_names = None
 
     @property
     def model(self):
@@ -92,6 +93,14 @@ class YOLODetector:
         if self._model is None:
             self._load_model()
         return self._model
+
+    @property
+    def _ultralytics_imgsz(self):
+        """ultralytics 的 imgsz 为 (高, 宽)，本类 input_size 约定为 (宽, 高)，此处做一次转换。"""
+        size = self.input_size
+        if isinstance(size, (tuple, list)) and len(size) == 2:
+            return (int(size[1]), int(size[0]))
+        return size
 
     def _load_model(self):
         """加载 YOLO 模型权重"""
@@ -109,7 +118,12 @@ class YOLODetector:
             elif _device.startswith("cuda:"):
                 _device = _device.split(":")[-1]
             self._model = YOLO(self.model_path)
-            print(f"[YOLO] 模型已加载: {self.model_path} on {_device}")
+            # 优先使用模型自带的类别名（自定义模型常见为 {0: 'drone'}），
+            # 避免被误标为 COCO 的 "person"。
+            _names = getattr(self._model, "names", None)
+            self._class_names = dict(_names) if _names else None
+            print(f"[YOLO] 模型已加载: {self.model_path} on {_device} 类别: "
+                  f"{list(self._class_names.values())[:5] if self._class_names else 'COCO'}")
         except ImportError:
             raise ImportError(
                 "ultralytics 未安装，请运行: pip install ultralytics"
@@ -138,7 +152,7 @@ class YOLODetector:
             frame,
             conf=self.confidence,
             iou=self.nms_threshold,
-            imgsz=self.input_size,
+            imgsz=self._ultralytics_imgsz,
             device=self.device,
             verbose=False,
         )
@@ -155,11 +169,12 @@ class YOLODetector:
                     continue
 
                 xyxy = boxes.xyxy[i].tolist()  # [x1, y1, x2, y2]
-                cls_name = (
-                    self.COCO_CLASSES[cls_id]
-                    if cls_id < len(self.COCO_CLASSES)
-                    else f"class_{cls_id}"
-                )
+                if self._class_names and cls_id in self._class_names:
+                    cls_name = str(self._class_names[cls_id])
+                elif cls_id < len(self.COCO_CLASSES):
+                    cls_name = self.COCO_CLASSES[cls_id]
+                else:
+                    cls_name = f"class_{cls_id}"
 
                 detections.append(Detection(
                     bbox=[round(v, 1) for v in xyxy],
@@ -190,7 +205,7 @@ class YOLODetector:
             frame,
             conf=self.confidence,
             iou=self.nms_threshold,
-            imgsz=self.input_size,
+            imgsz=self._ultralytics_imgsz,
             device=self.device,
             persist=True,
             tracker=tracker_cfg,

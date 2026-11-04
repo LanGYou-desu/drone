@@ -1,0 +1,73 @@
+% !TEX program = xelatex
+% ============================================================
+%  鹰眼长空 — 基于多平台协同的低空无人机智能监测系统
+%  程序设计说明书  V1.0
+% ============================================================
+\documentclass[UTF8,12pt,oneside,a4paper,fontset=windows]{ctexart}
+
+\input{preamble}
+
+\hypersetup{
+  pdftitle={鹰眼长空 — 低空无人机智能监测系统 程序设计说明书},
+  pdfauthor={鹰眼长空项目组},
+  pdfsubject={软件设计文档},
+  pdfkeywords={无人机监测; 双目立体视觉; 轨迹重建; 程序设计},
+}
+
+\begin{document}
+
+% ==================== 封面 ====================
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+\vspace*{2.0cm}
+
+{\heiti\zihao{2} 鹰眼长空}\\[6pt]
+{\heiti\zihao{3} 基于多平台协同的低空无人机智能监测系统}\\[2.2cm]
+
+{\heiti\zihao{1} 程序设计说明书}\\[10pt]
+{\heiti\zihao{3} V1.0}\\[2.6cm]
+
+\begin{tcolorbox}[width=0.74\textwidth, colback=white, colframe=black,
+                  boxrule=0.8pt, arc=0pt, left=18pt, right=18pt, top=12pt, bottom=12pt]
+\renewcommand{\arraystretch}{1.7}
+\zihao{5}
+\begin{tabularx}{\linewidth}{@{}>{\heiti}l@{\hspace{1.5em}}X@{}}
+软件名称 & 鹰眼长空 — 低空无人机智能监测系统 \\
+版本号   & V1.0 \\
+文档类型 & 程序设计说明书（软件设计文档） \\
+开发语言 & Python 3.11（后端）、JavaScript ES6（前端） \\
+完成日期 & 2026 年 10 月 \\
+\end{tabularx}
+\end{tcolorbox}
+
+\vfill
+{\zihao{5} 二〇二六年十月}
+\end{titlepage}
+
+% ==================== 目录 ====================
+\clearpage
+\pagenumbering{Roman}
+\renewcommand{\contentsname}{目\quad 录}
+\tableofcontents
+\clearpage
+
+% ==================== 正文 ====================
+\pagenumbering{arabic}
+\input{chapters/ch01_intro}
+\input{chapters/ch02_overview}
+\input{chapters/ch03_architecture}
+\input{chapters/ch04_flow}
+\input{chapters/ch05_reconstruction}
+\input{chapters/ch06_recognition}
+\input{chapters/ch07_prediction}
+\input{chapters/ch08_data}
+\input{chapters/ch09_interface}
+\input{chapters/ch10_usage}
+\input{chapters/ch11_deploy}
+\input{chapters/ch12_test}
+
+\appendix
+\input{chapters/appendix}
+
+\end{document}

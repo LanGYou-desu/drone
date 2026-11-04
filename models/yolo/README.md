@@ -29,6 +29,19 @@ cp train/yolotrain/train_result/models/drone_detect_YYYYMMDD_HHMMSS.pt models/yo
 }
 ```
 
+## 本目录现有模型（2026-11-04）
+
+| 文件 | 大小 | 类别 | 说明 |
+|------|------|------|------|
+| detect.pt | 6.0 MB | drone | 项目自训练（YOLOv8n，单类）。验证集 mAP@0.5 0.916，但训练/验证同源、目标极小且居中，换真实场景易漏检、且会误报 |
+| drone_yolo11n.pt | 5.2 MB | drone | 开源权重（Hugging Face: greatkoko/drone-detection-yolo11n，YOLO11n）。真实航拍机/四旋翼可整机框出，置信度 0.67–0.72，明显优于 detect.pt；鸟/客机仍会误报 |
+
+两个模型都只输出 1 类 `drone`（class_id = 0），在"检测设置"页的下拉框中可直接切换，互不影响。
+
+实测对比见 `docs/模型测试/README.md` 第 6 节。
+
+> 注意：`drone_yolo11n.pt` 来自公开模型，商用前请确认其许可证。
+
 ## 可用预训练模型
 
 | 模型 | 大小 | mAP | 速度 (CPU) | 速度 (GPU) |

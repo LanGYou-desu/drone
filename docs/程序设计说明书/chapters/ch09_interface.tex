@@ -1,0 +1,218 @@
+% ============================================================
+%  第九章  接口设计
+% ============================================================
+\section{接口设计}
+
+系统对外提供四类接口：命令行接口、页面路由、REST 接口与前端脚本接口；此外还依赖一个外部 AI 接口。所有 REST 接口遵循统一约定：成功返回 \code{\{"success": true, ...\}}，失败返回 \code{\{"success": false, "error": "..."\}}，并配合适当的 HTTP 状态码。
+
+\subsection{命令行接口}
+
+\subsubsection{系统启动}
+
+\begin{table}[H]
+\centering
+\caption{main.py 命令行参数}
+\label{tab:cli}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{5.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+命令 & 说明 \\
+\midrule
+python main.py & 同时启动两个模块，并以桌面窗口打开重建模块 \\
+python main.py --headless & 纯 HTTP 模式，不创建桌面窗口 \\
+python main.py recon & 仅启动轨迹重建与分析（5000） \\
+python main.py recog & 仅启动无人机检测（5001） \\
+python -m trajectory\_reconstruction & 以模块方式启动重建分析 \\
+python -m trajectory\_recognition & 以模块方式启动检测 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+无论采用哪种方式，启动前都会扫描并终止占用 5000/5001 端口的残留进程，避免“端口被占用”导致的启动失败。
+
+\subsubsection{训练脚本}
+
+\begin{table}[H]
+\centering
+\caption{训练脚本参数}
+\label{tab:traincli}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{4.5cm}>{\raggedright\ttfamily\scriptsize}p{3.0cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+脚本 & 常用参数 & 说明 \\
+\midrule
+train/yolotrain/train.py & --data / --model & 数据集描述文件与基础权重 \\
+ & --epochs / --imgsz & 训练轮数与输入尺寸 \\
+ & --batch / --device & 批次大小与设备（auto/cpu/cuda:0） \\
+ & --freeze / --lr & 冻结层数与初始学习率 \\
+ & --export / --format & 导出模型（onnx/engine/tflite） \\
+ & --val & 仅验证，不训练 \\
+\midrule
+train/hybrid\_predictor/train.py & --stage & 训练阶段（1/2/3/all） \\
+ & --epochs-s1..s3 & 各阶段轮数 \\
+ & --batch-s1..s3 & 各阶段批次大小 \\
+ & --resume & 从检查点恢复 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{页面路由}
+
+\begin{table}[H]
+\centering
+\caption{页面路由}
+\label{tab:pages}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily}p{3.0cm}>{\ttfamily}p{1.6cm}p{3.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+路径 & 模块 & 模板 & 页面说明 \\
+\midrule
+/ & 5000 & index.html & 总览：全屏三维轨迹视图 \\
+/predict & 5000 & predict.html & 预测：参数设置与预测预览 \\
+/analysis/ & 5000 & analysis.html & 分析：四联图与捕捉时机 \\
+/ai & 5000 & ai.html & AI 策略：平台勾选与策略正文 \\
+/data & 5000 & data.html & 数据：上传、备份、恢复 \\
+/docs & 5000 & docs.html & 帮助文档中心 \\
+/settings & 5000 & settings.html & 设置：主题、权重、模型参数 \\
+/ & 5001 & index.html & 检测工作台 \\
+/settings & 5001 & settings.html & 检测参数配置 \\
+/history & 5001 & history.html & 检测历史与备份 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{REST 接口：轨迹重建与分析}
+
+共 18 个接口，按功能分为四组，如表~\ref{tab:apirecon} 所示。
+
+\begin{longtable}{@{}>{\ttfamily\scriptsize}p{1.3cm}>{\raggedright\ttfamily\scriptsize}p{4.2cm}>{\raggedright\ttfamily\scriptsize}p{3.4cm}>{\raggedright\arraybackslash}p{4.9cm}@{}}
+\caption{轨迹重建与分析的 REST 接口}\label{tab:apirecon}\\
+\toprule
+{\heiti 方法} & {\heiti 路径} & {\heiti 请求参数} & {\heiti 返回} \\
+\midrule
+\endfirsthead
+\multicolumn{4}{@{}l}{\small 续表~\thetable}\\
+\toprule
+{\heiti 方法} & {\heiti 路径} & {\heiti 请求参数} & {\heiti 返回} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+POST & /api/predict & method\_id, num\_points, time\_step & prediction, pred\_times \\
+POST & /api/predict\_all & num\_points, time\_step & results\{平台: 预测\} \\
+POST & /api/ai\_suggestion & methods\_data & suggestion \\
+POST & /api/save\_report & content, platforms & filepath \\
+POST & /api/refresh\_data & --- & success \\
+POST & /api/load\_data & form: file, method\_id & success, name \\
+POST & /api/clear\_all\_data & --- & backup\_name \\
+POST & /api/toggle\_method & method\_id & visible \\
+POST & /api/synthesize & --- & point\_count, platforms, weights \\
+POST & /api/weights & synth\_weights 等 & success \\
+POST & /api/hybrid\_model & v\_max, a\_max 等 & hybrid\_model \\
+GET/POST & /api/theme & theme & theme \\
+GET & /api/list\_backups & --- & backups[] \\
+POST & /api/restore\_backup & backup\_file, full & message \\
+POST & /api/restore\_all\_backups & --- & restored[] \\
+POST & /api/backup/create & --- & name \\
+POST & /api/backup/delete & backup\_name & message \\
+GET & /analysis/data & --- & 各平台运动学序列 \\
+GET & /analysis/capture & --- & 前三名捕捉时机 \\
+\end{longtable}
+其中 \code{/analysis/data} 与 \code{/analysis/capture} 挂在 \code{/analysis} 前缀下，其余接口未设前缀。
+
+\subsection{REST 接口：无人机检测}
+
+检测接口统一挂在 \code{/api/detection} 前缀下，共 12 个，如表~\ref{tab:apidet} 所示。
+
+\begin{table}[H]
+\centering
+\caption{无人机检测的 REST 接口}
+\label{tab:apidet}
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily\scriptsize}p{1.2cm}>{\raggedright\ttfamily\scriptsize}p{3.3cm}>{\raggedright\ttfamily\scriptsize}p{3.9cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+方法 & 路径 & 参数 & 说明 \\
+\midrule
+POST & /start & 表单: video\_a, video\_b, config & 上传双路视频并启动会话 \\
+POST & /stop & session\_id? & 停止检测 \\
+POST & /pause & session\_id? & 暂停 \\
+POST & /resume & session\_id? & 恢复 \\
+GET & /status & session\_id? & 会话状态与进度 \\
+GET & /tracks & session\_id?, format & 跟踪结果（summary/full） \\
+GET & /preview & channel=a|b & 最新预览帧 JPEG \\
+GET & /sessions & status? & 历史会话列表 \\
+DELETE & /sessions/\{id\} & --- & 删除会话 \\
+GET/POST & /config & detection/platforms & 读写检测配置 \\
+GET & /models & --- & 可用模型列表 \\
+GET & /files & --- & 轨迹文件列表 \\
+DELETE & /files/\{name\} & --- & 删除轨迹文件 \\
+GET & /backups & --- & 备份列表 \\
+POST & /save & session\_id?, platform\_id & 保存轨迹到 data/fact \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{前端脚本接口}
+
+页面脚本通过 \code{window._PAGE_DATA_} 获取服务端注入的数据，通过 \code{fetch} 调用上述接口。检测模块把通信封装为 \code{DetectionAPI} 对象，主要方法如表~\ref{tab:jsapi} 所示。
+
+\begin{table}[H]
+\centering
+\caption{前端脚本的主要接口}
+\label{tab:jsapi}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{5.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+方法 / 对象 & 说明 \\
+\midrule
+DetectionAPI.start(formData) & 提交双路视频与配置，返回会话信息 \\
+DetectionAPI.status(sessionId) & 轮询状态、进度与统计 \\
+DetectionAPI.previewUrl(channel) & 生成预览图 URL \\
+DetectionAPI.tracks(sessionId) & 拉取跟踪摘要 \\
+DetectionAPI.save(payload) & 保存轨迹到共享目录 \\
+toast.show/error/success & 统一的通知浮层 \\
+buildAxes / buildLights & 构建三维坐标轴与光照 \\
+bindWASD / bindCoordTooltip & 键盘漫游与坐标拾取 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{外部 AI 接口}
+
+AI 策略调用遵循 OpenAI Chat Completions 协议：
+
+\begin{lstlisting}[style=json, basicstyle=\ttfamily\scriptsize, caption={AI 策略的请求体结构}]
+{
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "messages": [
+    {"role": "system", "content": "无人机反制专家……"},
+    {"role": "user", "content": "检测手段: 可见光 ……”}
+  ],
+  "temperature": 0.7,
+  "max_tokens": 800
+}
+\end{lstlisting}
+
+响应取 \code{choices} 数组首项的 \code{message.content}。系统对四类异常分别给出可读提示：请求超时、HTTP 错误、响应非 JSON、响应缺少 \code{choices} 字段。
+
+\subsection{响应约定与错误处理}
+
+\begin{table}[H]
+\centering
+\caption{HTTP 状态码与响应约定}
+\label{tab:http}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{1.6cm}>{\ttfamily}p{4.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+状态码 & 响应体 & 触发条件 \\
+\midrule
+200 & \{"success": true, ...\} & 请求成功 \\
+400 & \{"success": false, "error"\} & 参数缺失、格式错误、数据不足 \\
+404 & \{"success": false, "error"\} & 接口或资源不存在 \\
+500 & \{"success": false, "error"\} & 服务内部异常（不暴露堆栈） \\
+204 & 空响应 & 检测预览暂无可用帧 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+所有响应统一添加禁止缓存的响应头（\code{Cache-Control: no-store}），确保前端始终加载最新脚本与数据。

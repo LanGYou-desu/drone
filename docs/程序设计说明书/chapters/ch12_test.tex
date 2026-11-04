@@ -1,0 +1,133 @@
+% ============================================================
+%  第十二章  测试与验证
+% ============================================================
+\section{测试与验证}
+
+\subsection{测试环境}
+
+测试在如下环境进行：Windows 11（x64）、Intel 处理器 + NVIDIA RTX 4070 Laptop（本机未安装 CUDA 版 PyTorch，实际以 CPU 推理）、16 GB 内存、Edge 浏览器（WebView2），Python 3.11.17 + Conda 环境 \code{drone}，依赖版本见表~\ref{tab:versions}。
+
+\subsection{测试方法}
+
+\begin{itemize}
+  \item \term{功能测试}：按页面逐一执行典型操作，核对界面反馈与磁盘数据；
+  \item \term{接口测试}：用 HTTP 客户端直接调用 REST 接口，核对状态码与响应结构；
+  \item \term{界面测试}：以 1600$\times$1000 视口截图，检查布局、对齐、文字截断与主题切换；
+  \item \term{性能测试}：测量初始化、页面响应、预测与检测推理耗时；
+  \item \term{鲁棒性测试}：人为制造异常（缺模型、坏配置、空数据、端口占用），验证降级行为。
+\end{itemize}
+
+\subsection{功能测试用例}
+
+\begin{longtable}{@{}>{\heiti\scriptsize}p{0.7cm}>{\scriptsize}p{3.1cm}>{\scriptsize}p{3.4cm}>{\raggedright\arraybackslash}p{5.6cm}>{\heiti\scriptsize}p{0.9cm}@{}}
+\caption{功能测试用例与结果}\label{tab:testcases}\\
+\toprule
+编号 & 用例 & 步骤 & 预期结果 & 结论 \\
+\midrule
+\endfirsthead
+\multicolumn{5}{@{}l}{\small 续表~\thetable}\\
+\toprule
+编号 & 用例 & 步骤 & 预期结果 & 结论 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+T01 & 启动与首页 & 执行 main.py --headless，访问 5000 & 页面正常渲染，三维场景加载 & 通过 \\
+T02 & 平台显隐 & 总览页点击“隐藏”雷达 & 雷达轨迹消失，其它平台不受影响 & 通过 \\
+T03 & 时间轴动画 & 点击播放并拖动进度条 & 轨迹按时间推进，状态面板同步刷新 & 通过 \\
+T04 & 权重合成 & 设置页将红外权重改为 0 & 综合轨迹不再包含红外贡献 & 通过 \\
+T05 & 单平台预测 & 预测页选“可见光”，点击开始 & 出现虚线与半透明预测点 & 通过 \\
+T06 & 全平台预测 & 目标平台选“所有平台” & 各平台预测时间轴对齐，综合预测生成 & 通过 \\
+T07 & 参数越界 & 预测点数输入超过上限 & 自动夹紧到配置上限，不报错 & 通过 \\
+T08 & 分析曲线 & 预测后进入分析页 & 四图渲染，原始与预测段连续 & 通过 \\
+T09 & 捕捉评分 & 预测后查看捕捉卡片 & 显示前三名，得分降序 & 通过 \\
+T10 & 数据上传 & 上传 60 点 .dat & 出现“自选”平台，概览表更新 & 通过 \\
+T11 & 备份与恢复 & 立即备份 $\rightarrow$ 清理 $\rightarrow$ 恢复 & 数据恢复，平台与点数一致 & 通过 \\
+T12 & 检测配置保存 & 检测设置页修改置信度并保存 & config.json 对应字段更新 & 通过 \\
+T13 & 检测预览 & 上传双路视频并开始检测 & 双路预览带检测框，实时信息刷新 & 通过 \\
+T14 & 轨迹入库 & 检测完成后保存 & data/fact 下生成文件并触发刷新 & 通过 \\
+T15 & 检测历史 & 打开检测历史页 & 列出轨迹文件与备份，可删除 & 通过 \\
+T16 & 主题切换 & 设置页切换深/浅主题 & 全部页面配色同步变化 & 通过 \\
+T17 & AI 策略 & 勾选平台并生成（未配置密钥） & 返回可读的错误提示，不崩溃 & 通过 \\
+T18 & 帮助文档 & 打开 /docs & 内置文档正常显示 & 通过 \\
+\end{longtable}
+
+\subsection{接口测试}
+
+对主要接口逐一发起请求，结果如表~\ref{tab:apitest} 所示。
+
+\begin{table}[H]
+\centering
+\caption{接口测试结果}
+\label{tab:apitest}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{4.9cm}>{\scriptsize}p{1.1cm}>{\scriptsize}p{1.5cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+{\heiti 接口} & {\heiti 方法} & {\heiti 状态码} & {\heiti 说明} \\
+\midrule
+/ & GET & 200 & 页面 HTML，约 22 KB \\
+/analysis/data & GET & 200 & 五平台运动学序列，约 17 KB \\
+/api/list\_backups & GET & 200 & 备份列表 \\
+/api/predict\_all & POST & 200 & 21 个预测点 × 4 平台 \\
+/api/synthesize & POST & 200 & 返回点数、平台与权重 \\
+/api/toggle\_method & POST & 200 & 返回最新可见性 \\
+/api/load\_data & POST & 400 & 非法文件时返回错误说明 \\
+/api/restore\_backup & POST & 400 & 备份不存在时返回错误说明 \\
+/api/detection/status & GET & 200 & 无会话时 session 为 null \\
+/api/detection/preview & GET & 204 & 无可用帧时返回空响应 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{性能测试}
+
+\begin{table}[H]
+\centering
+\caption{性能指标实测值}
+\label{tab:perf}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{4.0cm}p{2.6cm}p{3.0cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+项目 & 实测值 & 条件 & 说明 \\
+\midrule
+应用初始化 & 1.80 s & 含配置校验、数据加载、合成 & 冷启动，CPU \\
+首页响应 & 46 ms & 1600$\times$1000 页面 & 服务端渲染 \\
+分析数据接口 & 22 ms & 五个平台 $\times$ 80 点 & JSON 序列化 \\
+全平台预测 & 114 ms & 20 点 $\times$ 4 平台 & 模型加载失败回退后 \\
+检测页响应 & 18 ms & 5001 首页 & --- \\
+YOLO 模型加载 & 1.62 s & CPU，\file{detect.pt} & 首次加载 \\
+单帧推理 & 1.56 s & 1920$\times$1080，imgsz 1280 & CPU，检出 17 个目标 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+CPU 下单帧推理约 1.5 s，若按 3 帧抽帧、每秒 25 帧的视频计算，处理速度约为实时的 $1/4$；改用 CUDA 版 PyTorch 后可提升至实时以上。因此现场使用时建议配置 GPU，或在设置页增大抽帧间隔。
+
+\subsection{鲁棒性测试}
+
+\begin{table}[H]
+\centering
+\caption{异常场景的降级行为}
+\label{tab:robust}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.6cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+异常场景 & 系统行为 \\
+\midrule
+预测权重缺失或结构不匹配 & 记录日志并回退线性外推，接口仍返回 200 \\
+历史点数不足 10 & 直接走线性外推，不加载模型 \\
+配置文件缺失 & 从模板重建；模板缺失则用内置默认值 \\
+配置文件损坏 & 捕获 JSON 解析异常，回退默认配置 \\
+数据目录为空 & 界面显示空场景，不抛异常 \\
+平台时间区间无交集 & 合成接口返回 400 与明确原因 \\
+备份清单损坏 & 列出备份时跳过该条目 \\
+端口被占用 & 启动时自动清理；清理失败则提示端口错误 \\
+上传文件格式非法 & 返回 400 与“需要 x y z t”的提示 \\
+检测预览无帧 & 返回 204，前端静默跳过 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{测试结论}
+
+功能用例 18 项全部通过；接口约定、错误响应与降级策略符合设计；性能在 CPU 环境下满足“交互流畅、检测可离屏运行”的定位。轨迹预测的精度问题属于功能未完成，已在第~\ref{sec:prediction_future} 章列出整改计划，不作为本版本的通过项。

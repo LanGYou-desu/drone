@@ -1,0 +1,250 @@
+% ============================================================
+%  第七章  轨迹预测（后续开发）
+% ============================================================
+\section{轨迹预测：现状与后续开发方案}
+\label{sec:prediction_future}
+
+本章说明轨迹预测功能的当前状态、失败原因与后续开发方案。需要明确的是：\textbf{本版本（V1.0）的轨迹预测尚未达到可用精度}，界面上的预测点实际由“线性外推”兜底算法产生，基于深度学习的混合模型仅完成了代码框架、训练脚本与权重加载链路，属于后续开发内容。
+
+\subsection{现状说明}
+
+\subsubsection{已实现的部分}
+
+系统中与预测相关的代码已具备完整骨架：
+
+\begin{itemize}
+  \item \file{core/prediction/prediction.py}：预测入口、模型权重查找与缓存、线性外推兜底；
+  \item \file{core/prediction/hybrid/}：Phy-ODE-Diffusion 模型定义（Transformer 编码器、物理 ODE 模块、扩散解码器、DDIM 采样器）；
+  \item \file{services/predict_service.py}：单平台/全平台预测编排、时间轴对齐、综合预测合成；
+  \item \file{train/hybrid_predictor/}：数据集加载、四旋翼动力学合成数据生成器、三阶段训练脚本；
+  \item \file{models/hybrid_predictor/}：若干训练产出的检查点文件。
+\end{itemize}
+
+\subsubsection{未解决的部分}
+
+当前版本存在三个层面的问题，导致混合模型无法投入使用：
+
+\begin{enumerate}
+  \item \term{权重与模型结构不匹配}。加载检查点时出现状态字典缺键错误：
+\begin{lstlisting}[style=sh, caption={混合模型加载失败的运行日志（节选）}]
+[预测] 模型加载失败: Error(s) in loading state_dict for PhyODEDiffusion:
+    Missing key(s): "diffusion.lambda_zmax",
+                    "diffusion.scheduler.alphas_cumprod", ...
+    ，回退到线性外推
+\end{lstlisting}
+  根因是扩散模块中的若干缓冲区（高度上限缩放系数、扩散调度器的累积乘积表）在保存检查点时未被持久化，重新实例化模型后这些缓冲区已由构造函数生成，但状态字典中缺少对应条目，\code{load_state_dict(strict=True)} 因此失败。
+
+  \item \term{训练数据不足且分布单一}。现有训练集主要由 \code{generate_synthetic.py} 按四旋翼动力学模型合成，缺少真实飞行数据；合成数据的运动模式（悬停、匀速盘旋、爬升）覆盖面有限，模型学到的是“生成器的分布”而非真实空域的运动分布。
+
+  \item \term{缺少可信的评估闭环}。由于前两项问题，模型尚未在统一的验证协议下与线性外推做过对比，ADE/FDE 等指标无从谈起；现有检查点文件名中的 \code{v0.0249} 等数值是训练损失，不是位移误差，不能作为精度依据。
+\end{enumerate}
+
+\subsubsection{当前的实际行为}
+
+预测接口 \code{/api/predict} 与 \code{/api/predict_all} 始终返回可用结果：当混合模型不可用（权重缺失、结构不匹配、历史点少于 10 个、推理异常）时，自动退回线性外推。线性外推以最后两点的速度向量延拓：
+
+\begin{equation}
+p_{n+k}=p_n+v\,\Delta t\,k,\qquad v=\frac{p_n-p_{n-1}}{t_n-t_{n-1}}
+\end{equation}
+
+该算法计算量极小、结果稳定，但假设“速度恒定”，对转弯、加速、爬升等机动完全无能为力。图~\ref{fig:use_analysis} 中可见可见光平台的预测高度持续下降并跌至负值，正是线性外推无法感知“无人机不会穿过地面”这一物理约束的表现。
+
+因此，本版本对预测功能的定位是“\textbf{占位与兜底}”：接口、页面、数据结构、时间轴对齐逻辑均已就绪，后续替换预测内核时无需改动上层代码。
+
+\subsection{需求分析}
+
+后续开发需满足以下指标，方可称为“可用”：
+
+\begin{table}[H]
+\centering
+\caption{轨迹预测功能的验收指标}
+\label{tab:predreq}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.2cm}p{3.4cm}X@{}}
+\toprule
+指标 & 目标值 & 说明 \\
+\midrule
+ADE & $\leq 1.5$ m & 预测 10 步（约 3 秒）内的平均位移误差 \\
+FDE & $\leq 3.0$ m & 末点位移误差 \\
+物理违反率 & $\leq 2\%$ & 高度越界、速度/加速度超限的预测点占比 \\
+推理时延 & $\leq 150$ ms（GPU）\newline $\leq 800$ ms（CPU） & 单平台 20 点预测，10 步 DDIM 采样 \\
+可用性 & 100\% & 任何异常都必须回退到线性外推，接口不得失败 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{技术路线：Phy-ODE-Diffusion}
+
+拟采用的模型把“数据驱动”与“物理约束”结合，整体结构如图~\ref{fig:hybridarch} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,
+  blk/.style={draw=cLine, line width=0.5pt, fill=cA, rounded corners=2pt,
+              minimum height=0.9cm, align=center, font=\scriptsize, inner sep=3pt}]
+\node[blk, minimum width=2.9cm, fill=cB] (in)  at (0,0)     {历史轨迹\\$(t_i,p_i)_{i=1}^{N}$};
+\node[blk, minimum width=3.2cm]          (enc) at (3.95,0)  {Transformer 编码器\\6 层 · 4 头};
+\node[blk, minimum width=3.0cm, fill=cC] (ode) at (7.95,0)  {物理结构 ODE\\$\dot z=f_\theta(z,t)$};
+\node[blk, minimum width=3.0cm]          (ctx) at (11.85,0) {上下文向量\\$c$};
+\node[blk, minimum width=2.9cm, fill=cD] (phy) at (3.4,-2.3)  {物理约束\\速度 / 加速度 / 高度};
+\node[blk, minimum width=3.4cm]          (dif) at (7.95,-2.3) {物理引导扩散\\$x_\tau\to x_0$};
+\node[blk, minimum width=3.0cm, fill=cB] (out) at (11.85,-2.3){预测轨迹\\$\hat p_{n+1..n+K}$};
+\draw[arr] (in) -- (enc);
+\draw[arr] (enc) -- node[lbl, above]{$z_0$} (ode);
+\draw[arr] (ode) -- node[lbl, above]{$c$} (ctx);
+\draw[arr] (ctx.south) -| (dif.north);
+\draw[arr] (phy) -- (dif);
+\draw[arr] (dif) -- (out);
+\end{tikzpicture}
+\caption{Phy-ODE-Diffusion 混合预测模型结构（开发方案）}
+\label{fig:hybridarch}
+\end{figure}
+
+\subsubsection{编码器}
+
+Transformer 编码器把不等间隔的历史轨迹映射为隐状态序列。时间间隔通过时间嵌入（\code{dt_emb_dim}）注入，使模型能处理“采样率不恒定”的真实数据；位置编码与时间嵌入相加后进入自注意力层。
+
+\subsubsection{物理结构 ODE}
+
+隐状态在连续时间上演化，由神经常微分方程描述：
+\begin{equation}
+\frac{\mathrm{d}z(t)}{\mathrm{d}t}=f_\theta\big(z(t),\,t,\,c\big),\qquad z(t_0)=z_0
+\end{equation}
+其中 $f_\theta$ 为两层 MLP（隐藏维 128），$c$ 为编码器给出的上下文。用四阶 Runge--Kutta 积分求解，ODE 的“连续时间”特性使模型可以在任意时间点查询状态，天然适配变步长预测。
+
+\subsubsection{物理引导扩散}
+
+预测轨迹被视为一个待去噪的样本。前向扩散逐步加噪：
+\begin{equation}
+q(x_\tau\mid x_0)=\mathcal{N}\left(\sqrt{\bar\alpha_\tau}\,x_0,\;(1-\bar\alpha_\tau)\mathbf{I}\right)
+\end{equation}
+反向过程由网络预测噪声，并在每一步施加物理引导：
+\begin{equation}
+x_{\tau-1}=\mathrm{DDIM}\big(x_\tau,\;\epsilon_\theta(x_\tau,\tau,c)\big)
+-\eta\,\nabla_{x}\mathcal{L}_{\text{phy}}(x)
+\end{equation}
+其中 $\mathcal{L}_{\text{phy}}$ 由四项组成：
+\begin{equation}
+\mathcal{L}_{\text{phy}}=\lambda_v\mathcal{L}_{\text{speed}}
++\lambda_a\mathcal{L}_{\text{accel}}
++\lambda_z\mathcal{L}_{\text{height}}
++\lambda_{\text{tilt}}\mathcal{L}_{\text{tilt}}
+\end{equation}
+分别惩罚速度超限、加速度超限、高度越界（$z_{\min}\leq z\leq z_{\max}$）与倾角超限（$a_h\leq g\tan\theta_{\max}$）。$\eta$ 为引导强度，可由配置项 \code{guidance_eta} 调整。
+
+\subsubsection{三阶段训练}
+
+\begin{enumerate}
+  \item \term{阶段一：表征学习}。冻结扩散模块，以 MSE 训练编码器 + ODE + 读出层，学习“历史 $\rightarrow$ 未来”的确定性映射；
+  \item \term{阶段二：扩散拟合}。冻结编码器与 ODE，训练扩散网络拟合残差分布，加入物理损失（权重 0.01）；
+  \item \term{阶段三：联合微调}。解冻全部参数，以小学习率（$10^{-4}$）联合优化，采用 scheduled sampling 缓解 exposure bias。
+\end{enumerate}
+
+每阶段独立保存检查点，支持断点续训；warmup + 余弦退火的学习率策略用于稳定训练。
+
+\subsection{已有基础与复用清单}
+
+后续开发可直接复用以下成果，无需从零开始：
+
+\begin{table}[H]
+\centering
+\caption{预测模块可复用的已有成果}
+\label{tab:reuse}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\ttfamily\scriptsize}p{6.5cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+文件 / 组件 & 可复用内容 \\
+\midrule
+core/prediction/prediction.py & 权重查找优先级、设备回退、异常降级、缓存机制 \\
+core/prediction/hybrid/model.py & 模型主体、前向接口 \code{predict()}、参数统计 \\
+core/prediction/hybrid/diffusion.py & 前向/反向扩散、DDIM 采样、物理引导 \\
+core/prediction/hybrid/physics\_ode.py & ODE 右端函数与 RK4 积分器 \\
+core/prediction/hybrid/ode\_manager.py & 变步长积分与状态管理 \\
+train/hybrid\_predictor/dataset.py & 滑动窗口采样、归一化、变长序列批处理 \\
+train/hybrid\_predictor/generate\_synthetic.py & 四旋翼动力学合成数据（含噪声与丢帧） \\
+train/hybrid\_predictor/train.py & 三阶段训练、检查点、指标计算与图表输出 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{待解决的关键问题}
+
+\begin{table}[H]
+\centering
+\caption{后续开发需解决的关键问题}
+\label{tab:issues}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.0cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+问题 & 说明与对策 \\
+\midrule
+检查点兼容 & 缓冲区改为 \code{register_buffer(..., persistent=False)} 或加载时使用 \code{strict=False} 并显式校验关键参数；同时在保存时写入 \code{model_info}（层数、维度、约束参数）以便版本校验 \\
+真实数据 & 采集不少于 200 条真实飞行轨迹（多机型、多天气、多背景），与合成数据按 1:1 混合训练，并做域随机化（噪声、丢帧、传输延迟） \\
+评估协议 & 固定训练/验证/测试划分与随机种子，统一报告 MSE、ADE、FDE、物理违反率，并与线性外推、卡尔曼滤波、LSTM 基线对比 \\
+长时预测 & 采用滚动预测 + 误差累积抑制（多步一致性损失），避免误差随步数指数增长 \\
+推理性能 & 采用 DDIM 少步采样（10--20 步）、TorchScript 导出与 INT8 量化，控制在 200 ms 以内 \\
+退化输出 & 增加输出合法性检查（高度、速度、加速度），越界即裁剪并记录，确保不出现“钻地”预测 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{开发计划}
+
+后续开发按四个里程碑推进，计划如图~\ref{fig:gantt} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\scriptsize]
+% 时间轴（每月 1.55cm，共 6 个月）
+\foreach \m in {0,1,...,6} {
+  \draw[cLine!45] (\m*1.55,0.35) -- (\m*1.55,-4.05);
+}
+\foreach \m in {1,2,...,6} {
+  \pgfmathsetmacro{\xc}{(\m-0.5)*1.55}
+  \node[font=\scriptsize] at (\xc,0.62) {第 \m 月};
+}
+\draw[cLine] (0,0.35) -- (9.3,0.35);
+% 任务名称（左侧）与条形
+\node[anchor=east, font=\scriptsize] at (-0.35,-0.55) {M1 缺陷修复};
+\node[anchor=east, font=\scriptsize] at (-0.35,-1.55) {M2 数据建设};
+\node[anchor=east, font=\scriptsize] at (-0.35,-2.55) {M3 模型训练};
+\node[anchor=east, font=\scriptsize] at (-0.35,-3.55) {M4 评估集成};
+\fill[cA] (0,-0.30) rectangle (4.65,-0.80);
+\fill[cB] (2.33,-1.30) rectangle (6.98,-1.80);
+\fill[cC] (4.65,-2.30) rectangle (9.30,-2.80);
+\fill[cD] (6.98,-3.30) rectangle (9.30,-3.80);
+\draw[cLine!50] (0,-0.55) -- (4.65,-0.55);
+\end{tikzpicture}
+\caption{轨迹预测功能开发计划（示意）}
+\label{fig:gantt}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{里程碑与交付物}
+\label{tab:milestone}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{1.4cm}>{\heiti}p{3.4cm}p{4.0cm}X@{}}
+\toprule
+编号 & 里程碑 & 交付物 & 验收标准 \\
+\midrule
+M1 & 缺陷修复 & 可正常加载的检查点、加载日志 & 状态字典无缺键，推理可跑通 \\
+M2 & 数据建设 & 真实轨迹数据集、数据清洗脚本 & 不少于 200 条，覆盖 3 类机动 \\
+M3 & 模型训练 & 三阶段训练权重、训练曲线 & 验证集 ADE $<2.0$ m \\
+M4 & 评估集成 & 对比报告、集成后的服务 & ADE $\leq1.5$ m，时延 $\leq200$ ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{与现有接口的兼容性}
+
+后续实现不改变任何对外契约：
+
+\begin{itemize}
+  \item 函数签名 \code{generate_prediction(points, timestamps, num_points, time_step)} 与 \code{generate_prediction_hybrid(...)} 保持不变；
+  \item 接口 \code{/api/predict} 的请求与响应字段保持不变；
+  \item 配置项 \code{hybrid_model} 的键名不变，新增参数以“有默认值”的方式追加；
+  \item 降级策略保留：新模型任何异常都必须回退到线性外推，保证界面永不报错。
+\end{itemize}
+
+因此，切换预测内核只需替换 \file{models/hybrid_predictor/} 下的权重并修正加载逻辑，前端与接口层无需任何改动。

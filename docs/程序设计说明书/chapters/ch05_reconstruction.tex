@@ -1,0 +1,378 @@
+% ============================================================
+%  第五章  轨迹重建与分析模块设计
+% ============================================================
+\section{轨迹重建与分析模块设计}
+
+本模块运行于 5000 端口，是系统的“态势呈现与研判”部分。它不产生轨迹，而是把来自三种探测平台（以及自选平台）的轨迹加载进来，统一到同一时空基准，完成融合、呈现、分析与策略生成。
+
+\subsection{模块结构与职责划分}
+
+模块代码位于 \file{trajectory_reconstruction/}，内部按分层原则组织为四个包，如图~\ref{fig:reconmod} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,
+  pk/.style={draw=cLine, line width=0.5pt, fill=cA, rounded corners=2pt,
+             minimum height=0.8cm, align=center, font=\small, inner sep=3pt}]
+\node[pk, text width=12.2cm] (fe)  at (7.4,-0.5)  {\heiti 表现层（frontend）：页面模板 + 页面脚本 + 共享静态资源};
+\node[pk, text width=12.2cm] (vew) at (7.4,-2.05) {\heiti 接口层（views）：main · api · api\_predict · api\_report · analysis};
+\node[pk, text width=12.2cm] (svc) at (7.4,-3.6)  {\heiti 业务层（services）：data\_service · predict\_service · backup\_service};
+\node[pk, text width=12.2cm] (cor) at (7.4,-5.15) {\heiti 领域层（core）：配置 · I/O · 数学工具 · 预测 · 混合模型 · AI 服务 · 状态};
+
+\draw[arr] (fe.south)  -- (vew.north);
+\draw[arr] (vew.south) -- (svc.north);
+\draw[arr] (svc.south) -- (cor.north);
+\node[lbl, anchor=west] at (8.6,-1.28) {调用};
+\node[lbl, anchor=west] at (8.6,-2.83) {调用};
+\node[lbl, anchor=west] at (8.6,-4.38) {调用};
+
+\draw[draw=cLine, dashed, rounded corners=2pt] (0.6,-6.55) rectangle (14.2,-8.0);
+\node[anchor=west, font=\scriptsize\heiti] at (1.0,-6.72) {共享数据资源};
+\node[pk, minimum width=2.8cm, font=\scriptsize, fill=cD] (k1) at (2.2,-7.5) {config.json};
+\node[pk, minimum width=2.8cm, font=\scriptsize, fill=cD] (k2) at (5.3,-7.5) {data/fact/};
+\node[pk, minimum width=2.8cm, font=\scriptsize, fill=cD] (k3) at (8.4,-7.5) {data/predict/};
+\node[pk, minimum width=2.8cm, font=\scriptsize, fill=cD] (k4) at (11.5,-7.5) {data/backup/};
+\draw[darr] (cor.south) -- node[lbl, right]{读写} (7.4,-6.55);
+\end{tikzpicture}
+\caption{轨迹重建与分析模块内部结构}
+\label{fig:reconmod}
+\end{figure}
+
+图中箭头自上而下表示调用方向：上层只能调用下层，领域层不依赖任何上层代码，因而可以脱离 Web 框架单独测试。各包职责如下：
+
+\begin{table}[H]
+\centering
+\caption{轨迹重建与分析模块的包职责}
+\label{tab:reconpkgs}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti\scriptsize}p{2.7cm}>{\raggedright\ttfamily\scriptsize}p{4.1cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+包 & 主要文件 & 职责 \\
+\midrule
+\code{core/config} & \code{config_manager.py} & 配置默认值、校验补全、原子写入 \\
+\code{core/io} & \code{data_loader.py} & .npz/.dat 读写、预测结果落盘、默认数据映射 \\
+\code{core/math_utils} & \code{math_utils.py} & 线性插值、速度外推、最近点均值、三点平滑、速度估计 \\
+\code{core/prediction} & \code{prediction.py}、\code{hybrid/} & 线性外推、混合模型加载与推理调度 \\
+\code{core/ai} & \code{ai_service.py} & 提示词构建与 OpenAI 兼容接口调用 \\
+\code{core/state} & \code{state.py} & 全局平台字典、线程锁、AI 配置 \\
+\code{services} & \code{data_service.py} 等 & 数据初始化、合成、预测编排、快照备份 \\
+\code{views} & 5 个蓝图文件 & 页面渲染与 REST 接口 \\
+\code{frontend} & \code{pages/} 与 \code{static/js} & 页面模板与交互脚本 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{配置管理}
+
+配置模块把 \code{DEFAULT_CONFIG} 作为唯一事实来源，提供三个对外函数，如表~\ref{tab:cfgapi} 所示。
+
+\begin{table}[H]
+\centering
+\caption{配置管理接口}
+\label{tab:cfgapi}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily\scriptsize}p{3.9cm}>{\scriptsize}p{2.2cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+函数 & 返回 & 说明 \\
+\midrule
+\code{ensure_config()} & dict & 确保文件存在；读取后逐字段补全缺失项 \\
+\code{save_config(cfg)} & None & 写临时文件后 \code{os.replace} 原子替换 \\
+\code{_validate_config(cfg)} & dict & 递归比对默认值，仅补缺、不覆盖 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+补全策略的伪代码如下。之所以“只补缺不覆盖”，是因为用户可能主动把某个权重设为 0 或把 \code{enabled} 设为 \code{false}，这些“看起来像默认值”的取值必须被尊重。
+
+\begin{lstlisting}[style=py, caption={配置校验的补全逻辑（节选）}]
+for key in DEFAULT_CONFIG:          # 顶层键
+    if key not in cfg:
+        cfg[key] = DEFAULT_CONFIG[key]
+if 'ai' not in cfg:
+    cfg['ai'] = {}
+for key in DEFAULT_CONFIG['ai']:    # 二级键（逐节点补全）
+    if key not in cfg['ai']:
+        cfg['ai'][key] = DEFAULT_CONFIG['ai'][key]
+\end{lstlisting}
+
+\subsection{数据存取}
+
+数据层同时支持两种文件格式，读取时按优先级自动选择：
+
+\begin{enumerate}
+  \item \file{.npz}（新格式，默认）：\code{np.savez(path, positions=(N,3), timestamps=(N,))}，二进制、读写快、精度可控；
+  \item \file{.dat}（旧格式，兼容）：纯文本，每行 \code{x y z t}，便于人工检查与外部脚本生成。
+\end{enumerate}
+
+\code{load_trajectory_file(base_path)} 是统一入口：给定不含扩展名的路径时先找 \file{.npz}，找不到再找 \file{.dat}；给出完整文件名时直接按扩展名解析。该函数还承担旧命名兼容（\file{fact1/2/3.dat} 映射到可见光/红外/雷达）。
+
+\subsection{全局状态}
+
+进程内的轨迹数据以字典形式保存，结构如图~\ref{fig:state} 所示。字典键为平台标识，值为该平台的元信息与点序列。平台顺序由常量 \code{METHOD_ORDER} 固定为 visible、infrared、radar、self、synthetic，以保证所有页面的图例顺序一致。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize,
+  box/.style={draw=cLine, rounded corners=2pt, fill=cA, align=left, inner sep=5pt}]
+\node[box, text width=5.6cm] (root) at (3.0,0) {\code{detection_methods}\\[1pt]{\scriptsize 类型：dict[str, dict]}};
+\node[box, text width=7.4cm] (val) at (11.0,-0.15) {键：平台标识（visible / infrared / radar / self / synthetic）\\[2pt]值：单个平台的字典\rule{0pt}{2.6ex}};
+\draw[arr] (root.east) -- (val.west);
+\node[draw=cLine, rounded corners=2pt, fill=cD, inner sep=6pt, anchor=north] (fields) at (11.0,-1.6) {%
+\scriptsize
+\begin{tabular}{@{}l@{\hspace{8pt}}l@{}}
+\code{name}       & str \quad 显示名称 \\
+\code{color}      & str \quad 十六进制颜色 \\
+\code{visible}    & bool \quad 界面是否显示 \\
+\code{enabled}    & bool \quad 是否参与计算 \\
+\code{weight}     & float \quad 融合权重 \\
+\code{points}     & list[[x,y,z]] \quad 三维点序列 \\
+\code{timestamps} & list[float] \quad 对应时间戳 \\
+\end{tabular}};
+\draw[arr] (val.south) -- (fields.north);
+\node[lbl, anchor=east] at (10.6,-1.05) {字段};
+\end{tikzpicture}
+\caption{全局状态 \code{detection_methods} 的数据结构}
+\label{fig:state}
+\end{figure}
+
+并发安全通过一把可重入锁（\code{threading.RLock}）实现：写操作在锁内进行；读操作通过快照函数复制一层浅拷贝。之所以使用可重入锁而非普通锁，是因为 \code{save_metadata()} 在持锁路径中可能再次触发读取，普通锁会导致自死锁。
+
+\subsection{加权综合合成算法}
+
+综合轨迹是系统的核心数据产品：指挥员看到的那条“白色轨迹”并非某一平台的数据，而是全部平台按权重融合的结果。算法分五步。
+
+\subsubsection{活跃平台筛选}
+
+只有同时满足“有数据（点数 $\geq 2$）”“已启用”“权重 $>0$”三个条件的平台参与融合。设活跃平台集合为 $S$，平台 $i$ 的权重为 $w_i$，则 $S=\{i \mid n_i \geq 2,\ \text{enabled}_i,\ w_i>0\}$。
+
+\subsubsection{统一时间网格}
+
+各平台采样时刻不同，必须先建立公共时间轴。取所有平台时间区间的交集 $[t_s,t_e]$：
+\begin{equation}
+t_s=\max_i t_i^{(0)},\qquad t_e=\min_i t_i^{(n_i-1)}
+\end{equation}
+若 $t_s \geq t_e$ 说明平台间没有共同观测时段，直接返回失败。网格分辨率取最细采样间隔：
+\begin{equation}
+\Delta t_{\min}=\min_i \min_{k}\left(t_i^{(k+1)}-t_i^{(k)}\right)\Big|_{>0}
+\end{equation}
+\begin{equation}
+N=\max\left(2,\left\lfloor\frac{t_e-t_s}{\Delta t_{\min}}\right\rfloor+1\right),\qquad
+t_j=t_s+j\cdot\frac{t_e-t_s}{N-1}
+\end{equation}
+
+\subsubsection{逐时刻插值与加权平均}
+
+对每个网格时刻 $t_j$，先在每个平台上求该时刻的位置 $p_i(t_j)$（线性插值），再按权重平均：
+\begin{equation}
+p(t_j)=\frac{\sum_{i\in S} w_i\,p_i(t_j)}{\sum_{i\in S} w_i}
+\end{equation}
+
+插值函数 \code{lerp_3d} 用二分查找定位区间，将复杂度控制在 $O(\log n)$：
+
+\begin{lstlisting}[style=py, caption={三维线性插值函数 lerp\_3d（core/math\_utils.py）}]
+def _lerp_3d_impl(pts, ts_arr, t):
+    i = bisect.bisect_left(ts_arr, t)      # 二分定位区间
+    if i <= 0 or i >= len(ts_arr):
+        return list(pts[i] if i < len(pts) else pts[-1])
+    t0, t1 = ts_arr[i - 1], ts_arr[i]
+    if t1 == t0:
+        return list(pts[i])
+    r = (t - t0) / (t1 - t0)               # 区间内比例
+    p0, p1 = pts[i - 1], pts[i]
+    return [p0[j] + (p1[j] - p0[j]) * r for j in range(3)]
+
+def lerp_3d(pts, ts_arr, t):
+    if not pts or not ts_arr or len(pts) < 2:
+        return None                        # 数据不足
+    if t <= ts_arr[0]:
+        return list(pts[0])                # 左边界夹紧
+    if t >= ts_arr[-1]:
+        return list(pts[-1])               # 右边界夹紧
+    return _lerp_3d_impl(pts, ts_arr, t)
+\end{lstlisting}
+
+若某平台在该时刻返回 \code{None}（点数不足），则调用 \code{nearest_avg_3d} 取前后最近两点的坐标均值兜底，避免该时刻因单个平台缺数据而整体失效。
+
+\subsubsection{平滑}
+
+多平台融合时，各平台间的定位偏差会使合成轨迹出现锯齿。系统对合成结果执行两遍三点移动平均：
+\begin{equation}
+p_j^{(m+1)}=\begin{cases}
+p_j^{(m)}, & j=0 \text{ 或 } j=N-1\\[2pt]
+\dfrac{p_{j-1}^{(m)}+p_j^{(m)}+p_{j+1}^{(m)}}{3}, & \text{其他}
+\end{cases}
+\end{equation}
+首尾点保持不变，以免轨迹端点“缩进”。单平台时不执行平滑，避免对原始数据做无谓修改。
+
+\subsubsection{结果写回}
+
+合成结果写入 \code{detection_methods['synthetic']}，并调用 \code{save_metadata()} 把各平台元信息（不含点序列）写回 \file{config.json}，保证重启后判读界面的名称、颜色、权重不丢失。
+
+\subsection{三维可视化子系统}
+
+三维视图基于 Three.js 实现，是总览页与预测页的主体。渲染管线如图~\ref{fig:render} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=5mm and 8mm]
+\node[term] (s) {页面加载};
+\node[proc, below=5mm of s, text width=62mm] (p1) {创建场景、透视相机、WebGL 渲染器与 CSS2D 渲染器};
+\node[proc, below=5mm of p1, text width=62mm] (p2) {按主题生成背景、雾、环境光/半球光/方向光};
+\node[proc, below=5mm of p2, text width=62mm] (p3) {绘制坐标轴（实线正轴 + 虚线负轴 + 刻度 + 箭头 + 轴字母）};
+\node[proc, below=5mm of p3, text width=62mm] (p4) {逐平台构建轨迹：CatmullRom 曲线 + 外发光 + 球体标记 + 拖尾粒子};
+\node[proc, below=5mm of p4, text width=62mm] (p5) {绑定交互：OrbitControls、WASD、悬停拾取、窗口自适应};
+\node[proc, below=5mm of p5, text width=62mm] (p6) {requestAnimationFrame 循环：更新动画时间、位置与粒子寿命};
+\node[term, below=5mm of p6] (e) {持续渲染};
+\foreach \a/\b in {s/p1,p1/p2,p2/p3,p3/p4,p4/p5,p5/p6,p6/e} \draw[arr] (\a) -- (\b);
+\end{tikzpicture}
+\caption{三维视图渲染管线}
+\label{fig:render}
+\end{figure}
+
+几个实现要点：
+
+\begin{itemize}
+  \item \term{轨迹曲线}：以轨迹点为控制点构造 \code{CatmullRomCurve3}，用 \code{TubeGeometry} 生成管状网格；再叠加一层半径更大、透明度更低、开启叠加混合（\code{AdditiveBlending}）的“外发光”网格，形成辉光效果。
+  \item \term{球体标记}：每个轨迹点对应一个球体，球体 \code{userData} 中保存所属平台的点数组、时间戳数组与索引，供拾取时读取；预测点使用虚线材质与半透明球体，视觉上与事实轨迹区分。
+  \item \term{拖尾粒子}：每平台 2000 个粒子，位置沿轨迹随机分布，透明度按个体寿命衰减，营造运动尾迹。
+  \item \term{主题感知}：背景色、雾色、网格色、光照强度均从主题函数读取，切换深/浅色时重建场景对象，而非简单改颜色。
+  \item \term{坐标拾取}：\code{Raycaster} 将鼠标位置转换为射线，与所有球体求交；命中后放大 2.5 倍并增强自发光，同时以 HTML 浮层显示 $x,y,z,t$ 四个数值。
+\end{itemize}
+
+时间轴动画的核心是把“墙钟时间”映射为“轨迹时间”：
+\begin{equation}
+t_{\text{traj}} = t_{start} + \left(t_{\text{wall}} - t_0\right)\cdot v_{\text{speed}}\cdot k_{\text{scale}}
+\end{equation}
+其中 $v_{\text{speed}}$ 为用户选择的倍速（0.5/1/2/4），$k_{\text{scale}}$ 为数据时长与播放时长的比例，使 11.8 秒的轨迹可以在约 12 秒内播完，而不受实际采样率影响。
+
+\subsection{运动学分析算法}
+
+分析接口对每个平台计算四类指标。设相邻点时间差为 $\Delta t_k = t_k-t_{k-1}$，位置为 $p_k=(x_k,y_k,z_k)$。
+
+\subsubsection{水平速度}
+
+系统关注的是“地面投影速度”，即忽略高度方向的运动：
+\begin{equation}
+v_k=\frac{\sqrt{(x_k-x_{k-1})^2+(z_k-z_{k-1})^2}}{\Delta t_k},\qquad k=1,\dots,N-1
+\end{equation}
+
+\subsubsection{加速度}
+
+以相邻速度差分近似切向加速度：
+\begin{equation}
+a_k=v_k-v_{k-1},\qquad k=2,\dots,N-1
+\end{equation}
+该定义不除以时间间隔，是因为采样间隔基本均匀，差分已能反映“速度变化的剧烈程度”；同时避免小 $\Delta t$ 造成的数值爆炸。
+
+\subsubsection{曲率}
+
+采用三点法的离散曲率（等价于密切圆半径的倒数）：
+\begin{equation}
+\kappa_k=\frac{\left\|\left(p_k-p_{k-1}\right)\times\left(p_{k+1}-p_k\right)\right\|}
+{\left\|p_k-p_{k-1}\right\|^3},\qquad k=1,\dots,N-2
+\end{equation}
+分子为两段位移向量叉积的模（等于三点构成的三角形面积的两倍），分母为前段位移长度的立方，量纲为 $\mathrm{m^{-1}}$。
+
+\subsubsection{数组对齐}
+
+速度比位置少 1 个元素、加速度少 2 个、曲率少 2 个。为了让前端能把四条曲线画在同一时间轴上，接口在数组前端补零（曲率两端各补一个），使长度与时间戳一致。前导补零在图上表现为“起点处为 0”，不会产生虚假的峰值。
+
+\subsection{最佳捕捉时机评分}
+
+捕捉评分只针对综合轨迹的预测段。设计思想是“低、慢、稳、直”四项归一化后加权：
+
+\begin{equation}
+s_j=w_h\left(1-\frac{h_j}{h_{\max}}\right)
+   +w_s\left(1-\frac{v_j}{v_{\max}}\right)
+   +w_a\left(1-\frac{|a_j|}{a_{\max}}\right)
+   +w_c\left(1-\frac{\kappa_j}{\kappa_{\max}}\right)
+\end{equation}
+
+其中 $h_j$ 为高度，$v_j$ 为水平速度，$a_j$ 为加速度，$\kappa_j$ 为曲率；$h_{\max}$ 等为预测段内的最大值（为 0 时取 1 以避免除零）。权重 $w_h,w_s,w_a,w_c$ 来自配置 \code{capture_weights}，读取后先做归一化使 $\sum w=1$，从而保证原始得分落在 $[0,1]$ 内。
+
+最终得分为相对值：以本次预测段的最高分记为 100，其余按比例缩放，再降序取前三名。这样即使轨迹整体“都不理想”，界面仍能指出“相对最优”的时机，符合指挥决策的实际需要。
+
+\subsection{AI 策略引擎}
+
+AI 策略把结构化轨迹转换为自然语言建议，调用链如图~\ref{fig:aiseq} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
+% 生命线
+\foreach \x/\name in {0.6/浏览器, 4.6/Flask 接口层, 8.6/领域层 \code{ai_service}, 12.6/外部大模型} {
+  \node[draw=black, fill=white, minimum width=2.0cm, minimum height=0.6cm] (h\x) at (\x,0) {\name};
+  \draw[dashed, black!60] (\x,-0.3) -- (\x,-6.6);
+}
+\draw[arr] (0.6,-0.9) -- node[lbl, above]{勾选平台并点击生成} (4.6,-0.9);
+\draw[arr] (4.6,-1.5) -- node[lbl, above]{\code{methods_data}} (8.6,-1.5);
+\draw[arr] (8.6,-2.1) -- node[lbl, above]{POST /chat/completions} (12.6,-2.1);
+\node[draw=black, fill=white, font=\scriptsize, align=center] at (12.6,-2.9) {提示词推理};
+\draw[arr, dashed] (12.6,-3.6) -- node[lbl, above]{choices[0].message.content} (8.6,-3.6);
+\draw[arr, dashed] (8.6,-4.2) -- node[lbl, above]{建议文本} (4.6,-4.2);
+\draw[arr, dashed] (4.6,-4.8) -- node[lbl, above]{\{success, suggestion\}} (0.6,-4.8);
+\node[draw=black, fill=white, font=\scriptsize, align=center, text width=2.4cm] at (0.6,-5.5) {渲染策略\\并存入 sessionStorage};
+\end{tikzpicture}
+\caption{AI 策略调用时序}
+\label{fig:aiseq}
+\end{figure}
+
+提示词由两部分组成：系统提示词固定为“无人机反制专家”的角色设定；用户提示词由程序拼接，逐平台列出名称与全部轨迹点（$x,y,z,t$），并在结尾要求给出运动模式判断、推荐捕捉设备、最佳拦截点与时间窗口。为避免提示词过长，前端只提交用户勾选的平台。
+
+接口调用使用 \code{requests.post}，超时 30 秒，返回内容取响应 \code{choices} 数组首项的 \code{message} 字段中的 \code{content}。异常被分类转换为可读信息：超时提示“响应超时”，HTTP 错误提示“请求失败”，非 JSON 响应或缺少 \code{choices} 字段提示“返回数据格式异常”。
+
+\begin{notebox}[安全性说明]
+API Key 仅保存在服务端 \file{config.json} 中，前端从不接触明文密钥；浏览器只调用本机接口 \code{/api/ai_suggestion}，由后端转发。这避免了密钥泄露与跨域问题。
+\end{notebox}
+
+\subsection{备份服务设计}
+
+备份采用“目录快照”模型，每个快照包含三部分内容与一份清单，如表~\ref{tab:snapshot} 所示。
+
+\begin{table}[H]
+\centering
+\caption{备份快照的目录结构}
+\label{tab:snapshot}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily}p{3.4cm}X@{}}
+\toprule
+路径 & 内容与用途 \\
+\midrule
+manifest.json & 创建时间、标签、各平台点数、各类文件清单 \\
+fact/ & 备份时 \file{data/fact/} 的全部轨迹文件（.npz/.dat） \\
+predict/ & 备份时 \file{data/predict/} 的预测文件（恢复时不还原） \\
+memory/ & 内存中各平台点序列导出的 .npz，用于恢复“未落盘”的数据 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+目录名格式为 \code{YYYYmmdd_HHMMSS_标签}。标签在自动备份时由“实际有数据的平台名”用加号连接而成（如“可见光+红外”），便于用户在列表中识别备份内容；手动备份固定为 \code{manual}，清空数据前的自动备份为 \code{auto}。
+
+恢复分两种模式：\term{部分恢复}只覆盖快照中存在的文件，适合“只找回某个平台”的场景；\term{完整恢复}先清空内存与磁盘再释放快照，适合“回到某个历史状态”。两种模式都在恢复后调用 \code{refresh_fact_data(keep_self=True)} 重新加载并合成，保证界面立即一致。
+
+\subsection{前端页面与脚本组织}
+
+模块前端包含 7 个页面，页面脚本按“一页一模块”组织，公共逻辑抽取为四个共享模块：
+
+\begin{table}[H]
+\centering
+\caption{前端脚本模块}
+\label{tab:frontjs}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\ttfamily\scriptsize}p{3.6cm}>{\scriptsize}p{2.2cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+文件 & 规模 & 职责 \\
+\midrule
+pages/dashboard.js & $\sim$500 行 & 总览页 3D 场景、轨迹、动画、平台切换 \\
+pages/predict.js & $\sim$500 行 & 预测页独立 3D 场景、预测渲染与动画 \\
+pages/ai.js & $\sim$100 行 & AI 请求、结果持久化、报告保存 \\
+pages/data.js & $\sim$200 行 & 上传、备份列表、恢复、删除 \\
+common/three-utils.js & --- & 坐标轴、光照、星空、主题色 \\
+common/three-input.js & --- & WASD、悬停拾取、窗口自适应 \\
+common/toast.js & --- & 轻量通知 \\
+common/utils.js & --- & 线性插值等小工具 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+页面之间不共享全局变量，页面数据通过模板注入的 \code{window._PAGE_DATA_} 对象传递（包含平台数据、预测参数、相机速度、版本号）。AI 策略结果与页面状态使用 \code{sessionStorage} 暂存，避免切换页面后丢失。

@@ -1,0 +1,304 @@
+% ============================================================
+%  第四章  程序流程设计
+% ============================================================
+\section{程序流程设计}
+
+本章以流程图形式描述系统的关键执行路径。图中符号约定：圆角矩形表示流程起止，矩形表示处理步骤，菱形表示判断，平行四边形表示数据输入/输出；实线箭头表示控制流，虚线箭头表示数据流或异步通知。
+
+\subsection{系统启动流程}
+
+系统的统一入口为根目录下的 \file{main.py}。启动时先清理端口残留进程，再按命令行参数决定启动哪一个模块，如图~\ref{fig:startup} 所示。
+
+
+
+三种启动模式的差异仅在于是否创建对应模块的 Flask 应用：
+
+\begin{itemize}
+  \item \code{python main.py}：默认模式。主线程启动重建模块并以 pywebview 打开桌面窗口；后台守护线程启动检测模块（仅 HTTP，无窗口）。
+  \item \code{python main.py --headless}：不创建桌面窗口，重建模块以纯 HTTP 方式运行，用户自行用浏览器访问。
+  \item \code{python main.py recon} / \code{recog}：只启动其中一个模块，便于单独调试。
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=7mm and 10mm]
+\node[term] (s) {启动 main.py};
+\node[proc, below=7mm of s] (p0) {扫描并终止占用\\5000 / 5001 的残留进程};
+\node[deci, below=8mm of p0] (d0) {启动模式};
+\node[proc, below left=12mm and 26mm of d0, text width=30mm] (b1) {仅检测模块\\{\scriptsize python main.py recog}};
+\node[proc, below=12mm of d0, text width=30mm] (b2) {仅重建模块\\{\scriptsize python main.py recon}};
+\node[proc, below right=12mm and 26mm of d0, text width=34mm] (b3) {双模块并行\\{\scriptsize 后台线程:检测}\\[-2pt]{\scriptsize 主线程:重建}};
+\node[proc, below=24mm of b2, text width=48mm] (p1) {\code{create_app()} 创建 Flask 应用\\（详见 图~\ref{fig:init}）};
+\node[term, below=7mm of p1] (e) {进入事件循环};
+\draw[arr] (s) -- (p0);
+\draw[arr] (p0) -- (d0);
+\draw[arr] (d0.west) -| (b1.north);
+\draw[arr] (d0.south) -- (b2.north);
+\draw[arr] (d0.east) -| (b3.north);
+\draw[arr] (b1.south) |- (p1.west);
+\draw[arr] (b2.south) -- (p1.north);
+\draw[arr] (b3.south) |- (p1.east);
+\draw[arr] (p1.south) -- (e.north);
+\end{tikzpicture}
+\caption{系统启动流程}
+\label{fig:startup}
+\end{figure}
+
+重建模块的初始化步骤如图~\ref{fig:init} 所示，这六步决定了“启动后界面看到什么”：
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+\node[term] (s) {\code{create_app()}};
+\node[proc, below=6mm of s, text width=72mm] (p1) {\code{ensure_config()}\\校验 config.json，缺失字段按默认值补全};
+\node[proc, below=6mm of p1, text width=72mm] (p2) {创建 data/fact、predict、backup 目录\\\code{migrate_legacy()} 清理旧版备份};
+\node[proc, below=6mm of p2, text width=72mm] (p3) {\code{init_from_config()}\\按固定顺序初始化五个平台元信息};
+\node[proc, below=6mm of p3, text width=72mm] (p4) {\code{initialize_data()}\\清除预测文件 → 加载 fact/*.npz → 自动合成综合轨迹};
+\node[proc, below=6mm of p4, text width=72mm] (p5) {\code{register_blueprints()} / \code{register_error_handlers()}};
+\node[proc, below=6mm of p5, text width=72mm] (p6) {app.run(5000, threaded) 或 webview.start()};
+\node[term, below=6mm of p6] (e) {服务就绪};
+\foreach \a/\b in {s/p1,p1/p2,p2/p3,p3/p4,p4/p5,p5/p6,p6/e} \draw[arr] (\a) -- (\b);
+\end{tikzpicture}
+\caption{重建模块初始化流程}
+\label{fig:init}
+\end{figure}
+
+检测模块的初始化更简单：创建 Flask 应用、注册页面与接口蓝图，不加载任何模型——YOLO 权重在首次启动检测会话时才延迟加载，从而保证“只打开页面”时启动时间在秒级以内。
+
+\subsection{HTTP 请求处理流程}
+
+所有页面请求与接口请求遵循同一条处理链路：
+
+\begin{enumerate}
+  \item 浏览器发起请求，Flask 开发服务器（单进程、多线程）接收；
+  \item 路由匹配到具体蓝图函数，接口层提取参数（JSON、表单或查询串）；
+  \item 接口层调用业务服务；业务服务组合领域函数并读写全局状态；
+  \item 领域函数完成计算或文件读写，返回纯 Python 数据；
+  \item 接口层将结果序列化为 JSON（页面请求则渲染 Jinja2 模板）；
+  \item \code{after_request} 钩子为所有响应加上禁止缓存的响应头，保证界面始终加载最新脚本；
+  \item 若过程中抛出异常，由全局错误处理器转换为统一的失败 JSON。
+\end{enumerate}
+
+这一链路严格禁止跨层调用：接口层不直接操作文件，业务层不直接访问 \code{request} 对象。
+
+\subsection{双目检测流水线流程}
+
+检测会话在后台线程中执行，主循环逐帧推进，如图~\ref{fig:pipeline} 所示。左右目视频按相同的抽帧间隔同步取帧，任一视频结束时结束整个会话。
+
+\begin{figure}[H]
+\centering
+\scalebox{0.78}{%
+\begin{tikzpicture}[node distance=5mm and 7mm]
+\node[term] (s) {创建会话并启动后台线程};
+\node[proc, below=5mm of s, text width=88mm] (p1) {读取配置 → 初始化检测器 / 跟踪器 / 三角测量器\\打开左右目视频（取总帧数较小值）→ 预热推理};
+\node[proc, below=5mm of p1, text width=58mm] (p2) {同步读取左右目下一帧};
+\node[deci, below=5mm of p2] (d1) {读取成功};
+\node[proc, below left=8mm and 24mm of d1, text width=52mm] (p3) {左右目 YOLO 推理\\绘制检测框、编码预览帧};
+\node[proc, below right=8mm and 18mm of d1, text width=26mm] (p9) {标记会话完成};
+\node[term, below=5mm of p9] (e) {结束线程};
+\node[proc, below=5mm of p3, text width=52mm] (p4) {左目多目标跟踪 \code{update(dets_a)}};
+\node[deci, below=5mm of p4] (d2) {两目皆有检测};
+\node[proc, below=5mm of d2, text width=52mm] (p5) {跨目匹配 \code{match_detections}};
+\node[deci, below=5mm of p5] (d3) {匹配成功};
+\node[proc, below=5mm of d3, text width=62mm] (p6) {三角测量 → 世界坐标变换\\按 IoU 关联到轨迹 \code{add_point_3d}};
+\draw[arr] (s) -- (p1); \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (d1);
+\draw[arr] (d1.west) -| node[lbl, above, pos=0.75]{是} (p3.north);
+\draw[arr] (d1.east) -| node[lbl, above, pos=0.75]{否} (p9.north);
+\draw[arr] (p9) -- (e);
+\draw[arr] (p3) -- (p4); \draw[arr] (p4) -- (d2);
+\draw[arr] (d2) -- node[lbl, right]{是} (p5);
+\draw[arr] (d2.east) -| node[lbl, above, pos=0.85]{否} (p6.east);
+\draw[arr] (p5) -- (d3);
+\draw[arr] (d3) -- node[lbl, right]{是} (p6);
+\draw[arr] (d3.east) -| node[lbl, above, pos=0.85]{否} (p6.east);
+\draw[arr] (p6.west) -- ++(-1.5,0) |- node[lbl, above, pos=0.2]{继续下一帧} (p2.west);
+\end{tikzpicture}}
+\caption{双目检测流水线流程}
+\label{fig:pipeline}
+\end{figure}
+
+流水线中有三处关键判断，其处理策略如表~\ref{tab:pipeline} 所示。
+
+\begin{table}[H]
+\centering
+\caption{检测流水线关键判断与处理策略}
+\label{tab:pipeline}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.4cm}X@{}}
+\toprule
+判断点 & 处理策略 \\
+\midrule
+视频读取是否成功 & 任一视频流结束（\code{StopIteration}）即跳出循环，将会话标记为完成；此时已产生的轨迹仍然可以保存 \\
+两目是否都有检测 & 只有一侧有检测时无法三角测量，仅更新 2D 跟踪与预览帧，不计入 3D 点数 \\
+跨目匹配是否成功 & 匹配失败（视差越界、类别不一致、垂直偏差过大）则丢弃该帧该目标，不产生错误点 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+此外，流水线在每个循环开头检查停止事件与暂停事件：\code{_stop_event} 置位则跳出循环；\code{_pause_event} 未置位则 \code{wait()} 阻塞，实现暂停而不销毁线程。
+
+\subsection{轨迹合成流程}
+
+综合轨迹（synthetic）是“多平台加权平均”的结果，其计算流程如图~\ref{fig:synth} 所示。合成在四个时机自动触发：启动初始化、刷新事实数据、上传自选轨迹、恢复备份。
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+\node[term] (s) {\code{synthesize_trajectory()}};
+\node[proc, below=6mm of s, text width=84mm] (p1) {遍历 visible / infrared / radar / self\\收集有点、已启用且权重 $>0$ 的平台};
+\node[deci, below=6mm of p1] (d1) {活跃平台数};
+\node[proc, below=6mm of d1, text width=84mm] (p2) {求各平台时间区间的交集 $[t_{start}, t_{end}]$\\以最细时间步 $\Delta t_{\min}$ 生成统一时间网格};
+\node[deci, below=6mm of p2] (d2) {$t_{start}<t_{end}$};
+\node[proc, below=6mm of d2, text width=84mm] (p3) {对网格上每个时刻 $t$：\\对各平台线性插值（越界用最近点均值兜底）后按权重求平均};
+\node[deci, below=6mm of p3] (d3) {合成点数 $\geq 2$};
+\node[proc, below=6mm of d3, text width=84mm] (p4) {多平台时做 2 遍三点移动平均平滑\\写入 synthetic 平台并持久化元信息};
+\node[term, below=6mm of p4] (e) {返回合成结果};
+\node[proc, right=12mm of d1, text width=30mm] (x1) {返回“没有可用平台”};
+\node[proc, right=12mm of d2, text width=30mm] (x2) {返回“时间无交集”};
+\node[proc, right=12mm of d3, text width=30mm] (x3) {返回“插值点不足”};
+\draw[arr] (s) -- (p1); \draw[arr] (p1) -- (d1);
+\draw[arr] (d1) -- node[lbl, right]{$\geq 1$} (p2);
+\draw[arr] (d1.east) -- node[lbl, above]{$=0$} (x1.west);
+\draw[arr] (p2) -- (d2);
+\draw[arr] (d2) -- node[lbl, right]{是} (p3);
+\draw[arr] (d2.east) -- node[lbl, above]{否} (x2.west);
+\draw[arr] (p3) -- (d3);
+\draw[arr] (d3) -- node[lbl, right]{是} (p4);
+\draw[arr] (d3.east) -- node[lbl, above]{否} (x3.west);
+\draw[arr] (p4) -- (e);
+\end{tikzpicture}
+\caption{综合轨迹合成流程}
+\label{fig:synth}
+\end{figure}
+
+其中统一时间网格的构造是保证“不丢细节”的关键：网格步长取所有平台最小采样间隔（而非固定值），从而在数据采样最密的平台上仍能逐点还原运动细节。网格点数按
+\begin{equation}
+N=\max\left(2,\;\left\lfloor \frac{t_{end}-t_{start}}{\Delta t_{\min}} \right\rfloor + 1\right),
+\qquad
+t_i = t_{start} + i\,\frac{t_{end}-t_{start}}{N-1}
+\end{equation}
+计算，得到严格等间隔的时间序列 $t_0,\dots,t_{N-1}$。
+
+\subsection{轨迹预测流程}
+
+预测流程如图~\ref{fig:predictflow} 所示。流程中包含三层降级：混合模型不可用、历史点不足、推理异常，任一情况均回退到线性外推，保证接口永远返回可用的预测点。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+\node[term] (s) at (0,0) {\code{POST /api/predict_all}};
+\node[proc, below=6mm of s, text width=86mm] (p1) {\code{clamp_params()}：预测点数限制在 $[min,max]$，步长缺省取配置值};
+\node[proc, below=6mm of p1, text width=86mm] (p2) {求各平台事实数据的最大结束时刻 $t_{\max}$\\生成统一预测时刻 $t_{\max}+k\Delta t\;(k=0..n)$};
+\node[proc, below=6mm of p2, text width=86mm] (p3) {逐个平台调用 \code{predict_single()}};
+\node[deci, below=7mm of p3] (d1) {混合模型可用};
+\node[proc, below left=12mm and 10mm of d1, text width=38mm] (p4) {混合模型推理\\{\scriptsize 权重存在且已启用}};
+\node[proc, below right=12mm and 10mm of d1, text width=34mm] (p5) {线性外推\\{\scriptsize 末两点速度延拓}};
+\node[proc, below=30mm of d1, text width=56mm] (p6) {对齐统一预测时间轴\\保存 \code{predict_{id}.npz}};
+\node[proc, below=6mm of p6, text width=62mm] (p7) {加权合成综合预测（算法同图~\ref{fig:synth}）};
+\node[term, below=6mm of p7] (e) {返回各平台预测结果};
+\draw[arr] (s) -- (p1); \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3); \draw[arr] (p3) -- (d1);
+\draw[arr] (d1.west) -| node[lbl, above, pos=0.75]{是} (p4.north);
+\draw[arr] (d1.east) -| node[lbl, above, pos=0.75]{否} (p5.north);
+\draw[arr] (p4.south) |- (p6.west);
+\draw[arr] (p5.south) |- (p6.east);
+\draw[darr] (p4.east) -- node[lbl, above]{推理异常则回退} (p5.west);
+\draw[arr] (p6) -- (p7); \draw[arr] (p7) -- (e);
+\end{tikzpicture}
+\caption{轨迹预测流程}
+\label{fig:predictflow}
+\end{figure}
+
+\subsection{分析与捕捉评分流程}
+
+分析接口在返回数据前完成三件事：拼接原始与预测轨迹、计算四类运动学指标、计算捕捉评分（仅综合轨迹）。流程如图~\ref{fig:analysisflow} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=6mm and 10mm]
+\node[term] (s) {\code{GET /analysis/data}};
+\node[proc, below=6mm of s, text width=84mm] (p1) {按固定顺序遍历平台（visible→infrared→radar→self→synthetic）};
+\node[deci, below=6mm of p1] (d1) {可见且点数 $\geq 2$};
+\node[proc, below=6mm of d1, text width=84mm] (p2) {读取 \code{predict_{id}.npz}；若首点与事实末点重合则去重后拼接};
+\node[proc, below=6mm of p2, text width=84mm] (p3) {计算水平速度、速度差分、三点曲率、高度序列\\按缺失个数前导补零对齐长度};
+\node[deci, below=6mm of p3] (d2) {是否为综合轨迹};
+\node[proc, below=6mm of d2, text width=84mm] (p4) {四项指标归一化并加权求评分\\取前三名返回时刻、坐标与分值};
+\node[term, below=6mm of p4] (e) {JSON 响应};
+\node[proc, right=9mm of d1, text width=24mm] (x1) {跳过该平台};
+\draw[arr] (s) -- (p1); \draw[arr] (p1) -- (d1);
+\draw[arr] (d1) -- node[lbl, right]{是} (p2);
+\draw[arr] (d1.east) -- node[lbl, above]{否} (x1.west);
+\draw[arr] (p2) -- (p3); \draw[arr] (p3) -- (d2);
+\draw[arr] (d2) -- node[lbl, right]{是} (p4);
+\draw[arr] (d2.east) -- ++(1.9,0) |- node[lbl, above, pos=0.25]{否} (e.east);
+\draw[arr] (p4) -- (e);
+\end{tikzpicture}
+\caption{运动学分析与捕捉评分流程}
+\label{fig:analysisflow}
+\end{figure}
+
+\subsection{备份与恢复流程}
+
+备份服务采用“快照目录”模型：一次备份产生一个以“时间戳 + 标签”命名的目录，目录内包含事实轨迹、预测轨迹与内存快照三部分。创建与恢复的流程如图~\ref{fig:backupflow} 所示。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+% 左：创建
+\node[term] at (-3.8,0) {创建备份};
+\node[proc, below=6mm of {(-3.8,0)}, text width=52mm, anchor=north] (c1) {生成目录名\\{\scriptsize \code{YYYYmmdd_HHMMSS}-标签}};
+\node[proc, below=6mm of c1, text width=52mm] (c2) {复制 data/fact 与 data/predict};
+\node[proc, below=6mm of c2, text width=52mm] (c3) {将内存中的各平台点序列 dump 为 .npz};
+\node[proc, below=6mm of c3, text width=52mm] (c4) {写 manifest.json\\{\scriptsize 创建时间、标签、各平台点数与文件名}};
+\node[term, below=6mm of c4] (c5) {备份完成};
+\foreach \a/\b in {c1/c2,c2/c3,c3/c4,c4/c5} \draw[arr] (\a) -- (\b);
+\draw[arr] (-3.8,-0.35) -- (c1.north);
+% 右：恢复
+\node[term] at (5.0,0) {恢复备份};
+\node[deci, below=6mm of {(5.0,0)}, anchor=north, text width=26mm] (r1) {完整恢复};
+\node[proc, below=6mm of r1, text width=58mm] (r2) {清空内存与 fact、predict 目录\\（仅完整恢复执行）};
+\node[proc, below=6mm of r2, text width=58mm] (r3) {复制快照 fact 与 predict 文件回 data/};
+\node[proc, below=6mm of r3, text width=58mm] (r4) {删除被 .dat 影子覆盖的同名 .npz};
+\node[proc, below=6mm of r4, text width=58mm] (r5) {\code{refresh_fact_data()} 重载并重新合成};
+\node[term, below=6mm of r5] (r6) {返回恢复文件数};
+\foreach \a/\b in {r1/r2,r2/r3,r3/r4,r4/r5,r5/r6} \draw[arr] (\a) -- (\b);
+\draw[arr] (5.0,-0.35) -- (r1.north);
+\node[lbl] at (5.0,0.42) {};
+\end{tikzpicture}
+\caption{备份创建与恢复流程}
+\label{fig:backupflow}
+\end{figure}
+
+“删除被 .dat 影子覆盖的同名 .npz”是恢复流程中一个容易被忽略但必要的步骤：加载器优先读取 .npz，若恢复的备份只含 .dat，则新复制的 .dat 会被旧的 .npz 遮蔽而“恢复无效”。因此恢复时主动删除同名 .npz，确保恢复结果生效。
+
+\subsection{检测会话状态机}
+
+检测会话的生命周期由状态机控制，状态迁移如图~\ref{fig:state} 所示。状态值定义于枚举 \code{SessionStatus}，接口层通过 \code{to_dict()} 暴露给前端轮询。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=26mm and 30mm]
+\node[term] (idle) {idle};
+\node[proc, right=of idle] (run) {running};
+\node[proc, right=of run] (pause) {paused};
+\node[proc, below=of run] (comp) {completed};
+\node[proc, below=of pause] (err) {error};
+\draw[arr] (idle) -- node[lbl, above]{start} (run);
+\draw[arr] (run) -- node[lbl, above]{pause} (pause);
+\draw[arr, bend left=18] (pause.north) to node[lbl, above]{resume} (run.north);
+\draw[arr] (run) -- node[lbl, right]{视频结束 / stop} (comp);
+\draw[arr] (err.west) -- (comp.east);
+\draw[arr] (pause.south) |- node[lbl, right, pos=0.75]{stop} (comp.east);
+\draw[arr] (comp.south) -- ++(0,-0.7) node[lbl, right]{delete} ++(0,-0.2) node[anchor=north, font=\scriptsize]{会话移除};
+\draw[arr] (run.north east) to[out=45,in=135] node[lbl, above]{异常} (err.north west);
+\end{tikzpicture}
+\caption{检测会话状态迁移}
+\label{fig:sessstate}
+\end{figure}
+
+状态机的实现要点：
+\begin{itemize}
+  \item 同一会话不允许重复启动：\code{start_detection()} 检查 \code{status} 与线程存活状态，重复调用抛出 \code{RuntimeError}；
+  \item 暂停不销毁线程，只清除事件标志使工作线程阻塞在 \code{wait()} 上，恢复时重新置位，因而不丢失已完成的帧；
+  \item 停止通过 \code{_stop_event} 让主循环在下一轮开始时退出，保证视频句柄在 \code{finally} 中释放；
+  \item 流水线内的异常被捕获后写入 \code{error_message}，状态置为 \code{error}，线程结束但会话对象保留，便于前端展示失败原因。
+\end{itemize}

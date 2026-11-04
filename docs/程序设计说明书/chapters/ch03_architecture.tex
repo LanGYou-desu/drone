@@ -1,0 +1,281 @@
+% ============================================================
+%  第三章  系统总体设计
+% ============================================================
+\section{系统总体设计}
+
+\subsection{设计原则}
+
+系统在架构层面遵循以下五条原则，后文的模块划分与接口设计均由此推导。
+
+\begin{enumerate}
+  \item \term{分层单向依赖}。代码按“表现层 $\rightarrow$ 接口层 $\rightarrow$ 业务层 $\rightarrow$ 领域层”组织，依赖方向严格单向。领域层不得导入 Flask、services 或 views；业务层不得导入 Flask 与 views；接口层只做参数解析与 JSON 序列化。该约束保证了核心算法可以脱离 Web 框架单独测试。
+  \item \term{以文件为数据总线}。两个子进程之间不建立 RPC 或消息队列，而是共享项目根目录下的 \file{data/} 目录：检测模块写入 \file{data/fact/*.npz}，重建模块启动或刷新时读取。文件格式统一为 \file{positions} + \file{timestamps} 的 NumPy 归档，既可被人眼检查，也可被训练脚本直接消费。
+  \item \term{进程解耦、端口固定}。重建分析固定使用 5000 端口，无人机检测固定使用 5001 端口，二者可独立启动、独立重启，互不影响；任一模块故障不会导致另一模块不可用。
+  \item \term{配置即数据}。所有可调参数集中于 \file{config.json}，程序启动时校验并补全缺失字段，运行期修改经接口回写；不把参数硬编码在业务代码中。
+  \item \term{离线优先}。前端第三方库（Three.js、ECharts、OrbitControls、CSS2DRenderer）以本地副本随包发布，界面在无外网环境下仍可完整使用；只有 AI 策略功能依赖外部接口。
+\end{enumerate}
+
+\subsection{总体架构}
+
+系统采用五层架构，如图~\ref{fig:arch} 所示。自上而下依次为表现层、接口层、业务服务层、领域核心层与数据资源层。每一层只调用其下一层公开的接口，跨层调用与反向依赖均被禁止。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small]
+% ================= 表现层 =================
+\draw[layer] (0,0) rectangle (15.0,-2.1);
+\node[anchor=north west, font=\small\heiti] at (0.18,-0.16) {表现层};
+\node[proc, minimum width=4.5cm, minimum height=1.15cm] (ui1) at (4.85,-1.25)
+  {轨迹重建与分析界面\\[-1pt]{\scriptsize 总览/预测/分析/AI 策略/数据/设置}};
+\node[proc, minimum width=3.6cm, minimum height=1.15cm] (ui2) at (9.1,-1.25)
+  {无人机检测界面\\[-1pt]{\scriptsize 检测工作台/历史/设置}};
+\node[proc, minimum width=3.0cm, minimum height=1.15cm] (ui3) at (12.9,-1.25)
+  {共享静态资源\\[-1pt]{\scriptsize Three.js/ECharts/CSS}};
+
+% ================= 接口层 =================
+\draw[layer] (0,-2.8) rectangle (15.0,-4.9);
+\node[anchor=north west, font=\small\heiti] at (0.18,-2.96) {接口层};
+\node[proc, minimum width=3.4cm, minimum height=1.15cm] (v1) at (4.0,-4.05)
+  {页面路由蓝图\\[-1pt]{\scriptsize main/analysis/pages}};
+\node[proc, minimum width=4.5cm, minimum height=1.15cm] (v2) at (8.1,-4.05)
+  {REST 接口蓝图\\[-1pt]{\scriptsize \code{api/predict/report/api_detection}}};
+\node[proc, minimum width=3.6cm, minimum height=1.15cm] (v3) at (12.3,-4.05)
+  {错误处理与静态路由\\[-1pt]{\scriptsize 400/404/500, /static}};
+
+% ================= 业务层 =================
+\draw[layer] (0,-5.6) rectangle (15.0,-7.7);
+\node[anchor=north west, font=\small\heiti] at (0.18,-5.76) {业务服务层};
+\node[proc, minimum width=2.5cm, minimum height=1.15cm] (s1) at (3.55,-6.85) {数据服务\\[-1pt]{\scriptsize \code{data_service}}};
+\node[proc, minimum width=2.5cm, minimum height=1.15cm] (s2) at (6.3,-6.85) {预测编排\\[-1pt]{\scriptsize \code{predict_service}}};
+\node[proc, minimum width=2.5cm, minimum height=1.15cm] (s3) at (9.05,-6.85) {备份服务\\[-1pt]{\scriptsize \code{backup_service}}};
+\node[proc, minimum width=3.6cm, minimum height=1.15cm] (s4) at (12.55,-6.85) {检测会话 / 数据桥接\\[-1pt]{\scriptsize \code{detection_service}}};
+
+% ================= 领域层 =================
+\draw[layer] (0,-8.4) rectangle (15.0,-11.8);
+\node[anchor=north west, font=\small\heiti] at (0.18,-8.56) {领域核心层};
+
+\draw[grp] (2.45,-9.25) rectangle (9.05,-11.55);
+\node[anchor=north, font=\scriptsize\heiti, fill=white, inner sep=1.5pt] at (5.75,-9.33) {轨迹重建与分析核心};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c1) at (3.25,-10.20) {配置管理};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c2) at (4.80,-10.20) {数据 I/O};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c3) at (6.35,-10.20) {数学工具};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c4) at (7.90,-10.20) {预测算法};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c5) at (3.25,-11.05) {AI 服务};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c6) at (4.80,-11.05) {全局状态};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c7) at (6.35,-11.05) {混合模型};
+\node[proc, minimum width=1.45cm, minimum height=0.72cm, font=\scriptsize] (c8) at (7.90,-11.05) {训练数据};
+
+\draw[grp] (9.25,-9.25) rectangle (14.85,-11.55);
+\node[anchor=north, font=\scriptsize\heiti, fill=white, inner sep=1.5pt] at (12.05,-9.33) {双目检测核心};
+\node[proc, minimum width=1.55cm, minimum height=0.72cm, font=\scriptsize] (d1) at (10.25,-10.20) {视频预处理};
+\node[proc, minimum width=1.55cm, minimum height=0.72cm, font=\scriptsize] (d2) at (11.95,-10.20) {YOLO 引擎};
+\node[proc, minimum width=1.55cm, minimum height=0.72cm, font=\scriptsize] (d3) at (13.65,-10.20) {多目标跟踪};
+\node[proc, minimum width=1.75cm, minimum height=0.72cm, font=\scriptsize] (d4) at (11.10,-11.05) {三角测量};
+\node[proc, minimum width=1.75cm, minimum height=0.72cm, font=\scriptsize] (d5) at (12.95,-11.05) {坐标变换};
+
+% ================= 资源层 =================
+\draw[layer] (0,-12.5) rectangle (15.0,-14.1);
+\node[anchor=north west, font=\small\heiti] at (0.18,-12.66) {数据资源层};
+\node[proc, minimum width=2.1cm, minimum height=0.75cm, font=\scriptsize] (r1) at (3.05,-13.55) {config.json};
+\node[proc, minimum width=2.1cm, minimum height=0.75cm, font=\scriptsize] (r2) at (5.55,-13.55) {data/};
+\node[proc, minimum width=2.1cm, minimum height=0.75cm, font=\scriptsize] (r3) at (8.05,-13.55) {models/};
+\node[proc, minimum width=2.1cm, minimum height=0.75cm, font=\scriptsize] (r4) at (10.55,-13.55) {reports/};
+\node[proc, minimum width=2.3cm, minimum height=0.75cm, font=\scriptsize] (r5) at (13.25,-13.55) {templates/};
+
+% ================= 层间流向 =================
+\foreach \y in {-2.1,-4.9,-7.7,-11.8} {
+  \draw[arr] (8.0,\y) -- (8.0,\y-0.7);
+}
+\node[lbl, fill=white] at (8.0,-2.45) {HTTP 请求 / 页面渲染};
+\node[lbl, fill=white] at (8.0,-5.25) {调用服务函数};
+\node[lbl, fill=white] at (8.0,-8.05) {调用领域函数};
+\node[lbl, fill=white] at (8.0,-12.15) {文件读写};
+\end{tikzpicture}
+\caption{系统总体分层架构}
+\label{fig:arch}
+\end{figure}
+
+各层的职责边界如下：
+
+\begin{table}[H]
+\centering
+\caption{分层职责与代码位置}
+\label{tab:layers}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{2.2cm}>{\heiti}p{4.4cm}X@{}}
+\toprule
+层次 & 代码位置 & 职责与约束 \\
+\midrule
+表现层 & \file{*/frontend/}、\file{templates/} & 页面渲染、三维绘图、图表绘制、交互事件。不包含业务判断，只处理展示逻辑与请求发起 \\
+接口层 & \file{*/views/} & 路由定义、参数提取、请求校验、JSON 序列化、统一错误响应。不做业务计算 \\
+业务服务层 & \file{*/services/} & 流程编排：组合多个领域函数、维护会话与状态、决定持久化时机、处理跨模块协作 \\
+领域核心层 & \file{*/core/}、\file{*/detection/} & 纯算法与数据结构：插值、平滑、三角测量、坐标变换、模型推理、文件编解码。不导入 Web 框架 \\
+数据资源层 & \file{config.json}、\file{data/}、\file{models/} & 配置、轨迹、权重、报告的持久化载体；由资源层提供路径常量与读写函数 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{模块划分与职责}
+
+系统按业务边界划分为 12 个功能模块，各模块的源文件与职责如表~\ref{tab:modules} 所示。
+
+\begin{table}[H]
+\centering
+\caption{功能模块划分}
+\label{tab:modules}
+\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{0.8cm}>{\heiti}p{2.2cm}>{\raggedright\ttfamily\scriptsize}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+编号 & 模块 & 源文件 & 主要职责 \\
+\midrule
+M01 & 配置管理 & \file{core/config/config_manager.py} & 配置创建、校验、补全与原子写入 \\
+M02 & 数据存取 & \file{core/io/data_loader.py} & .npz/.dat 轨迹的读写与默认数据加载 \\
+M03 & 数学工具 & \file{core/math_utils.py} & 三维插值、外推、最近点平均、三点平滑、速度估计 \\
+M04 & 轨迹合成 & \file{services/data_service.py} & 统一时间网格上的加权融合与平滑 \\
+M05 & 轨迹预测 & \file{core/prediction/} & 线性外推兜底与混合模型推理调度 \\
+M06 & 分析评估 & \file{views/analysis.py}（计算部分） & 速度、加速度、曲率计算与捕捉评分 \\
+M07 & AI 策略 & \file{core/ai/ai_service.py} & 提示词构建、接口调用与异常映射 \\
+M08 & 备份恢复 & \file{services/backup_service.py} & 快照创建、列举、部分/完整恢复与删除 \\
+M09 & 视频预处理 & \file{detection/preprocess.py} & 视频源打开、抽帧、时间戳计算与缩放 \\
+M10 & 目标检测 & \file{detection/engine.py} & YOLO 模型加载、推理、类别过滤与预热 \\
+M11 & 立体视觉 & \file{detection/stereo.py}、\file{detection/tracker.py} & 三角测量、跨目匹配、多目标跟踪 \\
+M12 & 检测服务 & \file{services/detection_service.py}、\file{data_bridge.py} & 会话生命周期、流水线线程、坐标变换与轨迹落盘 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{模块依赖关系}
+
+模块之间的依赖关系如图~\ref{fig:deps} 所示。箭头表示“调用/使用”，虚线表示运行期通过 HTTP 或文件间接协作。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small,
+  mod/.style={draw=black, line width=0.5pt, fill=white, rounded corners=1pt,
+              minimum width=3.4cm, minimum height=0.75cm, font=\small, align=center}]
+% ---------- 入口 ----------
+\node[mod] (main) at (7.5,0) {main.py 统一入口};
+
+% ---------- 左列：重建模块 ----------
+\node[mod] (rapp) at (3.3,-1.35) {重建模块 app.py};
+\node[mod] (rv)   at (3.3,-2.70) {views 蓝图层};
+\node[mod] (rs)   at (3.3,-4.05) {services 业务层};
+\node[mod] (rc)   at (3.3,-5.40) {core 领域层};
+
+% ---------- 右列：检测模块 ----------
+\node[mod] (capp) at (11.7,-1.35) {检测模块 app.py};
+\node[mod] (cv)   at (11.7,-2.70) {views 检测接口};
+\node[mod] (cs)   at (11.7,-4.05) {services 检测服务};
+\node[mod] (cd)   at (11.7,-5.40) {detection 检测算法};
+
+% ---------- 数据资源层 ----------
+\draw[draw=black!55, fill=white, rounded corners=2pt] (0,-6.55) rectangle (15.0,-8.05);
+\node[anchor=north west, font=\scriptsize\heiti] at (0.18,-6.66) {数据资源层};
+\node[mod, minimum width=2.3cm, minimum height=0.7cm, font=\scriptsize] (k1) at (2.55,-7.45) {config.json};
+\node[mod, minimum width=2.3cm, minimum height=0.7cm, font=\scriptsize] (k2) at (6.05,-7.45) {data/ 轨迹};
+\node[mod, minimum width=2.3cm, minimum height=0.7cm, font=\scriptsize] (k3) at (9.55,-7.45) {models/ 权重};
+\node[mod, minimum width=2.3cm, minimum height=0.7cm, font=\scriptsize] (k4) at (13.05,-7.45) {reports/ 报告};
+
+% ---------- 调用关系 ----------
+\draw[arr] (main.south) -- (rapp.north);
+\draw[arr] (main.south) -- (capp.north);
+\draw[arr] (rapp.south) -- (rv.north);
+\draw[arr] (rv.south) -- (rs.north);
+\draw[arr] (rs.south) -- (rc.north);
+\draw[arr] (capp.south) -- (cv.north);
+\draw[arr] (cv.south) -- (cs.north);
+\draw[arr] (cs.south) -- (cd.north);
+
+% ---------- 文件读写 ----------
+\draw[darr] (rc.south) -- node[lbl, right]{读写} (3.3,-6.55);
+\draw[darr] (cd.south) -- node[lbl, left]{写入轨迹} (11.7,-6.55);
+\end{tikzpicture}
+\caption{模块依赖关系}
+\label{fig:deps}
+\end{figure}
+
+需要特别说明的是两个模块之间的“松耦合”：重建模块并不导入检测模块的任何 Python 代码，二者的协作完全通过 \file{data/fact/} 目录与 HTTP 通知接口完成。检测模块保存轨迹后调用 \code{POST http://127.0.0.1:5000/api/refresh_data} 通知重建模块重载数据；若重建模块未启动，该调用失败被静默忽略，不影响检测流程。
+
+\subsection{部署与运行视图}
+
+系统的部署形态如图~\ref{fig:deploy} 所示。同一台主机上运行两个 Python 进程，浏览器（或 pywebview 原生窗口）作为前端宿主；两个进程共享同一套磁盘目录。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,font=\small]
+% ================= 主机边框 =================
+\draw[draw=black!60, line width=0.6pt, rounded corners=2pt] (0,0) rectangle (15.0,-6.9);
+\node[anchor=north west, font=\scriptsize\heiti] at (0.2,-0.15) {采集与处理主机（Windows 10 / 11）};
+
+% ================= 两个进程 =================
+\node[proc, minimum width=5.6cm, minimum height=1.7cm, align=center] (p0) at (3.9,-2.0)
+  {{\heiti 重建与分析进程}\\[1pt]{\scriptsize Flask @ 127.0.0.1:5000}\\[1pt]{\scriptsize 启动时加载 data/fact 并自动合成综合轨迹}};
+\node[proc, minimum width=5.2cm, minimum height=1.7cm, align=center] (p1) at (11.5,-2.0)
+  {{\heiti 检测进程}\\[1pt]{\scriptsize Flask @ 127.0.0.1:5001}\\[1pt]{\scriptsize 后台守护线程执行双目检测流水线}};
+
+\draw[{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, line width=0.4pt, dashed]
+  (p0.east) -- node[lbl, above=2pt]{刷新通知} (p1.west);
+
+% ================= 共享磁盘 =================
+\draw[draw=black!55, rounded corners=2pt] (0.4,-3.85) rectangle (14.6,-6.25);
+\node[anchor=north, font=\scriptsize\heiti, fill=white, inner sep=1.5pt] at (7.5,-3.92) {共享磁盘目录（进程间数据总线）};
+\node[proc, minimum width=3.6cm, minimum height=0.8cm, font=\scriptsize] (r1) at (2.8,-5.45) {data/（fact · predict · backup）};
+\node[proc, minimum width=2.4cm, minimum height=0.8cm, font=\scriptsize] (r2) at (6.7,-5.45) {config.json};
+\node[proc, minimum width=2.2cm, minimum height=0.8cm, font=\scriptsize] (r3) at (9.7,-5.45) {models/};
+\node[proc, minimum width=2.2cm, minimum height=0.8cm, font=\scriptsize] (r4) at (12.6,-5.45) {reports/};
+
+\draw[busr] (p0.south) -- node[lbl, right]{读写} (3.9,-3.85);
+\draw[busr] (p1.south) -- node[lbl, left]{写入} (11.5,-3.85);
+
+% ================= 外部实体 =================
+\node[proc, minimum width=3.6cm, minimum height=0.85cm, font=\scriptsize, dashed] (cam) at (2.9,1.05)
+  {双目相机 / 双目视频文件};
+\node[proc, minimum width=4.2cm, minimum height=0.85cm, font=\scriptsize, dashed] (br) at (11.4,1.05)
+  {浏览器 / pywebview 窗口};
+\node[proc, minimum width=4.2cm, minimum height=0.85cm, font=\scriptsize, dashed] (ai) at (10.6,-7.95)
+  {外部 AI 服务（可选）};
+
+\draw[darr] (cam.south) -- node[lbl, right]{视频流} (2.9,-0.0);
+\draw[darr] (br.south) -- node[lbl, right]{HTTP / JSON} (11.4,-0.0);
+\draw[darr] (11.4,-6.9) -- node[lbl, right]{HTTPS 调用} (11.4,-7.5);
+\end{tikzpicture}
+\caption{部署与运行视图}
+\label{fig:deploy}
+\end{figure}
+
+\subsection{关键设计决策}
+
+\begin{table}[H]
+\centering
+\caption{关键设计决策与取舍}
+\label{tab:decisions}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.0cm}>{\heiti}p{4.6cm}X@{}}
+\toprule
+决策点 & 采用方案 & 理由与代价 \\
+\midrule
+双模块拆分 & 重建分析（5000）与检测（5001）分进程 & 检测模块依赖 OpenCV/PyTorch，加载重、易崩溃；拆进程后重建模块可独立使用。代价是数据交换需经文件系统 \\
+数据交换 & 共享目录 + NumPy 归档 & 实现简单、可人工检查、训练脚本可直接复用。代价是不支持远端多机部署 \\
+状态管理 & 进程内全局字典 + 可重入锁 & 单机单用户场景下足够；避免引入数据库。代价是无法水平扩展 \\
+前端构建 & 无构建工具，原生 ES 模块 & 降低部署门槛，修改即生效。代价是缺少压缩与依赖管理 \\
+预测降级 & 混合模型不可用时静默回退线性外推 & 保证功能始终可用、界面不报错。代价是用户可能误以为使用了深度学习预测 \\
+AI 调用 & 直接在后端 \code{requests.post} & 避免浏览器跨域与密钥泄露。代价是需同步阻塞等待（超时 30 s） \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{公共支撑设计}
+
+\subsubsection{配置校验与补全}
+
+配置模块以 \code{DEFAULT_CONFIG} 为唯一事实来源。启动时若 \file{config.json} 不存在，优先从模板 \file{templates/config_template.json} 复制，模板缺失则写入默认配置；若文件存在，则逐字段比对默认配置并补全缺失项，已有值一律保留。写入采用“临时文件 + \code{os.replace}”的原子替换方式，避免写入过程中断电导致配置损坏。
+
+\subsubsection{全局状态与并发}
+
+重建模块的轨迹数据保存在进程级字典 \code{detection_methods} 中，键为五个平台标识（\code{visible}、\code{infrared}、\code{radar}、\code{self}、\code{synthetic}），值为包含名称、颜色、可见性、权重、点序列与时间戳的字典。所有读写经由可重入锁 \code{_state_lock} 保护；对外暴露的快照函数返回浅拷贝，防止调用方在迭代过程中被其他线程修改。
+
+检测模块的会话注册表 \code{_sessions} 由 \code{_sessions_lock} 保护，每个会话拥有独立的暂停事件、停止事件与后台线程，线程通过 \code{queue}-free 的共享缓存字段向接口层提供最新预览帧。
+
+\subsubsection{统一错误响应}
+
+接口层注册了 400/404/500 三个全局处理器，统一返回含 \code{success}、\code{error} 两个字段的 JSON 结构（失败时 \code{success} 为 \code{false}）；业务函数抛出异常时由接口层转换为 500 响应，避免把堆栈暴露给前端。前端 \file{toast.js} 对非 2xx 响应统一弹出错误提示。

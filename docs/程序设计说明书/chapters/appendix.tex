@@ -1,0 +1,112 @@
+% ============================================================
+%  附录
+% ============================================================
+\section{源文件清单}
+
+\begin{longtable}{@{}>{\raggedright\ttfamily\scriptsize}p{8.0cm}>{\scriptsize}p{1.2cm}>{\raggedright\arraybackslash}p{4.3cm}@{}}
+\caption{主要源文件与规模（不含第三方库）}\label{tab:files}\\
+\toprule
+文件 & 行数 & 职责 \\
+\midrule
+\endfirsthead
+\multicolumn{3}{@{}l}{\small 续表~\thetable}\\
+\toprule
+文件 & 行数 & 职责 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+main.py & 99 & 统一入口、端口清理、模块编排 \\
+trajectory\_reconstruction/app.py & 86 & 重建模块应用工厂 \\
+trajectory\_reconstruction/core/config/config\_manager.py & 300 & 配置管理 \\
+trajectory\_reconstruction/core/io/data\_loader.py & 170 & 轨迹读写 \\
+trajectory\_reconstruction/core/math\_utils.py & 200 & 插值、平滑、速度估计 \\
+trajectory\_reconstruction/core/prediction/prediction.py & 300 & 预测入口与模型加载 \\
+trajectory\_reconstruction/core/prediction/hybrid/\allowbreak model.py & 330 & 混合模型主体 \\
+trajectory\_reconstruction/core/prediction/hybrid/\allowbreak diffusion.py & 400 & 扩散与 DDIM 采样 \\
+trajectory\_reconstruction/core/prediction/hybrid/\allowbreak physics\_ode.py & 120 & 物理 ODE \\
+trajectory\_reconstruction/core/ai/ai\_service.py & 110 & AI 策略调用 \\
+trajectory\_reconstruction/core/state.py & 80 & 全局状态 \\
+trajectory\_reconstruction/services/data\_service.py & 300 & 数据服务与合成 \\
+trajectory\_reconstruction/services/predict\_service.py & 210 & 预测编排 \\
+trajectory\_reconstruction/services/backup\_service.py & 300 & 备份服务 \\
+trajectory\_reconstruction/views/main.py & 220 & 页面路由与参数接口 \\
+trajectory\_reconstruction/views/api.py & 180 & 数据与备份接口 \\
+trajectory\_reconstruction/views/api\_predict.py & 90 & 预测接口 \\
+trajectory\_reconstruction/views/analysis.py & 200 & 分析接口 \\
+trajectory\_recognition/app.py & 74 & 检测模块应用工厂 \\
+trajectory\_recognition/detection/engine.py & 230 & YOLO 检测引擎 \\
+trajectory\_recognition/detection/stereo.py & 260 & 三角测量与跨目匹配 \\
+trajectory\_recognition/detection/tracker.py & 340 & 多目标跟踪 \\
+trajectory\_recognition/detection/preprocess.py & 170 & 视频预处理 \\
+trajectory\_recognition/services/detection\_service.py & 420 & 会话与流水线 \\
+trajectory\_recognition/services/data\_bridge.py & 200 & 数据桥接 \\
+trajectory\_recognition/views/api\_detection.py & 400 & 检测接口 \\
+train/yolotrain/train.py & 900 & YOLO 训练与图表 \\
+train/hybrid\_predictor/train.py & 2400 & 混合模型训练 \\
+train/hybrid\_predictor/dataset.py & 240 & 数据集与采样 \\
+train/hybrid\_predictor/generate\_synthetic.py & 330 & 合成数据生成 \\
+\end{longtable}
+\section{配置项全表}
+
+完整字段说明见同目录下的 \file{docs/CONFIG.md}，此处给出速查表。
+
+\begin{longtable}{@{}>{\raggedright\ttfamily\scriptsize}p{6.6cm}>{\raggedright\scriptsize}p{3.3cm}>{\raggedright\arraybackslash}p{4.2cm}@{}}
+\caption{配置项速查}\label{tab:confall}\\
+\toprule
+字段 & 默认 & 说明 \\
+\midrule
+\endfirsthead
+\multicolumn{3}{@{}l}{\small 续表~\thetable}\\
+\toprule
+字段 & 默认 & 说明 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+ai.provider / api\_key / url / model & --- & 大模型接口配置 \\
+detection\_methods.<id>.weight & 1.0 & 融合权重 \\
+detection\_methods.<id>.visible & true & 界面可见性 \\
+prediction\_settings.min/max/default\_points & 10/50/20 & 预测点数范围 \\
+prediction\_settings.time\_step & 0.3 & 预测步长（秒） \\
+capture\_weights.height/speed/accel/curvature & 1.0 & 捕捉评分权重 \\
+hybrid\_model.enabled & true & 是否启用混合模型 \\
+hybrid\_model.v\_max / a\_max & 25/20 & 物理约束上限 \\
+hybrid\_model.z\_min / z\_max & 5/120 & 高度范围（米） \\
+hybrid\_model.guidance\_eta & 0.15 & 物理引导强度 \\
+hybrid\_model.inference\_steps & 80 & DDIM 步数 \\
+hybrid\_model.device & cuda:0 & 推理设备 \\
+drone\_dynamics.* & 见文件 & 四旋翼动力学参数 \\
+training.* & 见文件 & 训练超参 \\
+detection.model & models/yolo/detect.pt & YOLO 权重路径 \\
+detection.confidence\_threshold & 0.2 & 置信度阈值 \\
+detection.nms\_threshold & 0.2 & NMS 阈值 \\
+detection.frame\_interval & 3 & 抽帧间隔 \\
+detection.tracker & bytetrack & 跟踪器 \\
+detection.input\_width/height & 1280/960 & 输入尺寸 \\
+detection.device & cuda:0 & 检测设备 \\
+detection.target\_classes & [0] & 目标类别 \\
+platforms.<id>.baseline & 1.0--2.0 & 双目基线（米） \\
+platforms.<id>.fov\_horizontal/vertical & 60--120/45--90 & 视场角（度） \\
+platforms.<id>.pos\_x/y/z & 见文件 & 平台位置（米） \\
+platforms.<id>.pitch/yaw/roll & 见文件 & 平台姿态（度） \\
+theme & dark & 默认主题 \\
+camera\_speed & 0.1 & 相机移动速度 \\
+\end{longtable}
+\section{版本记录}
+
+\begin{table}[H]
+\centering
+\caption{版本记录}
+\label{tab:versions_history}
+\small
+\begin{tabularx}{\linewidth}{@{}p{1.6cm}p{2.4cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+版本 & 日期 & 说明 \\
+\midrule
+V1.0 & 2026-10 & 首个正式版本：双模块架构、三维可视化、加权合成、运动学分析、捕捉评分、AI 策略、备份恢复、双目检测与轨迹入库；轨迹预测列为后续开发 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+

@@ -55,3 +55,6 @@ train/hybrid_predictor/dataset/test/
 # config.json is tracked (contains placeholder API key)
 .playwright-mcp/
 
+
+# Large dataset archive (not tracked)
+hybrid_predictor_dataset.zip

@@ -1,0 +1,161 @@
+% ============================================================
+%  第二章  软件概述
+% ============================================================
+\section{软件概述}
+
+\subsection{建设背景与目标}
+
+近年来，消费级与改装型无人机数量快速增长，低空空域（真高 120 米以下）内“黑飞”无人机对重点区域的安全构成现实威胁。对这类目标的有效处置，前提是“看得见、定得准、判得快”：需要多种探测手段协同完成目标发现与三维定位，需要统一的三维态势呈现帮助指挥员建立空间概念，还需要在此基础上给出可执行的捕捉策略。
+
+现有单一探测手段各有短板：可见光相机分辨率高但受光照与天气影响；红外热像仪可全天时工作但分辨细节能力弱、易受背景热源干扰；雷达不受光照影响、测距精度高，但对低慢小目标的角分辨率有限，且难以判别目标类型。三者数据若各自独立呈现，指挥员必须在多个画面之间自行拼接态势，响应速度与判断一致性都难以保证。
+
+“鹰眼长空”即针对上述问题设计：以统一的时空坐标系为基准，将可见光、红外、雷达三种平台的轨迹数据在三维空间中融合呈现；以双目立体视觉与目标检测模型作为轨迹数据的自动采集手段，替代人工标注；在融合轨迹上完成运动学分析、捕捉时机评估与大模型策略生成，形成“探测—定位—融合—研判—决策”的闭环。
+
+软件的设计目标可归纳为四条：
+\begin{enumerate}
+  \item \term{多源融合}：支持任意数量的轨迹平台按权重融合，权重可在线调整并即时生效；
+  \item \term{自动采集}：通过双目视频与 YOLO 检测模型自动生成三维轨迹，减少人工干预；
+  \item \term{直观呈现}：以三维场景、时间轴动画和多维图表三种方式并行呈现态势；
+  \item \term{可解释决策}：捕捉时机评分给出明确的归一化构成，AI 策略基于真实轨迹统计生成，避免“黑箱”结论。
+\end{enumerate}
+
+需要说明的是，本版本在“预测”环节尚未达到可用精度：混合深度学习模型（Phy-ODE-Diffusion）的代码框架、训练脚本与权重加载链路已经具备，但受训练数据规模与分布限制，其预测结果尚不稳定，当前版本实际以“线性外推”作为兜底算法对外提供预测点。轨迹预测因此被列为后续开发内容，其技术方案与开发计划在第~\ref{sec:prediction_future}~章单独说明。
+
+\subsection{功能概览}
+
+软件由两个可独立运行、通过共享数据目录协作的子系统构成，共提供 10 个功能页面与 30 余个 HTTP 接口。功能清单如表~\ref{tab:functions} 所示。
+
+\begin{longtable}{@{}>{\heiti\scriptsize}p{1.0cm}>{\heiti\scriptsize}p{2.8cm}>{\scriptsize}p{8.2cm}>{\heiti\scriptsize}p{1.9cm}@{}}
+\caption{系统功能清单}\label{tab:functions}\\
+\toprule
+编号 & 功能名称 & 功能描述 & 所属模块 \\
+\midrule
+\endfirsthead
+\multicolumn{1}{@{}l}{\small 续表~\thetable}\\
+\toprule
+编号 & 功能名称 & 功能描述 & 所属模块 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+F01 & 三维轨迹可视化 & 在 Three.js 场景中渲染多平台轨迹、坐标轴、星空背景，支持旋转、缩放、平移、WASD 自由飞行与轨迹点悬停拾取 & 重建分析 \\
+F02 & 时间轴动画 & 按时间推进回放轨迹，支持播放/暂停、0.5$\times$--4$\times$ 调速与进度拖拽，实时显示当前状态 & 重建分析 \\
+F03 & 平台显隐与权重 & 在线切换平台可见性、修改显示名称与颜色、设置融合权重并即时重算综合轨迹 & 重建分析 \\
+F04 & 加权综合合成 & 在统一时间网格上对各平台轨迹插值后加权平均，并进行三点平滑 & 重建分析 \\
+F05 & 轨迹预测 & 选择平台与预测点数/步长生成未来轨迹，各平台预测自动对齐到同一时间轴 & 重建分析 \\
+F06 & 运动学分析 & 输出高度、水平速度、加速度、曲率四类指标曲线（ECharts），原始段与预测段拼接展示 & 重建分析 \\
+F07 & 捕捉时机评估 & 对综合轨迹的预测段计算“低、慢、稳、直”综合评分，给出前三名建议时刻与坐标 & 重建分析 \\
+F08 & AI 策略生成 & 将各平台轨迹统计提交大模型，生成运动模式判断、推荐装备、拦截点与时间窗建议，可保存为报告 & 重建分析 \\
+F09 & 数据与备份管理 & 上传自选轨迹、刷新事实数据、清空数据（自动备份）、快照备份/部分恢复/完整恢复/删除 & 重建分析 \\
+F10 & 双目视频检测 & 上传左右目视频，逐帧 YOLO 推理、跨目匹配、三角测量与世界坐标变换，生成三维轨迹 & 无人机检测 \\
+F11 & 多目标跟踪 & 以 ByteTrack/BoT-SORT 分配稳定 ID，并将 3D 定位点按 IoU 关联到轨迹 & 无人机检测 \\
+F12 & 检测结果入库 & 将跟踪轨迹合并写入 \file{data/fact/*.npz}，自动备份旧文件并通知重建模块刷新 & 无人机检测 \\
+F13 & 检测参数配置 & 配置模型权重、置信度、NMS、抽帧间隔、跟踪器、输入尺寸、设备与双目标定参数 & 无人机检测 \\
+F14 & 检测历史浏览 & 查看已保存的轨迹文件与备份快照，支持删除与容量统计 & 无人机检测 \\
+\end{longtable}
+
+\subsection{运行环境}
+
+\subsubsection{硬件环境}
+
+\begin{longtable}{@{}>{\heiti}p{3.2cm}p{10.8cm}@{}}
+\caption{硬件环境要求}\label{tab:hardware}\\
+\toprule
+项目 & 要求 \\
+\midrule
+\endfirsthead
+\multicolumn{1}{@{}l}{\small 续表~\thetable}\\
+\toprule
+项目 & 要求 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+处理器 & 双核 2.0 GHz 及以上（推荐四核以上） \\
+内存 & 8 GB 及以上（启用 YOLO 检测与混合模型时建议 16 GB） \\
+显卡 & 可选。NVIDIA 显卡（CUDA 12.x）可将 YOLO 推理加速 5--20 倍；纯 CPU 亦可运行 \\
+显存 & 启用 GPU 推理时建议 4 GB 及以上 \\
+硬盘 & 2 GB 可用空间（含 Python 依赖与模型权重） \\
+显示 & 1280$\times$800 及以上分辨率，支持 WebGL 2.0 的显卡驱动 \\
+输入设备 & 鼠标、键盘（WASD 飞行控制需要键盘） \\
+\end{longtable}
+
+\subsubsection{软件环境}
+
+\begin{longtable}{@{}>{\heiti}p{3.2cm}p{4.0cm}p{7.0cm}@{}}
+\caption{软件环境要求}\label{tab:software}\\
+\toprule
+类别 & 名称与版本 & 说明 \\
+\midrule
+\endfirsthead
+\multicolumn{1}{@{}l}{\small 续表~\thetable}\\
+\toprule
+类别 & 名称与版本 & 说明 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+操作系统 & Windows 10/11 64 位 & 亦可在 Linux/macOS 运行，启动脚本中的端口清理逻辑会自动适配 \\
+运行时 & Python 3.11 & 由 Conda 虚拟环境 \file{drone} 提供，避免与系统包冲突 \\
+Web 框架 & Flask 3.x & 提供页面路由与 REST 接口，单进程多线程模式运行 \\
+桌面外壳 & pywebview 5.x & 以系统 WebView2 承载页面，实现“双击即用”的桌面体验 \\
+深度学习 & PyTorch 2.x（CPU 或 CUDA） & 混合预测模型与 YOLO 推理的底层张量计算 \\
+目标检测 & ultralytics 8.x & YOLOv8/YOLO11 模型加载、推理与内置跟踪 \\
+图像处理 & OpenCV 4.x & 视频解码、抽帧、缩放、预览帧 JPEG 编码与矩形绘制 \\
+数值计算 & NumPy 2.x & 轨迹数组存储、插值、差分与文件序列化 \\
+前端渲染 & Three.js r160+（本地副本） & 三维场景、轨迹曲线、粒子拖尾、CSS2D 标签 \\
+图表库 & ECharts 5.x（本地副本） & 运动学分析四联图与设置页数值展示 \\
+AI 服务 & 任意 OpenAI Chat Completions 兼容接口 & 通过 HTTPS 调用，默认对接硅基流动平台 \\
+\end{longtable}
+
+\subsubsection{网络环境}
+
+除 AI 策略功能外，软件可完全离线运行：Three.js、ECharts、OrbitControls 等第三方前端库均以本地副本形式随软件发布，不依赖 CDN。AI 策略功能需要访问用户配置的大模型接口地址；若未配置或网络不可达，界面会给出明确的失败提示，不影响其余功能。
+
+\subsection{技术栈与选型说明}
+
+\begin{table}[H]
+\centering
+\caption{关键技术选型及理由}
+\label{tab:stack}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti}p{3.4cm}>{\raggedright\arraybackslash}p{4.0cm}X@{}}
+\toprule
+技术方向 & 选用方案 & 选型理由 \\
+\midrule
+后端框架 & Flask & 轻量、路由与蓝图机制清晰，适合“本地单机 + 少量并发”的桌面一体化应用；无需数据库与容器 \\
+桌面外壳 & pywebview & 复用系统 WebView2，包体仅数百 KB；相比 Electron 省去内置浏览器内核 \\
+前端形态 & 服务端模板 + 原生 ES6 模块 & 页面由 Jinja2 渲染，交互逻辑用原生模块组织，避免引入构建工具链，便于二次开发 \\
+三维渲染 & Three.js & 成熟的 WebGL 封装，支持曲线、粒子、CSS2D 标注；可通过本地文件离线加载 \\
+检测模型 & YOLOv8/YOLO11 & 单阶段检测，CPU 亦可实时；ultralytics 提供训练、导出与内置跟踪器一体化支持 \\
+立体视觉 & 几何三角测量 & 相比深度学习深度估计，几何解算结果可解释、无需训练数据，精度由标定参数决定 \\
+数据存储 & 文件系统（.npz/.dat/.json） & 单机部署、数据量小；便于人工检查与跨模块交换，无需数据库运维 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{软件组成与规模}
+
+软件由两个 Flask 应用、一个模型训练工程和一套共享前端资源组成，源代码规模如表~\ref{tab:scale} 所示（统计不含第三方库与模型权重二进制文件）。
+
+\begin{table}[H]
+\centering
+\caption{软件组成与代码规模}
+\label{tab:scale}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti\footnotesize}p{3.0cm}>{\heiti\footnotesize}p{2.5cm}>{\footnotesize}r>{\raggedright\arraybackslash}X@{}}
+\toprule
+组成单元 & 语言 & 行数 & 主要职责 \\
+\midrule
+轨迹重建与分析 & Python & 3\,152 & 配置、数据 I/O、数学工具、预测、AI 服务、备份与 5 个蓝图 \\
+无人机检测 & Python & 1\,807 & 检测引擎、立体视觉、跟踪、视频预处理、会话管理与数据桥接 \\
+模型训练工程 & Python & 2\,744 & YOLO 训练脚本、混合预测模型定义与分阶段训练脚本 \\
+前端脚本 & JavaScript & 2\,062 & 各页面交互模块与共享工具（不含 Three.js/ECharts 库文件） \\
+页面模板 & HTML/Jinja2 & 1\,789 & 10 个功能页面与共享布局、图标宏 \\
+样式表 & CSS & 1\,031 & 双主题变量与全部组件样式 \\
+共享配置与文档 & JSON/Markdown & --- & \file{config.json}、配置模板与四份技术文档 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+软件交付物包括：源代码（51 个 Python 文件）、YOLO 与混合预测模型权重、示例轨迹数据、配置文件、四份技术文档以及本说明书。

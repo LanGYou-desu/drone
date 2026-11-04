@@ -1,0 +1,203 @@
+% ============================================================
+%  鹰眼长空 — 程序设计说明书  排版导言区
+%  编译：xelatex main.tex  (两遍，生成目录与交叉引用)
+% ============================================================
+\usepackage{geometry}
+\geometry{left=2.6cm,right=2.6cm,top=2.6cm,bottom=2.4cm,headheight=15pt,footskip=1.0cm}
+
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{array,booktabs,longtable,tabularx,multirow,makecell}
+\usepackage{xltabular}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,shapes.symbols,fit,backgrounds,calc,chains,decorations.pathreplacing,decorations.markings,patterns,matrix}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage[hidelinks,bookmarksnumbered,bookmarksopen]{hyperref}
+\usepackage{url}
+
+% ---------- 黑白配色（白底黑字） ----------
+\definecolor{bwtext}{gray}{0}
+\definecolor{bwgray}{gray}{0.35}
+\definecolor{bwlight}{gray}{0.92}
+\definecolor{bwfill}{gray}{0.96}
+\color{black}
+
+% ---------- 字体（SimHei 无粗体，启用伪粗体） ----------
+\setCJKmainfont[AutoFakeBold=2.4]{SimSun}
+\setCJKsansfont[AutoFakeBold=2.4]{SimHei}
+\setCJKmonofont[AutoFakeBold=2.0]{SimSun}
+
+% ---------- 标题格式 ----------
+\ctexset{
+  section = {
+    format = \Large\heiti,
+    name = {,},
+    number = \arabic{section},
+    aftername = \hspace{0.7em},
+    beforeskip = 1.2ex plus .2ex,
+    afterskip = 1.0ex plus .2ex,
+  },
+  subsection = {
+    format = \large\heiti,
+    number = \arabic{section}.\arabic{subsection},
+    aftername = \hspace{0.7em},
+    beforeskip = 1.0ex plus .2ex,
+    afterskip = 0.8ex plus .2ex,
+  },
+  subsubsection = {
+    format = \normalsize\heiti,
+    number = \arabic{section}.\arabic{subsection}.\arabic{subsubsection},
+    aftername = \hspace{0.6em},
+    beforeskip = 0.8ex plus .2ex,
+    afterskip = 0.6ex plus .2ex,
+  },
+}
+
+% ---------- 图表编号：章-序 ----------
+\counterwithin{figure}{section}
+\counterwithin{table}{section}
+\counterwithin{equation}{section}
+\renewcommand{\thefigure}{\thesection-\arabic{figure}}
+\renewcommand{\thetable}{\thesection-\arabic{table}}
+\renewcommand{\theequation}{\thesection-\arabic{equation}}
+\captionsetup{font=small,labelsep=quad,justification=centering}
+\captionsetup[table]{skip=4pt}
+\captionsetup[figure]{skip=4pt}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+\renewcommand{\lstlistingname}{代码}
+
+% ---------- 页眉页脚 ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\songti 鹰眼长空 — 低空无人机智能监测系统}
+\fancyhead[R]{\small\songti 程序设计说明书}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- 列表 ----------
+\setlist[itemize]{leftmargin=2em,itemsep=2pt,topsep=3pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=2.4em,itemsep=2pt,topsep=3pt,parsep=0pt}
+
+% ---------- 代码清单 ----------
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  commentstyle=\color{bwgray},
+  stringstyle=\color{black},
+  frame=single,
+  rulecolor=\color{black!40},
+  framexleftmargin=10pt,
+  numbers=left,
+  numberstyle=\tiny\color{bwgray},
+  numbersep=6pt,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=4,
+  aboveskip=6pt,
+  belowskip=6pt,
+  xleftmargin=22pt,
+  extendedchars=true,
+  inputencoding=utf8,
+}
+\lstdefinestyle{json}{
+  basicstyle=\ttfamily\footnotesize,
+  frame=single,
+  rulecolor=\color{black!40},
+  breaklines=true,
+  columns=fullflexible,
+  showstringspaces=false,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+\lstdefinestyle{sh}{
+  language=bash,
+  basicstyle=\ttfamily\footnotesize,
+  frame=single,
+  rulecolor=\color{black!40},
+  breaklines=true,
+  columns=fullflexible,
+  showstringspaces=false,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+\lstset{style=py}
+
+% ---------- 提示框（黑白） ----------
+\newtcolorbox{notebox}[1][]{
+  enhanced,
+  colback=white,
+  colframe=black!55,
+  boxrule=0.5pt,
+  arc=2pt,
+  left=6pt,right=6pt,top=4pt,bottom=4pt,
+  fonttitle=\bfseries\heiti,
+  title=#1,
+  breakable,
+}
+
+% ---------- 插图配色（正文仍为黑白） ----------
+\definecolor{cA}{RGB}{222,235,249}   % 蓝
+\definecolor{cB}{RGB}{228,243,231}   % 绿
+\definecolor{cC}{RGB}{252,241,222}   % 橙
+\definecolor{cD}{RGB}{238,240,245}   % 灰
+\definecolor{cLine}{RGB}{58,78,104}  % 深蓝灰描边
+\definecolor{cLbl}{RGB}{45,45,45}
+
+% ---------- TikZ 统一风格 ----------
+\tikzset{
+  base/.style   = {draw=cLine, line width=0.5pt, fill=cA, align=center,
+                   font=\small, inner sep=3pt, minimum height=8mm, text=black},
+  proc/.style   = {base, rectangle, rounded corners=1.5pt, minimum width=26mm},
+  deci/.style   = {base, diamond, aspect=2.2, inner sep=1pt, minimum width=20mm,
+                   minimum height=9mm, font=\footnotesize, fill=cC},
+  term/.style   = {base, rectangle, rounded corners=9pt, minimum width=24mm, fill=cB},
+  data/.style   = {base, trapezium, trapezium left angle=72, trapezium right angle=108,
+                   text width=26mm, inner sep=3pt, fill=cD},
+  doc/.style    = {base, signal, signal to=east, minimum width=26mm, inner sep=5pt, fill=cD},
+  layer/.style  = {draw=cLine, line width=0.7pt, fill=cD!35, inner sep=8pt,
+                   rounded corners=3pt},
+  grp/.style    = {draw=cLine!80, line width=0.5pt, rounded corners=2pt, inner sep=7pt, fill=white},
+  arr/.style    = {-{Stealth[length=2.2mm]}, line width=0.5pt, draw=cLine},
+  darr/.style   = {-{Stealth[length=2.2mm]}, line width=0.4pt, draw=cLine, dashed},
+  busr/.style   = {-{Stealth[length=2.2mm]}, line width=1.0pt, draw=cLine},
+  lbl/.style    = {font=\scriptsize, inner sep=1.5pt, fill=white, text=black},
+}
+
+% ---------- 自定义命令 ----------
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\file}[1]{\path{#1}}   % 路径使用 url 宏包，可在 / 处断行
+\def\UrlBreaks{\do\/\do\_\do\.\do\-}
+\newcommand{\term}[1]{\textbf{#1}}
+\renewcommand{\arraystretch}{1.25}
+\setcounter{tocdepth}{2}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.7}
+\renewcommand{\textfraction}{0.12}
+\renewcommand{\floatpagefraction}{0.75}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.35ex}
+\setlength{\emergencystretch}{2.5em}
+\tolerance=1500
+
+
+% ---------- 截图标注点（第 11 章使用） ----------
+\tikzset{
+  hmark/.style={circle, draw=white, line width=0.9pt, fill=cLine,
+               text=white, font=\bfseries\scriptsize, inner sep=1.4pt,
+               minimum size=4.6mm, opacity=0.96, text opacity=1},
+}
+\newcommand{\hotspot}[3]{\node[hmark] at (#2,#3) {#1};}
+\newcommand{\cn}[1]{\textcircled{\footnotesize #1}}

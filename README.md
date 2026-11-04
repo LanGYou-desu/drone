@@ -182,3 +182,4 @@ python train/hybrid_predictor/train.py --stage 2 --resume train/hybrid_predictor
 | [配置说明](docs/CONFIG.md) | config.json 完整参数说明 |
 | [混合预测模型](docs/hybrid_prediction_model.md) | Phy-ODE-Diffusion 数学模型、架构、训练方法 |
 | [开发文档](docs/DEVELOPER.md) | 架构、API、开发指南 |
+| [程序设计说明书](docs/程序设计说明书/main.pdf) | 系统总体设计、模块详细设计、流程图、数据结构与接口、运行截图（LaTeX 源码同目录） |
