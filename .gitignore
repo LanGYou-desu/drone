@@ -65,6 +65,14 @@ train/hybrid_predictor/dataset/test/
 轨迹预测预测算法.txt
 !docs/鹰眼长空使用手册.pdf
 !docs/鹰眼长空开发文档.pdf
+!docs/程序设计说明书/main.pdf
+
+# LaTeX 中间产物
+docs/程序设计说明书/*.aux
+docs/程序设计说明书/*.log
+docs/程序设计说明书/*.out
+docs/程序设计说明书/*.toc
+docs/程序设计说明书/main_build.log
 
 # Env
 .env
