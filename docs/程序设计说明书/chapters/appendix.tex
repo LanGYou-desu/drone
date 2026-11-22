@@ -21,10 +21,19 @@ trajectory\_reconstruction/app.py & 86 & 重建模块应用工厂 \\
 trajectory\_reconstruction/core/config/config\_manager.py & 300 & 配置管理 \\
 trajectory\_reconstruction/core/io/data\_loader.py & 170 & 轨迹读写 \\
 trajectory\_reconstruction/core/math\_utils.py & 200 & 插值、平滑、速度估计 \\
-trajectory\_reconstruction/core/prediction/prediction.py & 300 & 预测入口与模型加载 \\
-trajectory\_reconstruction/core/prediction/hybrid/\allowbreak model.py & 330 & 混合模型主体 \\
-trajectory\_reconstruction/core/prediction/hybrid/\allowbreak diffusion.py & 400 & 扩散与 DDIM 采样 \\
-trajectory\_reconstruction/core/prediction/hybrid/\allowbreak physics\_ode.py & 120 & 物理 ODE \\
+trajectory\_reconstruction/core/prediction/prediction.py & 260 & 预测入口、权重查找、线性兜底 \\
+trajectory\_reconstruction/core/prediction/kinflow/\allowbreak encoder.py & 210 & 连续时间上下文编码器 \\
+trajectory\_reconstruction/core/prediction/kinflow/\allowbreak corridor.py & 80 & 运动学走廊先验 \\
+trajectory\_reconstruction/core/prediction/kinflow/\allowbreak flow.py & 240 & 走廊初始化流匹配 \\
+trajectory\_reconstruction/core/prediction/kinflow/\allowbreak projector.py & 210 & 可微物理投影器 \\
+trajectory\_reconstruction/core/prediction/kinflow/\allowbreak model.py & 420 & 顶层模型、长视界分段预测 \\
+trajectory\_reconstruction/core/timesync.py & 360 & 时间步同步 \\
+trajectory\_reconstruction/core/fusion.py & 300 & 一致子集与逆方差融合 \\
+trajectory\_reconstruction/core/reconstruction.py & 220 & 三维重建（剔除/补洞/平滑） \\
+trajectory\_reconstruction/core/risk.py & 320 & 六因子风险评估 \\
+trajectory\_reconstruction/core/sensor\_sim.py & 200 & 同目标多传感器仿真 \\
+trajectory\_reconstruction/services/sensor\_service.py & 560 & 协同链路编排与参数持久化 \\
+trajectory\_reconstruction/views/api\_sensor.py & 70 & 协同/评估接口 \\
 trajectory\_reconstruction/core/ai/ai\_service.py & 110 & AI 策略调用 \\
 trajectory\_reconstruction/core/state.py & 80 & 全局状态 \\
 trajectory\_reconstruction/services/data\_service.py & 300 & 数据服务与合成 \\
@@ -43,9 +52,10 @@ trajectory\_recognition/services/detection\_service.py & 420 & 会话与流水�
 trajectory\_recognition/services/data\_bridge.py & 200 & 数据桥接 \\
 trajectory\_recognition/views/api\_detection.py & 400 & 检测接口 \\
 train/yolotrain/train.py & 900 & YOLO 训练与图表 \\
-train/hybrid\_predictor/train.py & 2400 & 混合模型训练 \\
-train/hybrid\_predictor/dataset.py & 240 & 数据集与采样 \\
-train/hybrid\_predictor/generate\_synthetic.py & 330 & 合成数据生成 \\
+train/kinflow\_predictor/train.py & 1100 & KinFlow 两阶段训练、图表与测试评价 \\
+train/kinflow\_predictor/dataset.py & 260 & 数据集加载、滑动窗口与增强 \\
+train/kinflow\_predictor/generate\_synthetic.py & 300 & 四旋翼动力学合成轨迹 \\
+tools/make\_runtime\_demo.py & 110 & 同目标三路异构观测演示数据 \\
 \end{longtable}
 \section{配置项全表}
 
@@ -70,12 +80,16 @@ detection\_methods.<id>.visible & true & 界面可见性 \\
 prediction\_settings.min/max/default\_points & 10/50/20 & 预测点数范围 \\
 prediction\_settings.time\_step & 0.3 & 预测步长（秒） \\
 capture\_weights.height/speed/accel/curvature & 1.0 & 捕捉评分权重 \\
-hybrid\_model.enabled & true & 是否启用混合模型 \\
-hybrid\_model.v\_max / a\_max & 25/20 & 物理约束上限 \\
-hybrid\_model.z\_min / z\_max & 5/120 & 高度范围（米） \\
-hybrid\_model.guidance\_eta & 0.15 & 物理引导强度 \\
-hybrid\_model.inference\_steps & 80 & DDIM 步数 \\
-hybrid\_model.device & cuda:0 & 推理设备 \\
+kinflow\_model.enabled & true & 是否启用 KinFlow \\
+kinflow\_model.v\_h\_max / v\_up\_max / v\_down\_max & 20/5/5 & 速度与垂直速率上限（m/s） \\
+kinflow\_model.y\_min / y\_max & 1/120 & 高度范围（米） \\
+kinflow\_model.n\_euler\_steps & 4 & 流匹配采样步数 \\
+kinflow\_model.sigma & 0.0 & 推理起点噪声（0=确定性） \\
+kinflow\_model.device & cpu & 推理设备 \\
+synchronization.hz & 10.0 & 主时间栅格（Hz） \\
+sensor\_fusion.gate\_m & 3.0 & 关联门限（米） \\
+reconstruction.smooth\_window & 5 & 平滑窗口 \\
+assessment.zone & [8,12,4]/6 & 防护区中心/半径 \\
 drone\_dynamics.* & 见文件 & 四旋翼动力学参数 \\
 training.* & 见文件 & 训练超参 \\
 detection.model & models/yolo/detect.pt & YOLO 权重路径 \\
@@ -105,6 +119,7 @@ camera\_speed & 0.1 & 相机移动速度 \\
 版本 & 日期 & 说明 \\
 \midrule
 V1.0 & 2026-10 & 首个正式版本：双模块架构、三维可视化、加权合成、运动学分析、捕捉评分、AI 策略、备份恢复、双目检测与轨迹入库；轨迹预测列为后续开发 \\
+V2.0 & 2026-11 & 预测内核替换为 KinFlow（2 s 视界，ADE 0.495 m）；新增时间同步/融合/重建/风险评估链路；页面整合为 7 个；长视界分段预测；参数持久化 \\
 \bottomrule
 \end{tabularx}
 \end{table}

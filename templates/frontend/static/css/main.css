@@ -849,6 +849,37 @@ tbody tr:hover { background: var(--bg-card-hover); }
 /* 面板折叠 */
 .overlay-panel.collapsed .panel-body { display: none; }
 .overlay-panel.collapsed .collapse-arrow { transform: rotate(-90deg); }
+
+/* 总览·综合重建参数（紧凑 2×2，与面板风格一致） */
+.overlay-panel .recon-params {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-muted, #21262d);
+}
+.overlay-panel .recon-params label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+}
+.overlay-panel .recon-params input {
+    width: 100%;
+    padding: 3px 6px;
+    font-size: 0.72rem;
+    font-family: var(--mono);
+    background: var(--bg-root);
+    border: 1px solid var(--border-default, #30363d);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+.overlay-panel .recon-params input:focus {
+    outline: none;
+    border-color: var(--blue);
+}
 .collapse-arrow {
     display: inline-block;
     transition: transform var(--fast);

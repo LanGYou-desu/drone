@@ -194,7 +194,7 @@ t_i = t_{start} + i\,\frac{t_{end}-t_{start}}{N-1}
 \node[proc, below left=12mm and 10mm of d1, text width=38mm] (p4) {混合模型推理\\{\scriptsize 权重存在且已启用}};
 \node[proc, below right=12mm and 10mm of d1, text width=34mm] (p5) {线性外推\\{\scriptsize 末两点速度延拓}};
 \node[proc, below=30mm of d1, text width=56mm] (p6) {对齐统一预测时间轴\\保存 \code{predict_{id}.npz}};
-\node[proc, below=6mm of p6, text width=62mm] (p7) {加权合成综合预测（算法同图~\ref{fig:synth}）};
+\node[proc, below=6mm of p6, text width=62mm] (p7) {综合轨迹直接预测（失败时回退各平台预测加权合成）};
 \node[term, below=6mm of p7] (e) {返回各平台预测结果};
 \draw[arr] (s) -- (p1); \draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3); \draw[arr] (p3) -- (d1);
 \draw[arr] (d1.west) -| node[lbl, above, pos=0.75]{是} (p4.north);

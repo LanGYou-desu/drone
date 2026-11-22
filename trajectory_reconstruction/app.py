@@ -31,6 +31,9 @@ def create_app() -> Flask:
         static_folder=None,
     )
     app.jinja_loader.searchpath.insert(0, shared_templates)
+    # 开发期模板热加载：修改 .html 后无需重启服务即可生效
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.jinja_env.auto_reload = True
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):

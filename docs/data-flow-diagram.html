@@ -71,7 +71,7 @@ flowchart TB
 
     P1_REF(P1 轨迹识别):::proc_ext
 
-    P2(P2 轨迹重建\n数据加载+加权合成):::proc
+    P2(P2 轨迹重建\n数据加载+综合重建):::proc
     P3(P3 轨迹预测\n外推预测+时机评分):::proc
     P4(P4 AI 策略\nPrompt+API调用):::proc
     P5(P5 备份管理\n快照+恢复):::proc
@@ -161,7 +161,7 @@ flowchart LR
 flowchart LR
     P21(2.1 初始化加载):::proc
     P22(2.2 数据刷新):::proc
-    P23(2.3 加权合成):::proc
+    P23(2.3 综合重建):::proc
     P24(2.4 平台管理):::proc
     P25(2.5 自选平台):::proc
     P1_IN(P1.6 检测完成):::proc_ext
@@ -199,7 +199,7 @@ flowchart LR
     P31(3.1 参数校验):::proc
     P32(3.2 单平台预测\n线性外推):::proc
     P33(3.3 全平台预测\n时间网格对齐):::proc
-    P34(3.4 综合预测\n加权合成):::proc
+    P34(3.4 综合预测\n重建轨迹直接预测):::proc
     P35(3.5 捕捉时机\n运动学评分):::proc
     D_M3[("detection_methods")]:::mem
     D_P3[(data/predict/)]:::ds
@@ -210,7 +210,7 @@ flowchart LR
     P32 -->|写预测| D_M3
     P33 -->|批量调用| P32
     P33 -->|存盘| D_P3
-    P34 -->|多平台加权| D_M3
+    P34 -->|综合轨迹| D_M3
     P34 -->|存盘| D_P3
     P35 -->|运动学分析| D_M3
     P35 -->|评分| D_M3

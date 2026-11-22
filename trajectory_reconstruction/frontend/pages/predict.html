@@ -19,6 +19,7 @@
                 <option value="{{ id }}">{{ m.name }}</option>
                 {% endfor %}
             </select>
+            <div id="reconStatus" style="font-size:0.72rem;color:var(--text-tertiary);margin-top:5px;line-height:1.5;"></div>
         </div>
         <div>
             <label>预测点数: <strong id="numPointsLabel">{{ pred_settings.default_points }}</strong></label>
@@ -28,7 +29,9 @@
         </div>
         <div>
             <label>时间步长 (秒)</label>
-            <input type="number" id="timeStep" value="{{ pred_settings.time_step }}" step="0.1" min="0.1" max="5">
+            <input type="number" id="timeStep" value="{{ pred_settings.time_step }}" step="0.05" min="0.05" max="5">
+            <div id="horizonHint" style="font-size:0.72rem;color:var(--text-tertiary);margin-top:5px;"></div>
+            <div id="confidenceHint" style="font-size:0.72rem;color:var(--text-tertiary);margin-top:3px;"></div>
         </div>
         <button class="btn btn-primary" id="predictBtn">
             {{ icon_lightning() }} 开始预测
@@ -92,7 +95,9 @@
     window._PAGE_DATA_ = {
         methodsData: {{ methods_data | tojson }},
         predSettings: {{ pred_settings | tojson }},
-        cameraSpeed: {{ camera_speed }}
+        cameraSpeed: {{ camera_speed }},
+        collab: {{ collab_config | tojson }},
+        zone: {{ zone | tojson }}
     };
 </script>
 <script type="module" src="/static/js/pages/predict.js?v={{ app_version }}"></script>

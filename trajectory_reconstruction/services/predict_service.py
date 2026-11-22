@@ -1,14 +1,15 @@
 """
 预测编排服务 — 参数校验 + 调用预测算法 + 结果持久化
 
-优先使用 Phy-ODE-Diffusion 混合模型，不可用时回退到线性外推。
+优先使用 KinFlow 轨迹预测模型，不可用时回退到线性外推。
 """
 from trajectory_reconstruction.core.state import detection_methods
 from trajectory_reconstruction.core.config.config_manager import ensure_config
 from trajectory_reconstruction.core.prediction.prediction import (
-    generate_prediction,
-    generate_prediction_hybrid,
-    is_hybrid_model_available,
+    generate_linear_prediction,
+    generate_kinflow_prediction,
+    generate_kinflow_prediction_with_confidence,
+    is_kinflow_model_available,
 )
 from trajectory_reconstruction.core.io.data_loader import save_predict_data
 from trajectory_reconstruction.core.math_utils import lerp_3d_extrapolate, smooth_points_3d
@@ -52,7 +53,7 @@ def predict_single(method_id: str, num_points: int = 6,
     """
     对指定平台进行预测，返回 { prediction: [[x,y,z],...], pred_times: [t,...] }
 
-    优先使用 Phy-ODE-Diffusion 混合模型（若权重文件存在），
+    优先使用 KinFlow 模型（若权重文件存在且启用），
     否则回退到线性外推。综合轨迹(synthetic)不参与预测。
     """
     data = detection_methods.get(method_id)
@@ -63,21 +64,27 @@ def predict_single(method_id: str, num_points: int = 6,
     points = data['points']
     timestamps = data.get('timestamps', [])
 
-    # 优先使用混合模型（仅对非 synthetic 平台）
-    if method_id != 'synthetic' and is_hybrid_model_available():
+    # 优先使用 KinFlow（综合轨迹是重建结果，同样直接预测）
+    confidence = None
+    if is_kinflow_model_available():
         cfg = ensure_config()
-        device = cfg.get('hybrid_model', {}).get('device', 'cpu')
-        pred_points, pred_times = generate_prediction_hybrid(
+        device = cfg.get('kinflow_model', {}).get('device', 'cpu')
+        pred_points, pred_times, confidence = generate_kinflow_prediction_with_confidence(
             points, timestamps, num_points, time_step, device=device,
         )
     else:
-        pred_points, pred_times = generate_prediction(
+        pred_points, pred_times = generate_linear_prediction(
             points, timestamps, num_points, time_step,
         )
+
+    # 落盘：分析与"最佳捕捉时机"都读取这里的结果，
+    # 因此单平台预测也必须保存，而不是只在"全部平台预测"时保存。
+    save_predict_data(method_id, pred_points, pred_times)
 
     return {
         'prediction': pred_points,
         'pred_times': pred_times,
+        'confidence': confidence,
     }
 
 
@@ -115,8 +122,22 @@ def predict_all(num_points: int = 6, time_step: float | None = None) -> dict:
             result['pred_times'] = pred_times_unified
             save_predict_data(mid, result['prediction'], pred_times_unified)
             results[mid] = result
-    # 合成综合预测
+    # 综合轨迹: 优先直接预测"重建后的综合轨迹"（与总览保持一致），
+    # 重建结果不可用时才回退为各平台预测的加权合成。
     if 'synthetic' in detection_methods:
+        syn_pts = detection_methods['synthetic'].get('points') or []
+        syn_ts = detection_methods['synthetic'].get('timestamps') or []
+        direct = None
+        if len(syn_pts) >= 10 and len(syn_ts) == len(syn_pts):
+            direct = predict_single('synthetic', num_points, time_step)
+        if direct and direct.get('prediction'):
+            syn_pred = direct['prediction']
+            syn_times = pred_times_unified if len(direct['prediction']) == len(pred_times_unified) \
+                else direct['pred_times']
+            save_predict_data('synthetic', syn_pred, syn_times)
+            results['synthetic'] = {'prediction': syn_pred, 'pred_times': syn_times,
+                                    'confidence': direct.get('confidence')}
+            return results
         if len(results) >= 2:
             syn_pred, syn_times = _synthesize_predictions(results, num_points, time_step)
         elif len(results) == 1:

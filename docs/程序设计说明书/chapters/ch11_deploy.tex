@@ -81,7 +81,7 @@ Windows 11 已内置 WebView2 运行时；Windows 10 若缺少，需安装“Mic
 
 \begin{enumerate}
   \item \term{YOLO 权重}：放置在 \file{models/yolo/}，默认读取 \file{detect.pt}。首次使用 ultralytics 时若指定 \code{yolov8n.pt} 等官方名称，会自动从网络下载。
-  \item \term{预测权重}：放置在 \file{models/hybrid_predictor/}。按“\code{best_s*} $\rightarrow$ \code{s*_e*}”的优先级自动选择最新的检查点；缺失时自动回退线性外推。
+  \item \term{预测权重}：放置在 \file{models/kinflow/}（或训练产物 \file{train/kinflow_predictor/train_result/best/}）。按“\code{best_s2} $\rightarrow$ \code{best_s1}”的优先级选择；缺失时自动回退线性外推。
   \item \term{轨迹数据}：\file{data/fact/} 下的 \file{visible.npz}、\file{infrared.npz}、\file{radar.npz}。首次运行若为空，界面显示空场景，不影响启动。
 \end{enumerate}
 

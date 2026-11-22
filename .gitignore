@@ -37,7 +37,23 @@ train/yolotrain/dataset/test/
 train/yolotrain/dataset/train/
 train/yolotrain/dataset/valid/
 
-# Hybrid predictor synthetic dataset (large binaries, not tracked)
+# KinFlow predictor synthetic dataset (large binaries, not tracked)
+train/kinflow_predictor/dataset/data/
+train/kinflow_predictor/dataset/train/
+train/kinflow_predictor/dataset/valid/
+train/kinflow_predictor/dataset/test/
+
+# KinFlow training outputs (checkpoints/plots/logs per run, not tracked)
+train/kinflow_predictor/train_result/run_*/
+train/kinflow_predictor/train_result/best/
+train/kinflow_predictor/train_result/*.log
+train/kinflow_predictor/train_result/*.err.log
+train/kinflow_predictor/train_result/app_server*.log
+
+# 旧模型归档目录：整目录不入库（历史在 git commit 中，权重/数据只保留在本地）
+backup/
+
+# 旧训练模块的合成数据集（已迁移到 train/kinflow_predictor/dataset/）
 train/hybrid_predictor/dataset/data/
 train/hybrid_predictor/dataset/train/
 train/hybrid_predictor/dataset/valid/

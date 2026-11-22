@@ -25,27 +25,52 @@ def _load_predict_data(method_id: str):
     return load_trajectory_file(file_path)
 
 
+def _smooth_points(points, window: int = 5):
+    """
+    位置序列滑动平均（端点保持）。
+
+    传感器原始观测含 0.25~0.6 m 测量噪声，直接差分求速度/加速度会把噪声放大
+    1/Δt 倍（4 Hz 下相当于 2 m/s 量级），曲线完全被噪声淹没；先做 5 点平滑
+    再差分，得到的是"可读的运动趋势"，与界面上"分析"的定位一致。
+    """
+    n = len(points)
+    if n < 3 or window <= 1:
+        return list(points)
+    half = window // 2
+    out = []
+    for i in range(n):
+        lo, hi = max(0, i - half), min(n, i + half + 1)
+        chunk = points[lo:hi]
+        out.append([sum(p[a] for p in chunk) / len(chunk) for a in range(3)])
+    return out
+
+
 def _compute_metrics(points, timestamps):
-    """计算运动学指标"""
+    """计算运动学指标（先平滑再差分，加速度按 m/s² 计算）"""
     if len(points) < 2:
         return [], [], [], [p[1] for p in points]
 
+    smooth = _smooth_points(points, 5)
+
     speeds = []
-    for i in range(1, len(points)):
+    step_dt = []
+    for i in range(1, len(smooth)):
         dt = timestamps[i] - timestamps[i - 1] if i < len(timestamps) else 1.0
         if dt <= 0:
             dt = 1.0
-        dx = points[i][0] - points[i - 1][0]
-        dz = points[i][2] - points[i - 1][2]
+        step_dt.append(dt)
+        dx = smooth[i][0] - smooth[i - 1][0]
+        dz = smooth[i][2] - smooth[i - 1][2]
         speeds.append((dx ** 2 + dz ** 2) ** 0.5 / dt)
 
     accelerations = []
     for i in range(1, len(speeds)):
-        accelerations.append(speeds[i] - speeds[i - 1])
+        dt = step_dt[i] if i < len(step_dt) else 1.0
+        accelerations.append((speeds[i] - speeds[i - 1]) / max(dt, 1e-3))
 
     curvatures = []
-    for i in range(1, len(points) - 1):
-        p0, p1, p2 = points[i - 1], points[i], points[i + 1]
+    for i in range(1, len(smooth) - 1):
+        p0, p1, p2 = smooth[i - 1], smooth[i], smooth[i + 1]
         d1 = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]]
         d2 = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]]
         cross = [
@@ -62,7 +87,7 @@ def _compute_metrics(points, timestamps):
 
 @analysis_bp.route('/')
 def analysis_page():
-    """分析页面"""
+    """分析评估页面（运动学分析 + 智能风险评估）"""
     metadata = {}
     for mid, data in detection_methods.items():
         if data.get('visible', True):
@@ -71,7 +96,10 @@ def analysis_page():
                 'color': data.get('color', '#999999'),
                 'visible': True,
             }
-    return render_template('analysis.html', methods_data=metadata, active_page='analysis')
+    from trajectory_reconstruction.services.sensor_service import get_collab_config
+    collab = get_collab_config()
+    return render_template('analysis.html', methods_data=metadata, active_page='analysis',
+                           collab_config=collab, zone=collab.get('zone', {}))
 
 
 @analysis_bp.route('/data')
@@ -145,28 +173,44 @@ def get_capture_analysis():
     if w_sum > 0:
         w_h, w_s, w_a, w_c = w_h / w_sum, w_s / w_sum, w_a / w_sum, w_c / w_sum
 
+    n = len(pred_pts)
+    if n < 4:
+        return jsonify([])
+
     heights = [p[1] for p in pred_pts]
     speeds, accels, curvs, _ = _compute_metrics(pred_pts, pred_ts)
-    speeds = [0] + speeds
-    accels = [0, 0] + accels
-    curvs = [0] + curvs + [0]
+    # 对齐到点索引；缺失（首/末点无法差分）记为 None，按中性值处理，
+    # 避免"锚点速度为 0"被误判成最优捕捉点。
+    speed_arr = [None] + list(speeds)
+    accel_arr = [None, None] + list(accels)
+    curv_arr = [None] + list(curvs) + [None]
 
-    n = len(pred_pts)
-    def _safe(arr, i): return arr[i] if i < len(arr) else 0
+    def _vmax(arr):
+        vals = [abs(v) for v in arr if v is not None]
+        return max(vals) if vals else 1.0
+
     h_max = max(heights) or 1
-    s_max = max(speeds) or 1
-    a_max = max((abs(v) for v in accels), default=1) or 1
-    c_max = max(curvs) or 1
+    s_max = _vmax(speed_arr) or 1
+    a_max = _vmax(accel_arr) or 1
+    c_max = _vmax(curv_arr) or 1
+
+    def _norm(v, vmax):
+        if v is None:
+            return 0.5          # 缺失指标按中性处理，不奖励也不惩罚
+        return max(0.0, min(1.0, 1.0 - abs(v) / vmax))
 
     scored = []
-    for i in range(n):
-        sc = (w_h * (1 - _safe(heights, i) / h_max) +
-              w_s * (1 - _safe(speeds, i) / s_max) +
-              w_a * (1 - abs(_safe(accels, i)) / a_max) +
-              w_c * (1 - _safe(curvs, i) / c_max))
+    # 只在预测段内部取候选：跳过锚点（当前时刻）与末端外推点
+    for i in range(1, n - 1):
+        sc = (w_h * (1 - heights[i] / h_max) +
+              w_s * _norm(speed_arr[i], s_max) +
+              w_a * _norm(accel_arr[i], a_max) +
+              w_c * _norm(curv_arr[i], c_max))
         scored.append((sc, i))
+    if not scored:
+        return jsonify([])
     # 以最高分为 100，其余按比例缩放
-    max_sc = max(s for s, _ in scored) if scored else 1
+    max_sc = max(s for s, _ in scored)
     if max_sc > 0:
         scored = [(round(s / max_sc * 100), i) for s, i in scored]
     scored.sort(reverse=True)
@@ -178,5 +222,5 @@ def get_capture_analysis():
         'position': [round(pred_pts[i][0], 2), round(pred_pts[i][1], 2), round(pred_pts[i][2], 2)],
         'score': s,
         'height': round(heights[i], 2),
-        'speed': round(speeds[i], 2),
+        'speed': round(speed_arr[i] or 0.0, 2),
     } for j, (s, i) in enumerate(top3)])

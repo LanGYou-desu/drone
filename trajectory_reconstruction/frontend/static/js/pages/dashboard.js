@@ -30,6 +30,7 @@ let lines = {}, predLines = {}, movingSpheres = {}, predictedSpheres = {};
 let trailSystems = {};
 let animActive = false, animId = null, animSpeed = 1.0;
 let animElapsed = 0;   // 已播放的时间（秒），暂停时保留
+let zoneGroup = null;  // 防护区（3D）
 let timeRange = { start: 0, end: 0 };
 
 // ═══════════════════════════════════════════
@@ -47,9 +48,11 @@ async function init() {
         buildGround();
         buildGrid();
         buildStarfield(scene);
+        buildRiskZone(window._PAGE_DATA_ && window._PAGE_DATA_.zone);
 
         startLoop(orb, css);
         refreshAll();
+        fitCameraToData();
         calcRange();
         bindEvents();
         bindWASD(camera, controls, () => (window._PAGE_DATA_ && window._PAGE_DATA_.cameraSpeed) || 0.12);
@@ -60,6 +63,27 @@ async function init() {
         console.error('Dashboard init failed:', e);
         toast.error('3D 初始化失败: ' + e.message);
     }
+}
+
+/** 首屏按当前轨迹范围自动取景（仅初始化时执行一次，避免打断用户视角） */
+function fitCameraToData() {
+    const pts = [];
+    for (const d of Object.values(detectionMethods)) {
+        if (!d.visible || !d.points) continue;
+        d.points.forEach(p => { if (p && p.length === 3) pts.push(p); });
+    }
+    if (!pts.length) return;
+    const box = new THREE.Box3();
+    pts.forEach(p => box.expandByPoint(new THREE.Vector3(p[0], p[1], p[2])));
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+    const r = Math.max(size.length() * 0.6, 5);
+    controls.target.copy(center);
+    camera.position.set(center.x + r * 1.0, center.y + r * 0.55, center.z + r * 1.25);
+    camera.lookAt(center);
+    controls.update();
 }
 
 function buildScene(THREE, orb, css) {
@@ -106,6 +130,55 @@ function buildGround() {
     scene.add(plane);
 }
 
+/** 防护区（圆柱）: 红色细环 + 半透明侧壁 + 母线，风格与轨迹/网格一致 */
+function buildRiskZone(zone) {
+    if (!zone || !Array.isArray(zone.center) || zone.center.length !== 3) return;
+    const [cx, cy, cz] = zone.center;
+    const radius = Number(zone.radius) || 4;
+    const y0 = Number(zone.y_min ?? 0);
+    const y1 = Number(zone.y_max ?? (y0 + 20));
+    const height = Math.max(y1 - y0, 1);
+    const color = 0xff6b6b;
+    const group = new THREE.Group();
+
+    group.add(new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, height, 48, 1, true),
+        new THREE.MeshBasicMaterial({
+            color, transparent: true, opacity: 0.02, side: THREE.DoubleSide, depthWrite: false,
+        }),
+    ).translateY(0));
+
+    const wall = group.children[group.children.length - 1];
+    wall.position.set(cx, y0 + height / 2, cz);
+
+    for (const y of [y0, y1]) {
+        const ring = new THREE.Mesh(
+            new THREE.RingGeometry(Math.max(radius - 0.03, 0.05), radius, 64),
+            new THREE.MeshBasicMaterial({
+                color, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false,
+            }),
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(cx, y, cz);
+        group.add(ring);
+    }
+
+    for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        const g = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(cx + radius * Math.cos(a), y0, cz + radius * Math.sin(a)),
+            new THREE.Vector3(cx + radius * Math.cos(a), y1, cz + radius * Math.sin(a)),
+        ]);
+        group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.22 })));
+    }
+
+    scene.add(group);
+    const label = addLabel('防护区', [cx, y1, cz], 'color:#ffb3b3;font-size:10px;font-weight:600;'
+        + 'background:rgba(0,0,0,0.65);padding:2px 8px;border-radius:10px;white-space:nowrap;');
+    scene.add(label);
+    zoneGroup = group;
+}
+
 function buildGrid() {
     // 主网格 — 清晰 5m 间距
     const gc = getGridColor();
@@ -132,6 +205,31 @@ function startLoop(orb, css) {
 // 轨迹渲染
 // ═══════════════════════════════════════════
 
+const RECON_COLOR = 0x4fc3f7;
+
+/** 综合轨迹（重建结果）: 青色管状体 + 柔和外发光，与"重建"视觉语言一致 */
+function buildReconTrail(points, radius = 0.1, opacity = 1) {
+    if (!points || points.length < 2) return null;
+    const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
+    const segs = Math.max(150, points.length * 5);
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(
+        new THREE.TubeGeometry(curve, segs, radius, 12, false),
+        new THREE.MeshStandardMaterial({
+            color: RECON_COLOR, emissive: RECON_COLOR, emissiveIntensity: 0.32,
+            roughness: 0.45, metalness: 0.05, transparent: opacity < 1, opacity,
+        }),
+    ));
+    group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(curve.getPoints(segs)),
+        new THREE.LineBasicMaterial({
+            color: RECON_COLOR, transparent: true, opacity: 0.25 * opacity,
+            blending: THREE.AdditiveBlending, depthWrite: false,
+        }),
+    ));
+    return group;
+}
+
 function buildTrailMesh(points, color) {
     if (!points || points.length < 2) return null;
     const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p[0], p[1], p[2])));
@@ -142,20 +240,21 @@ function buildTrailMesh(points, color) {
     // 外发光
     const gGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
     group.add(new THREE.Line(gGeo, new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false,
+        color, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false,
     })));
 
-    // 主线
+    // 主线（作为背景证据，弱化以突出综合重建轨迹）
     const lGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
-    group.add(new THREE.Line(lGeo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 })));
+    group.add(new THREE.Line(lGeo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45 })));
 
     return group;
 }
 
-function buildSpheres(points, color, size = 0.06, opacity = 1, timestamps = null) {
+function buildSpheres(points, color, size = 0.06, opacity = 1, timestamps = null, every = 1) {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.15, roughness: 0.3, transparent: opacity < 1, opacity });
     points.forEach((p, i) => {
+        if (every > 1 && i % every !== 0) return;
         const s = new THREE.Mesh(new THREE.SphereGeometry(size, 10, 10), mat);
         s.position.set(p[0], p[1], p[2]);
         s.castShadow = true;
@@ -186,35 +285,117 @@ function refreshAll() {
     for (const [id, data] of Object.entries(detectionMethods)) {
         if (!data.visible || !data.points || data.points.length < 2) continue;
 
-        const trail = buildTrailMesh(data.points, data.color);
-        const spheres = buildSpheres(data.points, data.color, 0.06, 1, data.timestamps);
+        const isRecon = id === 'synthetic';
+        const density = data.points.length > 120 ? 2 : 1;
+        const trail = isRecon ? buildReconTrail(data.points) : buildTrailMesh(data.points, data.color);
+        const spheres = buildSpheres(data.points, isRecon ? RECON_COLOR : data.color,
+                                     isRecon ? 0.07 : 0.03,
+                                     isRecon ? 1 : 0.40, data.timestamps,
+                                     isRecon ? Math.max(density, 2) : 4);
         const pts = data.points;
-        const startLab = addLabel('◉ 起点', pts[0], LABEL_CSS);
-        const endLab = addLabel('⚑ 终点', pts[pts.length-1], LABEL_CSS);
 
-        lines[id] = { trail, spheres, startLab, endLab };
+        lines[id] = { trail, spheres };
         if (trail) scene.add(trail);
         scene.add(spheres);
-        scene.add(startLab); scene.add(endLab);
+        if (isRecon) {   // 只给综合轨迹加起终点标签，避免多平台标签重叠
+            const startLab = addLabel('重建起点', pts[0], LABEL_CSS);
+            const endLab = addLabel('重建终点', pts[pts.length-1], LABEL_CSS);
+            lines[id].startLab = startLab;
+            lines[id].endLab = endLab;
+            scene.add(startLab); scene.add(endLab);
+        }
 
         // 预测线
         const pred = predictedTrajectories[id];
         if (pred?.points?.length >= 2) {
             const lastPt = data.points?.length ? data.points[data.points.length - 1] : null;
-            addPredLine(id, pred, data.color, lastPt);
+            addPredLine(id, pred, isRecon ? '#4fc3f7' : data.color, lastPt);
         }
+    }
+    renderReconSummary();
+}
+
+/** 左侧"综合重建"面板: 展示管线质量指标 */
+function renderReconSummary() {
+    const el = document.getElementById('reconSummary');
+    if (!el) return;
+    const syn = detectionMethods.synthetic;
+    const pipeline = syn && syn.pipeline;
+    if (!pipeline) {
+        el.innerHTML = '<span style="color:var(--text-tertiary);">尚无重建结果</span>';
+        return;
+    }
+    const rec = pipeline.reconstruction || {};
+    const fusion = pipeline.fusion || {};
+    const health = fusion.health || {};
+    const total = Object.keys(health).length;
+    const selected = (fusion.selected || []).length;
+    const excluded = fusion.excluded || [];
+    const row = (k, v) => '<div style="display:flex;justify-content:space-between;gap:8px;">'
+        + '<span>' + k + '</span>'
+        + '<b style="color:var(--text-primary);font-family:var(--mono);">' + v + '</b></div>';
+    el.innerHTML =
+        row('轨迹帧数', (syn.points || []).length + ' 帧') +
+        row('参与传感器', selected + ' / ' + total) +
+        (excluded.length ? row('已排除', excluded.join('、')) : '') +
+        row('融合不确定度', rec.mean_sigma != null ? Number(rec.mean_sigma).toFixed(2) + ' m' : '—') +
+        row('重建置信度', rec.mean_confidence != null ? Number(rec.mean_confidence).toFixed(2) : '—') +
+        row('补洞 / 剔除', (rec.n_filled || 0) + ' / ' + (rec.n_outliers || 0) + ' 帧');
+}
+
+async function rebuildSynthesis() {
+    const btn = document.getElementById('rebuildBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '重建中…';
+    try {
+        const payload = {
+            hz: Number(document.getElementById('reconHz')?.value) || undefined,
+            gate_m: Number(document.getElementById('reconGate')?.value) || undefined,
+            smooth_window: Number(document.getElementById('reconSmooth')?.value) || undefined,
+            max_gap_s: Number(document.getElementById('reconGap')?.value) || undefined,
+        };
+        const resp = await fetch('/api/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const r = await resp.json();
+        if (r.success) {
+            location.reload();
+        } else {
+            toast.error(r.error || '重建失败');
+        }
+    } catch (e) {
+        toast.error('重建请求失败');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = old;
     }
 }
 
 function addPredLine(id, pred, color, lastHistPt) {
+    // 预测段沿用该轨迹自身的视觉语言：
+    //   综合轨迹 → 更细、略透明的青色管（延续重建轨迹）；
+    //   单平台   → 同色实线 + 与历史点同尺寸的小球。
+    const isRecon = id === 'synthetic';
     const allPts = pred.points.map(p => new THREE.Vector3(p[0], p[1], p[2]));
-    const line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(allPts),
-        new THREE.LineDashedMaterial({ color, dashSize: 0.35, gapSize: 0.2, transparent: true, opacity: 0.55 })
-    );
-    line.computeLineDistances();
-    const grp = buildSpheres(pred.points, color, 0.04, 0.5, pred.times);
-    scene.add(line); scene.add(grp);
+
+    let line;
+    if (isRecon) {
+        line = buildReconTrail(pred.points, 0.055, 0.6);
+    } else {
+        line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(allPts),
+            new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 })
+        );
+    }
+
+    const grp = buildSpheres(pred.points, isRecon ? RECON_COLOR : color,
+                             isRecon ? 0.045 : 0.05, isRecon ? 0.6 : 0.75, pred.times, 1);
+    if (line) scene.add(line);
+    scene.add(grp);
     predLines[id] = { line, points: grp };
 }
 
@@ -306,6 +487,12 @@ function setPredVisible(v) {
 function animStep(ts) {
     for (const id in detectionMethods) {
         const data = detectionMethods[id], pred = predictedTrajectories[id];
+        if (!data.visible) {
+            // 平台被隐藏时，播放球也必须隐藏（否则隐藏轨迹上仍有目标点）
+            if (movingSpheres[id]) movingSpheres[id].visible = false;
+            if (predictedSpheres[id]) predictedSpheres[id].visible = false;
+            continue;
+        }
         if (data.points?.length && data.timestamps?.length && ts <= data.timestamps[data.timestamps.length-1]) {
             const pos = lerp(data.points, data.timestamps, ts);
             if (pos) { ensureMovingSphere(id, data.color, 0.18); movingSpheres[id].position.set(pos[0],pos[1],pos[2]); movingSpheres[id].visible = true; emitParticle(id, movingSpheres[id].position, data.color); }
@@ -461,6 +648,7 @@ window.toggleMethod = function(id) {
 function bindEvents() {
     document.getElementById('playBtn')?.addEventListener('click', togglePlay);
     document.getElementById('speedSelect')?.addEventListener('change', e => { animSpeed = parseFloat(e.target.value); });
+    document.getElementById('rebuildBtn')?.addEventListener('click', rebuildSynthesis);
     document.getElementById('timelineSlider')?.addEventListener('input', e => {
         if (animActive) pauseAnim();
         setPredVisible(false);

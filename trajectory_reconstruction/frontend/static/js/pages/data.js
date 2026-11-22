@@ -4,6 +4,7 @@
  * 低耦合：通过 API 与后端交互，刷新即同步
  */
 import { toast } from '../common/toast.js';
+import { icon } from '../common/icons.js';
 
 // ---- 拖拽上传 ----
 const dropZone = document.getElementById('dropZone');
@@ -22,7 +23,7 @@ if (dropZone) {
             dt.items.add(file);
             dataFile.files = dt.files;
             fileInfo.style.display = 'block';
-            fileInfo.innerHTML = `<span style="color:var(--green);">✓</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            fileInfo.innerHTML = `<span style="color:var(--green);">${icon('check')}</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
             document.getElementById('uploadBtn').disabled = false;
         }
     });
@@ -31,7 +32,7 @@ if (dropZone) {
         const file = dataFile.files[0];
         if (file) {
             fileInfo.style.display = 'block';
-            fileInfo.innerHTML = `<span style="color:var(--green);">✓</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+            fileInfo.innerHTML = `<span style="color:var(--green);">${icon('check')}</span> ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
             document.getElementById('uploadBtn').disabled = false;
         }
     });

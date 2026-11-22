@@ -179,10 +179,14 @@ def _ensure_synthetic_method():
         }
 
 
-def synthesize_trajectory() -> dict:
+def synthesize_trajectory(params: dict | None = None) -> dict:
     """
-    加权合成综合轨迹 — 合并所有启用的平台
-    权重从各平台的 detection_methods[].weight 读取
+    综合轨迹重建 — 多传感器时间同步 → 关联融合 → 三维重建。
+
+    这是"重建"能力在软件中的落点：不再把不同平台的位置直接加权平均
+    （那会在时间错位时产生锯齿、在目标不一致时产生虚假中间轨迹），
+    而是先对齐时间轴、按精度加权融合同一目标，再做异常点剔除/补洞/平滑。
+    传感器不足 2 路或管线异常时回退到加权平均。
     """
     active = {}
     for mid in ['visible', 'infrared', 'radar', 'self']:
@@ -195,13 +199,72 @@ def synthesize_trajectory() -> dict:
     if len(active) == 0:
         return {'success': False, 'error': '没有可用的平台'}
 
-    # 构建统一时间网格（以各平台最小时间步为分辨率，覆盖交集区间）
+    if len(active) >= 2:
+        rebuilt = _synthesize_by_reconstruction(list(active.keys()), params)
+        if rebuilt is not None:
+            return rebuilt
+
+    return _weighted_synthesis(active)
+
+
+def _synthesize_by_reconstruction(platforms: list, params: dict | None = None) -> dict | None:
+    """用同步+融合+重建管线生成综合轨迹；失败返回 None。"""
+    payload = {'scenario': 'live'}
+    for key in ('hz', 'gate_m', 'smooth_window', 'max_gap_s'):
+        if params and params.get(key) is not None:
+            payload[key] = params[key]
+    try:
+        from trajectory_reconstruction.services.sensor_service import run_pipeline
+        result = run_pipeline(payload)
+    except Exception as exc:      # noqa: BLE001 - 管线失败应回退而不是中断
+        print(f'[综合] 重建管线失败，回退加权平均: {exc}', flush=True)
+        return None
+
+    if not result or not result.get('success'):
+        return None
+    rec = result.get('reconstruction') or {}
+    times = rec.get('times') or []
+    points = rec.get('points') or []
+    pairs = [(t, p) for t, p in zip(times, points)
+             if p and len(p) == 3 and all(v is not None for v in p)]
+    if len(pairs) < 2:
+        return None
+
+    _ensure_synthetic_method()
+    pipeline = {
+        'mode': 'reconstruction',
+        'platforms': platforms,
+        'sync': result.get('sync') or {},
+        'fusion': {k: (result.get('fusion') or {}).get(k)
+                   for k in ('health', 'agreement', 'track_jumps', 'n_sensors',
+                             'selected', 'excluded')},
+        'reconstruction': result.get('reconstruction_metrics') or {},
+        'sensor_meta': result.get('sensor_meta') or {},
+    }
+    detection_methods['synthetic']['points'] = [list(p) for _, p in pairs]
+    detection_methods['synthetic']['timestamps'] = [float(t) for t, _ in pairs]
+    detection_methods['synthetic']['visible'] = True
+    detection_methods['synthetic']['pipeline'] = pipeline
+    save_metadata()
+
+    return {
+        'success': True,
+        'mode': 'reconstruction',
+        'point_count': len(pairs),
+        'platforms': platforms,
+        'sync': pipeline['sync'],
+        'fusion': pipeline['fusion'],
+        'reconstruction': pipeline['reconstruction'],
+    }
+
+
+def _weighted_synthesis(active: dict) -> dict:
+    """加权平均兜底：平台不足 2 路或重建管线不可用时使用。"""
     t_start = max(detection_methods[mid]['timestamps'][0] for mid in active)
     t_end = min(detection_methods[mid]['timestamps'][-1] for mid in active)
     if t_start >= t_end:
         return {'success': False, 'error': '平台时间范围无交集'}
 
-    # 取最细时间步作为网格分辨率，保证不丢失运动细节
     min_dt = min(
         min((ts[i + 1] - ts[i]) for i in range(len(ts) - 1) if ts[i + 1] > ts[i])
         for mid in active
@@ -213,7 +276,6 @@ def synthesize_trajectory() -> dict:
     sorted_ts = [round(t_start + i * (t_end - t_start) / (n_steps - 1), 6)
                  for i in range(n_steps)]
 
-    # 加权平均
     syn_points, syn_times = [], []
     for t in sorted_ts:
         wx, wy, wz, ws = 0.0, 0.0, 0.0, 0.0
@@ -231,7 +293,6 @@ def synthesize_trajectory() -> dict:
     if len(syn_points) < 2:
         return {'success': False, 'error': '合成失败：有效插值点不足'}
 
-    # 平滑（多平台融合才需要平滑，单平台直接使用原始点）
     if len(active) > 1:
         syn_points = smooth_points_3d(syn_points, passes=2)
 
@@ -239,10 +300,12 @@ def synthesize_trajectory() -> dict:
     detection_methods['synthetic']['points'] = syn_points
     detection_methods['synthetic']['timestamps'] = syn_times
     detection_methods['synthetic']['visible'] = True
+    detection_methods['synthetic'].pop('pipeline', None)
     save_metadata()
 
     return {
         'success': True,
+        'mode': 'weighted',
         'point_count': len(syn_points),
         'platforms': list(active.keys()),
         'weights': dict(active),

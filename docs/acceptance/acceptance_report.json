@@ -1,0 +1,94 @@
+{
+  "cases": [
+    {
+      "case": "runtime demo trajectory (visible.dat, held-out 1.2 s)",
+      "compared_steps": 6,
+      "per_step_error_m": [
+        0.0349,
+        0.16,
+        0.3843,
+        0.7601,
+        1.504,
+        2.5367
+      ],
+      "ade_m": 0.8967,
+      "fde_m": 2.5367,
+      "linear_ade_m": 1.1008,
+      "anchor_matches_history_end": true,
+      "times_monotonic": true,
+      "all_points_3d": true,
+      "first_pred": [
+        16.2071,
+        2.8684,
+        0.8311
+      ],
+      "gt_first": [
+        16.2,
+        2.835,
+        0.824
+      ],
+      "status": 200,
+      "label": "预测 10 点",
+      "slider_points": "10",
+      "rendered_points": 11,
+      "canvas": [
+        1440,
+        900
+      ],
+      "screenshot": "D:\\CodeWorks\\drone\\docs\\acceptance\\kinflow_predict_demo.png"
+    },
+    {
+      "case": "in-distribution test trajectory (traj_00000.npz, held-out 1.0 s)",
+      "compared_steps": 9,
+      "per_step_error_m": [
+        0.0525,
+        0.0843,
+        0.121,
+        0.1409,
+        0.1514,
+        0.1528,
+        0.1413,
+        0.12,
+        0.0908
+      ],
+      "ade_m": 0.1172,
+      "fde_m": 0.0908,
+      "linear_ade_m": 0.1615,
+      "anchor_matches_history_end": true,
+      "times_monotonic": true,
+      "all_points_3d": true,
+      "first_pred": [
+        17.7282,
+        17.2851,
+        -36.525
+      ],
+      "gt_first": [
+        17.7199,
+        17.2348,
+        -36.513
+      ],
+      "status": 200,
+      "label": "预测 10 点",
+      "slider_points": "10",
+      "rendered_points": 11,
+      "canvas": [
+        1440,
+        900
+      ],
+      "screenshot": "D:\\CodeWorks\\drone\\docs\\acceptance\\kinflow_predict_test_traj.png"
+    }
+  ],
+  "predict_all": {
+    "status": 200,
+    "success": true,
+    "platforms": [
+      "infrared",
+      "radar",
+      "self",
+      "synthetic",
+      "visible"
+    ],
+    "screenshot": "D:\\CodeWorks\\drone\\docs\\acceptance\\kinflow_predict_all.png"
+  },
+  "console_errors": []
+}

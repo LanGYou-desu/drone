@@ -52,10 +52,14 @@
 \code{core/config} & \code{config_manager.py} & 配置默认值、校验补全、原子写入 \\
 \code{core/io} & \code{data_loader.py} & .npz/.dat 读写、预测结果落盘、默认数据映射 \\
 \code{core/math_utils} & \code{math_utils.py} & 线性插值、速度外推、最近点均值、三点平滑、速度估计 \\
-\code{core/prediction} & \code{prediction.py}、\code{hybrid/} & 线性外推、混合模型加载与推理调度 \\
+\code{core/prediction} & \code{prediction.py}、\code{kinflow/} & KinFlow 加载/推理调度、长视界外推、线性兜底 \\
+\code{core/timesync} & \code{timesync.py} & 时钟偏置估计、主时间栅格、覆盖率与空档 \\
+\code{core/fusion} & \code{fusion.py} & 一致子集选择、关联门限、逆方差融合、健康度 \\
+\code{core/reconstruction} & \code{reconstruction.py} & 异常点剔除、空洞补全、加权平滑、逐点置信度 \\
+\code{core/risk} & \code{risk.py} & 六因子风险评估、时间线与分级建议 \\
 \code{core/ai} & \code{ai_service.py} & 提示词构建与 OpenAI 兼容接口调用 \\
 \code{core/state} & \code{state.py} & 全局平台字典、线程锁、AI 配置 \\
-\code{services} & \code{data_service.py} 等 & 数据初始化、合成、预测编排、快照备份 \\
+\code{services} & \code{data_service.py} 等 & 数据初始化、综合重建、预测编排、协同评估、快照备份 \\
 \code{views} & 5 个蓝图文件 & 页面渲染与 REST 接口 \\
 \code{frontend} & \code{pages/} 与 \code{static/js} & 页面模板与交互脚本 \\
 \bottomrule
@@ -233,7 +237,7 @@ p_j^{(m)}, & j=0 \text{ 或 } j=N-1\\[2pt]
 
 \begin{itemize}
   \item \term{轨迹曲线}：以轨迹点为控制点构造 \code{CatmullRomCurve3}，用 \code{TubeGeometry} 生成管状网格；再叠加一层半径更大、透明度更低、开启叠加混合（\code{AdditiveBlending}）的“外发光”网格，形成辉光效果。
-  \item \term{球体标记}：每个轨迹点对应一个球体，球体 \code{userData} 中保存所属平台的点数组、时间戳数组与索引，供拾取时读取；预测点使用虚线材质与半透明球体，视觉上与事实轨迹区分。
+  \item \term{球体标记}：每个轨迹点对应一个球体，球体 \code{userData} 中保存所属平台的点数组、时间戳数组与索引，供拾取时读取；预测段沿用轨迹自身风格：综合轨迹为更细的半透明青色管，单平台为同色实线与半透明球体。
   \item \term{拖尾粒子}：每平台 2000 个粒子，位置沿轨迹随机分布，透明度按个体寿命衰减，营造运动尾迹。
   \item \term{主题感知}：背景色、雾色、网格色、光照强度均从主题函数读取，切换深/浅色时重建场景对象，而非简单改颜色。
   \item \term{坐标拾取}：\code{Raycaster} 将鼠标位置转换为射线，与所有球体求交；命中后放大 2.5 倍并增强自发光，同时以 HTML 浮层显示 $x,y,z,t$ 四个数值。
@@ -352,7 +356,7 @@ memory/ & 内存中各平台点序列导出的 .npz，用于恢复“未落盘�
 
 \subsection{前端页面与脚本组织}
 
-模块前端包含 7 个页面，页面脚本按“一页一模块”组织，公共逻辑抽取为四个共享模块：
+模块前端包含 7 个页面（总览、预测、分析评估、AI 策略、数据、帮助、设置），页面脚本按“一页一模块”组织，公共逻辑抽取为共享模块：
 
 \begin{table}[H]
 \centering
@@ -363,16 +367,18 @@ memory/ & 内存中各平台点序列导出的 .npz，用于恢复“未落盘�
 \toprule
 文件 & 规模 & 职责 \\
 \midrule
-pages/dashboard.js & $\sim$500 行 & 总览页 3D 场景、轨迹、动画、平台切换 \\
-pages/predict.js & $\sim$500 行 & 预测页独立 3D 场景、预测渲染与动画 \\
+pages/dashboard.js & $\sim$700 行 & 总览页 3D 场景、综合重建面板、防护区、轨迹与动画 \\
+pages/predict.js & $\sim$600 行 & 预测页独立 3D 场景、预测渲染、长视界提示 \\
+pages/analysis.js & $\sim$380 行 & 分析评估页：图表、六因子评估、捕捉时机 \\
 pages/ai.js & $\sim$100 行 & AI 请求、结果持久化、报告保存 \\
 pages/data.js & $\sim$200 行 & 上传、备份列表、恢复、删除 \\
 common/three-utils.js & --- & 坐标轴、光照、星空、主题色 \\
 common/three-input.js & --- & WASD、悬停拾取、窗口自适应 \\
 common/toast.js & --- & 轻量通知 \\
 common/utils.js & --- & 线性插值等小工具 \\
+common/icons.js & --- & 自绘 SVG 图标 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-页面之间不共享全局变量，页面数据通过模板注入的 \code{window._PAGE_DATA_} 对象传递（包含平台数据、预测参数、相机速度、版本号）。AI 策略结果与页面状态使用 \code{sessionStorage} 暂存，避免切换页面后丢失。
+页面之间不共享全局变量，页面数据通过模板注入的 \code{window._PAGE_DATA_} 对象传递（包含平台数据、预测参数、协同配置、防护区与版本号）。AI 策略结果与页面状态使用 \code{sessionStorage} 暂存，避免切换页面后丢失。

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}数据分析 — 鹰眼长空{% endblock %}
-{% from "icons.html" import icon_chart %}
+{% block title %}分析评估 — 鹰眼长空{% endblock %}
+{% from "icons.html" import icon_chart, icon_warning, icon_lightning, icon_list, icon_search, icon_predict, icon_activity %}
 {% block extra_css %}
 <style>
     .chart-card {
@@ -15,23 +15,45 @@
         font-size: 0.82rem; font-weight: 600;
         color: var(--text-secondary); margin-bottom: 8px;
     }
-    .chart { height: 360px; width: 100%; }
+    .chart { height: 280px; width: 100%; }
     .chart-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
         gap: 16px;
+        margin-bottom: 16px;
     }
-    .legend-row {
-        display: flex; gap: 12px; flex-wrap: wrap;
-        margin-bottom: 20px;
-    }
+    .legend-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
     .legend-item {
         display: flex; align-items: center; gap: 8px;
-        padding: 5px 12px;
-        background: var(--bg-card);
-        border-radius: var(--radius-pill);
-        font-size: 0.82rem; font-weight: 500;
+        padding: 5px 12px; background: var(--bg-card);
+        border-radius: var(--radius-pill); font-size: 0.82rem; font-weight: 500;
         border: 1px solid var(--border-default);
+    }
+    .section-gap { margin-bottom: 16px; }
+
+    /* 最佳捕捉时机：三个候选横向并列 */
+    .capture-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+    }
+    .capture-item {
+        border: 1px solid var(--border-muted);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+    }
+    .capture-rank {
+        font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+        color: var(--text-tertiary); margin-bottom: 4px;
+    }
+    .capture-pos {
+        font-family: var(--mono); font-size: 0.8rem; font-weight: 600;
+        color: var(--text-primary); margin-bottom: 6px;
+    }
+    .capture-meta {
+        display: flex; gap: 12px; flex-wrap: wrap;
+        font-size: 0.72rem; color: var(--text-secondary);
     }
     @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 </style>
@@ -41,18 +63,102 @@
 
 <div class="page">
     <div class="page-header">
-        <h1>{{ icon_chart() }} 轨迹详细分析</h1>
-        <p>速度、加速度、曲率、高度 — 多维运动学指标</p>
+        <h1>{{ icon_chart() }} 轨迹分析与智能评估</h1>
+        <p>六因子风险分级与处置建议 · 最佳捕捉时机 · 运动学指标（共用同一条重建轨迹与预测）</p>
     </div>
 
     <div class="legend-row" id="legend"></div>
 
-    <!-- 最佳捕捉时机 -->
-    <div class="card" style="margin-bottom:16px;" id="captureCard">
-        <div class="card-header"><h3>最佳捕捉时机</h3></div>
-        <div id="captureResult" style="font-size:0.85rem;color:var(--text-secondary);">加载中...</div>
+    <!-- ① 评估结论 + 参数 -->
+    <div class="grid grid-2 section-gap">
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_activity() }} 风险总分</h3></div>
+            <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+                <div id="riskGauge" style="width:220px;height:180px;"></div>
+                <div style="flex:1;min-width:200px;">
+                    <div id="riskLevel" style="font-size:1.7rem;font-weight:700;color:var(--text-tertiary);">—</div>
+                    <div id="riskAdvice" style="font-size:0.8rem;color:var(--text-secondary);margin:4px 0 10px;"></div>
+                    <div id="riskSummary" style="font-size:0.78rem;line-height:1.6;color:var(--text-secondary);">等待评估…</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_warning() }} 评估参数 · 防护区</h3></div>
+            <div class="grid grid-2" style="gap:10px;">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">数据源</label>
+                    <select id="scenario" style="width:100%;padding:5px 8px;">
+                        <option value="live">实际平台数据</option>
+                        <option value="simulated">协同仿真（同一目标）</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">预测视界（秒）</label>
+                    <input type="number" id="horizon" value="2.0" min="0.2" max="10" step="0.2"
+                           style="width:100%;padding:5px 8px;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">防护区中心 X / Y / Z</label>
+                    <div style="display:flex;gap:5px;">
+                        <input type="number" id="zx" value="8" step="0.5" style="width:33%;padding:5px 6px;">
+                        <input type="number" id="zy" value="12" step="0.5" style="width:33%;padding:5px 6px;">
+                        <input type="number" id="zz" value="4" step="0.5" style="width:33%;padding:5px 6px;">
+                    </div>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">半径 / 高度上限（米）</label>
+                    <div style="display:flex;gap:5px;">
+                        <input type="number" id="radius" value="6" min="0.5" step="0.5" style="width:50%;padding:5px 6px;">
+                        <input type="number" id="ymax" value="25" min="1" step="1" style="width:50%;padding:5px 6px;">
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+                <button class="btn btn-primary" id="assessBtn" style="width:auto;margin:0;">
+                    {{ icon_lightning() }} 重新评估
+                </button>
+                <span id="assessStatus" style="font-size:0.72rem;color:var(--text-tertiary);">首次进入自动计算</span>
+            </div>
+        </div>
     </div>
 
+    <!-- ② 时间线 -->
+    <div class="card section-gap">
+        <div class="card-header"><h3>{{ icon_chart() }} 风险时间线</h3></div>
+        <div id="riskTimeline" style="height:240px;"></div>
+    </div>
+
+    <!-- ③ 因子 + 建议 -->
+    <div class="grid grid-2 section-gap">
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_list() }} 风险因子拆解</h3></div>
+            <div id="factorList" style="font-size:0.78rem;color:var(--text-secondary);">等待评估…</div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_lightning() }} 处置建议</h3></div>
+            <div id="recommendList" style="font-size:0.78rem;color:var(--text-secondary);">等待评估…</div>
+        </div>
+    </div>
+
+    <!-- ④ 证据 + 预测 -->
+    <div class="grid grid-2 section-gap">
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_search() }} 证据质量与传感器状态</h3></div>
+            <div id="evidenceBox" style="font-size:0.78rem;color:var(--text-secondary);">等待评估…</div>
+        </div>
+        <div class="card">
+            <div class="card-header"><h3>{{ icon_predict() }} 未来预测与关键事件</h3></div>
+            <div id="eventBox" style="font-size:0.78rem;color:var(--text-secondary);">等待评估…</div>
+        </div>
+    </div>
+
+    <!-- ⑤ 捕捉时机 -->
+    <div class="card section-gap">
+        <div class="card-header"><h3>{{ icon_lightning() }} 最佳捕捉时机</h3></div>
+        <div id="captureResult" style="font-size:0.8rem;color:var(--text-secondary);">加载中…</div>
+    </div>
+
+    <!-- ⑥ 运动学图表 -->
     <div class="chart-grid">
         <div class="chart-card">
             <h3>高度变化曲线</h3>
@@ -78,115 +184,11 @@
 {% block scripts %}
 <script src="/static/js/lib/echarts.min.js?v={{ app_version }}"></script>
 <script>
-    const methodsMeta = {{ methods_data | tojson }};
-    let allData = {};
-
-    async function load() {
-        const r = await (await fetch('/analysis/data')).json();
-        allData = r;
-        renderLegend();
-        renderAll();
-        loadCapture();
-    }
-
-    async function loadCapture() {
-        const el = document.getElementById('captureResult');
-        try {
-            const r = await (await fetch('/analysis/capture')).json();
-            if (!Array.isArray(r) || !r.length) {
-                el.innerHTML = '<span style="color:var(--text-tertiary);">请先在预测页面对综合轨迹进行预测</span>';
-                return;
-            }
-            const medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
-            el.innerHTML = r.map((v, i) => `
-                <div style="padding:8px 0;${i < r.length-1 ? 'border-bottom:1px solid var(--border-muted);' : ''}">
-                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
-                        <span style="font-weight:700;color:${medals[i]};">#${i+1}</span>
-                        <span>坐标 <b>(${v.position[0]}, ${v.position[1]}, ${v.position[2]})</b></span>
-                        <span>时间 <b>${v.time}s</b></span>
-                        <span style="color:var(--green);font-weight:600;">得分 ${v.score}</span>
-                    </div>
-                    <div style="display:flex;gap:16px;font-size:0.8rem;color:var(--text-secondary);padding-left:32px;">
-                        <span>高度 ${v.height}m</span>
-                        <span>速度 ${v.speed}m/s</span>
-                    </div>
-                </div>
-            `).join('');
-        } catch(e) {
-            el.innerHTML = '<span style="color:var(--red);">加载失败</span>';
-        }
-    }
-
-    const LEGEND_ORDER = ['visible', 'infrared', 'radar', 'self', 'synthetic'];
-    function renderLegend() {
-        const el = document.getElementById('legend');
-        const items = [];
-        // 按固定顺序
-        for (const mid of LEGEND_ORDER) {
-            if (allData[mid]) items.push([mid, allData[mid]]);
-        }
-        for (const [mid, info] of Object.entries(allData)) {
-            if (!LEGEND_ORDER.includes(mid)) items.push([mid, info]);
-        }
-        el.innerHTML = items.map(([id, info]) =>
-            `<div class="legend-item">
-                <span class="legend-dot" style="background:${info.color};color:${info.color};"></span>
-                ${info.name}
-            </div>`).join('');
-    }
-
-    function renderAll() {
-        const ids = Object.keys(allData);
-        if (!ids.length) return;
-
-        function makeSeries(field) {
-            return ids.map(id => {
-                const ts = allData[id].time_steps || [];
-                const vals = allData[id][field] || [];
-                const data = ts.map((t, i) => [t, vals[i]]).filter(p => p[1] != null);
-                return {
-                    name: allData[id].name, type: 'line', data,
-                    lineStyle: { color: allData[id].color, width: 2 },
-                    itemStyle: { color: allData[id].color },
-                    symbol: 'none', smooth: true,
-                };
-            });
-        }
-
-        const xAxis = { type: 'value', axisLabel: { color: '#8b949e', fontSize: 9 },
-                        axisLine: { lineStyle: { color: '#30363d' } },
-                        splitLine: { show: false } };
-        const tooltip = { trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d',
-                          textStyle: { color: '#e6edf3', fontSize: 12 },
-                          valueFormatter: v => v != null ? v.toFixed(2) : '-' };
-        const grid = { top: 12, bottom: 30, left: 8, right: 20, containLabel: true };
-        const init = id => echarts.init(document.getElementById(id));
-
-        init('heightChart').setOption({ tooltip, legend: { show: false }, grid, xAxis,
-            yAxis: { type: 'value', name: '高度 (m)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                     axisLabel: { color: '#8b949e', fontSize: 10 }, splitLine: { lineStyle: { color: '#21262d' } } },
-            series: makeSeries('heights') });
-        init('speedChart').setOption({ tooltip, legend: { show: false }, grid, xAxis,
-            yAxis: { type: 'value', name: '速度 (m/s)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                     axisLabel: { color: '#8b949e', fontSize: 10 }, splitLine: { lineStyle: { color: '#21262d' } } },
-            series: makeSeries('speeds') });
-        init('accelChart').setOption({ tooltip, legend: { show: false }, grid, xAxis,
-            yAxis: { type: 'value', name: '加速度 (m/s²)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                     axisLabel: { color: '#8b949e', fontSize: 10 }, splitLine: { lineStyle: { color: '#21262d' } } },
-            series: makeSeries('accelerations') });
-        init('curvatureChart').setOption({ tooltip, legend: { show: false }, grid, xAxis,
-            yAxis: { type: 'value', name: '曲率 (1/m)', nameTextStyle: { color: '#8b949e', fontSize: 10 },
-                     axisLabel: { color: '#8b949e', fontSize: 10 }, splitLine: { lineStyle: { color: '#21262d' } } },
-            series: makeSeries('curvatures') });
-    }
-
-    window.addEventListener('resize', () => {
-        ['heightChart','speedChart','accelChart','curvatureChart'].forEach(id => {
-            const inst = echarts.getInstanceByDom(document.getElementById(id));
-            if (inst) inst.resize();
-        });
-    });
-
-    load();
+    window._PAGE_DATA_ = {
+        methodsMeta: {{ methods_data | tojson }},
+        collab: {{ collab_config | tojson }},
+        zone: {{ zone | tojson }}
+    };
 </script>
+<script src="/static/js/pages/analysis.js?v={{ app_version }}"></script>
 {% endblock %}

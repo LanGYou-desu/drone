@@ -35,6 +35,7 @@ def predict():
         'success': True,
         'prediction': result['prediction'],
         'pred_times': result['pred_times'],
+        'confidence': result.get('confidence'),
     })
 
 

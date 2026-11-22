@@ -1,11 +1,13 @@
 """
-轨迹预测算法
+轨迹预测入口
 
 提供两种预测方法:
-  1. generate_prediction (线性外推)  — 简单快速，始终可用
-  2. generate_prediction_hybrid     — Phy-ODE-Diffusion 模型，高精度物理约束预测
+  1. generate_linear_prediction  — 匀速线性外推，简单快速，始终可用（兜底）
+  2. generate_kinflow_prediction — KinFlow 模型，物理约束并行非自回归预测
 
-预测入口函数根据模型是否加载自动选择方法。
+KinFlow（学习式运动学先验 + 并行非自回归细化）:
+  连续时间编码器 → 运动学走廊先验 → 走廊初始化流匹配 → 可微物理投影器。
+权重缺失、模型被禁用或推理异常时，自动回退到线性外推。
 """
 
 import os
@@ -17,172 +19,164 @@ from trajectory_reconstruction.core.config.config_manager import _PROJECT_ROOT
 
 # ── 模型缓存 ──────────────────────────────────────────
 
-_model_cache: Optional["PhyODEDiffusion"] = None
+_model_cache: Optional["KinFlow"] = None
 _model_device: str = "cpu"
+_model_path: str = ""
+
+# 可由 config.json → kinflow_model 覆盖的构造参数
+_OVERRIDABLE_KEYS = (
+    "v_h_max", "v_up_max", "v_down_max", "y_min", "y_max",
+    "max_tilt", "g", "n_euler_steps", "sigma", "project",
+)
 
 
-def _get_model_path() -> str:
-    """返回最新/最佳模型权重路径，优先查找: best/ > models/hybrid_predictor/ > train_result/best/"""
-    # 1. 训练统一管理目录 train_result/best/
-    best_central = os.path.join(_PROJECT_ROOT, "train", "hybrid_predictor", "train_result", "best")
+def _find_kinflow_weights() -> str:
+    """
+    查找可用的 KinFlow 权重，优先级:
+      1. train/kinflow_predictor/train_result/best/kinflow_best_s2|s1.pt
+      2. models/kinflow/kinflow_best_s*.pt
+      3. models/kinflow/kinflow_s*_v{loss}.pt（按 loss 升序取最优）
+      4. models/kinflow/kinflow.pt（兼容手写文件名）
+    """
+    best_central = os.path.join(_PROJECT_ROOT, "train", "kinflow_predictor", "train_result", "best")
     if os.path.isdir(best_central):
-        best_files = sorted(
-            [f for f in os.listdir(best_central) if f.startswith("phy_ode_diffusion_best")],
-            reverse=True,
-        )
-        if best_files:
-            return os.path.join(best_central, best_files[0])
+        for stage in (2, 1):
+            candidate = os.path.join(best_central, f"kinflow_best_s{stage}.pt")
+            if os.path.isfile(candidate):
+                return candidate
 
-    # 2. 推理目录 models/hybrid_predictor/
-    model_dir = os.path.join(_PROJECT_ROOT, "models", "hybrid_predictor")
+    model_dir = os.path.join(_PROJECT_ROOT, "models", "kinflow")
     if os.path.isdir(model_dir):
-        best_files = sorted(
-            [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_best")],
-            reverse=True,
-        )
-        if best_files:
-            return os.path.join(model_dir, best_files[0])
+        for stage in (2, 1):
+            candidate = os.path.join(model_dir, f"kinflow_best_s{stage}.pt")
+            if os.path.isfile(candidate):
+                return candidate
 
-        # 次选带描述的检查点，按 loss 升序取最优
-        all_files = [f for f in os.listdir(model_dir) if f.startswith("phy_ode_diffusion_s")]
-        if all_files:
-            def _parse_loss(fname: str) -> float:
+        checkpoints = [f for f in os.listdir(model_dir)
+                       if f.startswith("kinflow_s") and f.endswith(".pt")]
+        if checkpoints:
+            def _loss_of(fname: str) -> float:
                 try:
-                    return float(fname.rsplit('_v', 1)[-1].rstrip('.pt'))
+                    return float(fname.rsplit("_v", 1)[-1].rstrip(".pt"))
                 except (ValueError, IndexError):
-                    return float('inf')
-            all_files.sort(key=_parse_loss)
-            return os.path.join(model_dir, all_files[0])
+                    return float("inf")
+            checkpoints.sort(key=_loss_of)
+            return os.path.join(model_dir, checkpoints[0])
 
-    # 3. 回退到旧命名
-    return os.path.join(model_dir, "phy_ode_diffusion.pt")
+        plain = os.path.join(model_dir, "kinflow.pt")
+        if os.path.isfile(plain):
+            return plain
+
+    return os.path.join(model_dir, "kinflow.pt")
 
 
-def _get_hybrid_config() -> dict:
-    """从 config.json 读取混合模型配置，缺失字段用默认值填充"""
+def _get_kinflow_config() -> dict:
+    """读取 config.json → kinflow_model（失败时返回空字典）。"""
     try:
         from trajectory_reconstruction.core.config.config_manager import ensure_config
-        cfg = ensure_config()
-        return cfg.get("hybrid_model", {})
+        return ensure_config().get("kinflow_model", {})
     except Exception:
         return {}
 
 
-def load_hybrid_model(device: str = None) -> Optional["PhyODEDiffusion"]:
+def load_kinflow_model(device: str = None) -> Optional["KinFlow"]:
     """
-    加载 Phy-ODE-Diffusion 模型（含缓存）。
+    加载 KinFlow 模型（含进程内缓存）。
 
-    从 config.json → hybrid_model 读取配置参数。
-    若权重文件不存在，返回 None。
+    架构参数从检查点的 model_info 读取，物理边界/采样步数/设备可被
+    config.json → kinflow_model 覆盖。权重不存在或禁用时返回 None。
 
     Args:
-        device: 推理设备，None 则从 config.json 读取
+        device: 推理设备，None 则读 config.json
     """
-    global _model_cache, _model_device
+    global _model_cache, _model_device, _model_path
 
-    model_path = _get_model_path()
-    if not os.path.isfile(model_path):
-        print(f"[预测] 混合模型权重不存在: {model_path}，回退到线性外推")
+    path = _find_kinflow_weights()
+    if not os.path.isfile(path):
+        print(f"[预测] KinFlow 权重不存在: {path}，回退到线性外推", flush=True)
         return None
 
-    # 从 config.json 读取配置
-    h_cfg = _get_hybrid_config()
+    cfg = _get_kinflow_config()
+    if not cfg.get("enabled", True):
+        print("[预测] KinFlow 已禁用 (kinflow_model.enabled=false)，回退到线性外推", flush=True)
+        return None
+
     if device is None:
-        device = h_cfg.get("device", "cpu")
-    if not h_cfg.get("enabled", True):
-        print("[预测] 混合模型已禁用 (hybrid_model.enabled=false)，回退到线性外推")
-        return None
-
-    # 设备回退
-    if device.startswith("cuda") and not torch.cuda.is_available():
-        print(f"[预测] CUDA 不可用，回退到 CPU")
+        device = cfg.get("device", "cpu")
+    if str(device).startswith("cuda") and not torch.cuda.is_available():
+        print("[预测] CUDA 不可用，KinFlow 回退到 CPU")
         device = "cpu"
 
-    if _model_cache is not None and _model_device == device:
+    if _model_cache is not None and _model_device == device and _model_path == path:
         return _model_cache
 
     try:
-        from trajectory_reconstruction.core.prediction.hybrid import PhyODEDiffusion
+        from trajectory_reconstruction.core.prediction.kinflow import KinFlow
 
         device_obj = torch.device(device)
-        ckpt = torch.load(model_path, map_location=device_obj, weights_only=True)
+        ckpt = torch.load(path, map_location=device_obj, weights_only=False)
+        info = ckpt.get("model_info", {}) or {}
 
-        # 读取四旋翼动力学参数
-        try:
-            from trajectory_reconstruction.core.config.config_manager import ensure_config
-            dyn_cfg = ensure_config().get("drone_dynamics", {})
-        except Exception:
-            dyn_cfg = {}
+        # 架构参数: 检查点优先，缺失用模型默认值
+        # 架构参数必须与训练时完全一致：尤其 ctx_len / sample_dt 决定推理时历史
+        # 重采样窗口，漏传会让模型用更短的历史（尺度与训练不符）导致预测退化。
+        arch = {k: info[k] for k in (
+            "d_feat", "d_context", "n_head", "n_layers", "dim_feedforward", "dropout",
+            "corridor_hidden", "d_z", "flow_hidden", "flow_hidden_layers",
+            "tau_emb_dim", "time_emb_dim", "k_max", "n_project_iters",
+            "ctx_len", "sample_dt", "max_native_steps",
+        ) if k in info}
 
-        # 从检查点读取架构参数（兜底为默认值）
-        mc = ckpt.get("model_info", {})
-        model = PhyODEDiffusion(
-            # 架构参数：优先使用检查点中保存的值
-            d_feat=mc.get("d_feat", 64),
-            d_context=mc.get("d_context", 128),
-            n_head=mc.get("n_head", 4),
-            n_layers=mc.get("n_layers", 3),
-            dim_feedforward=mc.get("dim_feedforward", 256),
-            dropout=mc.get("dropout", 0.1),
-            d_z=mc.get("d_z", 32),
-            ode_hidden_dim=mc.get("ode_hidden_dim", 64),
-            obs_hidden_dim=mc.get("obs_hidden_dim", 32),
-            n_diffusion_steps=mc.get("n_diffusion_steps", 500),
-            tau_emb_dim=mc.get("tau_emb_dim", 16),
-            dt_emb_dim=mc.get("dt_emb_dim", 16),
-            diff_hidden_dim=mc.get("diff_hidden_dim", 128),
-            # 物理约束参数：推理时可覆盖（config.json → hybrid_model 优先）
-            v_max=h_cfg.get("v_max", mc.get("v_max", dyn_cfg.get("v_h_max", 30.0))),
-            a_max=h_cfg.get("a_max", mc.get("a_max", 30.0)),
-            z_min=h_cfg.get("z_min", mc.get("z_min", dyn_cfg.get("min_alt", 0.0))),
-            z_max=h_cfg.get("z_max", mc.get("z_max", dyn_cfg.get("max_alt", 120.0))),
-            v_v_up=h_cfg.get("v_v_up", mc.get("v_v_up", dyn_cfg.get("v_v_up", 5.0))),
-            v_v_down=h_cfg.get("v_v_down", mc.get("v_v_down", dyn_cfg.get("v_v_down", 3.0))),
-            max_tilt=h_cfg.get("max_tilt", mc.get("max_tilt", dyn_cfg.get("max_tilt", 35.0))),
-            g=h_cfg.get("g", mc.get("g", dyn_cfg.get("g", 9.81))),
-            guidance_eta=h_cfg.get("guidance_eta", mc.get("guidance_eta", 0.1)),
-            n_inference_steps=h_cfg.get("inference_steps", mc.get("n_inference_steps", 50)),
-        )
+        # 物理/采样参数: config.json 优先
+        runtime = {}
+        for key in _OVERRIDABLE_KEYS:
+            if key in cfg:
+                runtime[key] = cfg[key]
+        for key in _OVERRIDABLE_KEYS:
+            if key not in runtime and key in info:
+                runtime[key] = info[key]
+
+        model = KinFlow(**arch, **runtime)
         model.load_state_dict(ckpt["model_state_dict"])
         model.to(device_obj)
         model.eval()
-        model.diffusion.scheduler.to(device_obj)
 
         _model_cache = model
         _model_device = device
-        print(f"[预测] 已加载混合模型: {model_path} "
-              f"({model.get_model_info()['total_params']:,} 参数, "
-              f"device={device}, v_max={model.v_max})")
+        _model_path = path
+        n_params = sum(p.numel() for p in model.parameters())
+        print(f"[预测] 已加载 KinFlow: {path} ({n_params:,} 参数, device={device}, "
+              f"euler={model.n_euler_steps}, v_h_max={model.bounds.v_h_max})", flush=True)
         return model
 
     except ImportError:
-        print("[预测] hybrid 模块不可用，回退到线性外推")
+        print("[预测] kinflow 模块不可用，回退到线性外推")
         return None
-    except Exception as e:
-        print(f"[预测] 模型加载失败: {e}，回退到线性外推")
+    except Exception as exc:
+        print(f"[预测] KinFlow 加载失败: {exc}，回退到线性外推", flush=True)
         return None
 
 
-# ── 线性外推（保留）──────────────────────────────────
+# ── 线性外推（兜底）──────────────────────────────────
 
-def generate_prediction(
+def generate_linear_prediction(
     points: list[list[float]],
     timestamps: list[float],
     num_points: int = 5,
     time_step: float = 0.5,
 ) -> tuple[list[list[float]], list[float]]:
     """
-    基于最后两点线性外推，生成未来轨迹预测点（兜底方案）。
+    基于最后两点的匀速外推（兜底方案）。
 
     Args:
         points:     历史轨迹点 [[x, y, z], ...]，至少 2 个点
-        timestamps: 各点时间戳 [t, ...]，长度需与 points 一致
+        timestamps: 各点时间戳 [t, ...]，长度与 points 一致
         num_points: 预测点数
         time_step:  预测点之间的时间间隔（秒）
 
     Returns:
-        pred_points: 预测坐标 [[x, y, z], ...]
-        pred_times:  对应时间戳 [t, ...]
+        pred_points: 预测坐标 [[x, y, z], ...]（含锚点，共 num_points+1 个）
+        pred_times:  对应时间戳
     """
     if len(points) < 2:
         return [], []
@@ -215,57 +209,82 @@ def generate_prediction(
     return pred_points, pred_times
 
 
-# ── 混合模型预测 ─────────────────────────────────────
+# ── KinFlow 预测 ─────────────────────────────────────
 
-def generate_prediction_hybrid(
+def generate_kinflow_prediction_with_confidence(
     points: list[list[float]],
     timestamps: list[float],
     num_points: int = 5,
     time_step: float = 0.5,
     device: str = "cpu",
+    sigma: float = None,
+    n_samples: int = 1,
+) -> tuple[list[list[float]], list[float], list[float]]:
+    """
+    与 generate_kinflow_prediction 相同，但额外返回逐点置信度。
+
+    视界 ≤ 模型可靠视界（k_max × sample_dt，默认 2 s）内为 1.0；
+    更长片段由运动模型外推，置信度随时间衰减（最低 0.15）。
+    """
+    model = load_kinflow_model(device)
+    if model is None or len(points) < 5:
+        pts, ts = generate_linear_prediction(points, timestamps, num_points, time_step)
+        return pts, ts, [1.0] * len(pts)
+    try:
+        return model.predict_with_confidence(
+            timestamps=timestamps, positions=points, num_points=num_points,
+            time_step=time_step, device=device, sigma=sigma, n_samples=n_samples,
+        )
+    except Exception as exc:
+        print(f"[预测] KinFlow 推理失败: {exc}，回退到线性外推")
+        pts, ts = generate_linear_prediction(points, timestamps, num_points, time_step)
+        return pts, ts, [1.0] * len(pts)
+
+
+def generate_kinflow_prediction(
+    points: list[list[float]],
+    timestamps: list[float],
+    num_points: int = 5,
+    time_step: float = 0.5,
+    device: str = "cpu",
+    sigma: float = None,
+    n_samples: int = 1,
 ) -> tuple[list[list[float]], list[float]]:
     """
-    使用 Phy-ODE-Diffusion 模型进行轨迹预测。
-
-    自动加载已训练的模型权重（从 models/hybrid_predictor/phy_ode_diffusion.pt）。
-    若模型不可用，自动回退到线性外推。
+    使用 KinFlow 做并行（非自回归）轨迹预测。
 
     Args:
-        points:     历史轨迹点 [[x, y, z], ...]，至少 5 个点（模型需要足够上下文）
+        points:     历史轨迹点 [[x, y, z], ...]，建议 ≥ 5
         timestamps: 各点时间戳 [t, ...]
         num_points: 预测点数
-        time_step:  预测时间步长（秒）
+        time_step:  未来相邻预测点时间间隔（秒）
         device:     推理设备 ("cpu" / "cuda:0")
+        sigma:      起点噪声（0/None = 确定性均值预测，>0 = 单峰概率采样）
+        n_samples:  概率样本数（取第一条返回）
 
     Returns:
-        pred_points: 预测坐标 [[x, y, z], ...]
-        pred_times:  对应时间戳 [t, ...]
+        pred_points: 预测坐标（含锚点，共 num_points+1 个）
+        pred_times:  对应时间戳
     """
-    model = load_hybrid_model(device)
-
-    if model is None:
-        # 回退到线性外推
-        return generate_prediction(points, timestamps, num_points, time_step)
-
-    # 至少需要 10 个点才能得到有意义的 Transformer 编码
-    if len(points) < 10:
-        print("[预测] 历史点不足 (< 10)，回退到线性外推")
-        return generate_prediction(points, timestamps, num_points, time_step)
-
-    try:
-        pred_positions, pred_times = model.predict(
-            timestamps=timestamps,
-            positions=points,
-            num_points=num_points,
-            time_step=time_step,
-            device=device,
-        )
-        return pred_positions, pred_times
-    except Exception as e:
-        print(f"[预测] 混合模型推理失败: {e}，回退到线性外推")
-        return generate_prediction(points, timestamps, num_points, time_step)
+    if len(points) < 5:
+        print("[预测] 历史点不足 (< 5)，回退到线性外推")
+        return generate_linear_prediction(points, timestamps, num_points, time_step)
+    pts, ts, _ = generate_kinflow_prediction_with_confidence(
+        points, timestamps, num_points=num_points, time_step=time_step,
+        device=device, sigma=sigma, n_samples=n_samples,
+    )
+    return pts, ts
 
 
-def is_hybrid_model_available() -> bool:
-    """检查混合模型权重文件是否存在"""
-    return os.path.isfile(_get_model_path())
+def is_kinflow_model_available() -> bool:
+    """检查是否存在可用的 KinFlow 权重文件。"""
+    return os.path.isfile(_find_kinflow_weights())
+
+
+__all__ = [
+    "load_kinflow_model",
+    "generate_linear_prediction",
+    "generate_kinflow_prediction",
+    "generate_kinflow_prediction_with_confidence",
+    "is_kinflow_model_available",
+]

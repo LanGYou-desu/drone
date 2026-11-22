@@ -126,36 +126,50 @@ drone/
 │   │   ├── io/
 │   │   │   └── data_loader.py           # .dat 文件 I/O（读写、默认加载）
 │   │   ├── prediction/
-│   │   │   └── prediction.py            # 线性外推预测算法
-│   │   │   └── math_utils.py             # 三维轨迹插值/平滑工具
+│   │   │   ├── prediction.py            # 预测入口（KinFlow + 线性外推回退）
+│   │   │   └── kinflow/                 # KinFlow 模型
+│   │   │       ├── encoder.py           #   连续时间上下文编码器
+│   │   │       ├── corridor.py          #   运动学走廊先验
+│   │   │       ├── flow.py              #   走廊初始化流匹配
+│   │   │       ├── projector.py         #   可微物理投影器
+│   │   │       └── model.py             #   顶层模型 + 长视界分段预测
+│   │   ├── timesync.py                  # 时间步同步（偏置估计 + 主栅格）
+│   │   ├── fusion.py                    # 一致子集 + 关联 + 逆方差融合
+│   │   ├── reconstruction.py            # 剔除/补洞/平滑/置信度
+│   │   ├── risk.py                      # 六因子风险评估
+│   │   ├── sensor_sim.py                # 同目标多传感器仿真
+│   │   ├── math_utils.py                # 三维轨迹插值/平滑工具
 │   │   └── ai/
 │   │       └── ai_service.py            # 大模型 API 调用
 │   │
 │   ├── services/                        # ---- 业务编排层 ----
-│   │   ├── data_service.py              # 数据加载/刷新/合成/清理
-│   │   ├── predict_service.py           # 预测编排 + 综合预测合成
+│   │   ├── data_service.py              # 数据加载/刷新/综合重建/清理
+│   │   ├── predict_service.py           # 预测编排 + 综合预测
+│   │   ├── sensor_service.py            # 同步→融合→重建→评估 + 参数持久化
 │   │   └── backup_service.py            # 快照备份/列表/恢复/删除
 │   │
 │   ├── views/                           # ---- HTTP 视图层 ----
 │   │   ├── __init__.py                  # 蓝图注册 + 错误处理
-│   │   ├── main.py                      # 页面路由 (/, /predict, /ai, /data, /docs, /settings)
-│   │   ├── api.py                       # 数据 & 备份 API + 平台切换 + 合成
+│   │   ├── main.py                      # 页面路由 (/, /predict, /analysis/, /ai, /data, /docs, /settings)
+│   │   ├── api.py                       # 数据 & 备份 API + 平台切换 + 综合重建
 │   │   ├── api_predict.py               # 预测 & AI API
+│   │   ├── api_sensor.py                # 协同重建 / 评估 / 传感器状态 API
 │   │   ├── api_report.py                # 报告保存 API
 │   │   └── analysis.py                  # 分析数据 + 捕捉时机 API
 │   │
 │   └── frontend/                        # ---- 前端资源（模块专属）----
 │       └── pages/                       # 7 个页面模板
-│           ├── index.html               # 总览（全屏 3D）
-│           ├── predict.html             # 预测
-│           ├── analysis.html            # 分析（ECharts + 捕捉时机卡片）
+│           ├── index.html               # 总览（3D + 综合重建面板 + 防护区）
+│           ├── predict.html             # 预测（联动综合轨迹）
+│           ├── analysis.html            # 分析评估（图表 + 六因子风险 + 捕捉时机）
 │           ├── ai.html                  # AI 策略
 │           ├── data.html                # 数据管理
 │           ├── docs.html                # 帮助文档
 │           └── settings.html            # 设置（主题切换）
 │       └── static/js/pages/             # 页面 JS 模块
-│           ├── dashboard.js             # 3D 场景/轨迹/动画
+│           ├── dashboard.js             # 3D 场景/轨迹/重建面板/防护区/动画
 │           ├── predict.js               # 预测 + 预览/动画
+│           ├── analysis.js              # 图表 + 评估 + 捕捉时机
 │           ├── ai.js                    # AI 策略交互
 │           └── data.js                  # 备份管理
 │
@@ -322,30 +336,25 @@ AI_API_KEY, AI_URL, AI_MODEL  # 从 config.json ai 字段读取
 
 ## 8. 轨迹合成引擎
 
-### 8.1 文件：`services/data_service.py` → `synthesize_trajectory()`
+### 8.1 文件：`services/data_service.py` → `synthesize_trajectory(params)`
 
-**算法流程：**
+**算法流程（管线优先，失败回退）：**
 
 ```
-1. 收集活跃平台及其权重
-   for mid in ['visible', 'infrared', 'radar', 'self']:
-       if 有数据且 weight > 0: active[mid] = weight
-
-2. 构建统一时间轴
-   收集所有活跃平台的时间戳 → set 去重 → sorted 排序
-
-3. 逐时间点加权平均
-   for t in sorted_ts:
-       for mid in active:
-           p = _interpolate(mid, t) or _nearest_avg(mid, t)
-           weighted_sum += p * weight
-       if weight_sum > 0: syn_points.append(weighted_sum / weight_sum)
-
-4. 平滑处理（仅多平台融合时执行，单平台跳过）
-   调用 smooth_points_3d(syn_points, passes=2)
-
-5. 更新 detection_methods['synthetic']
+1. 收集活跃平台（enabled 且有 >=2 点、weight > 0）
+2. 平台 >= 2 路时调用 sensor_service.run_pipeline({'scenario':'live', ...params})
+     timesync → 一致子集关联(fusion) → 逆方差融合 → 三维重建
+   成功则写入 detection_methods['synthetic']：
+     points / timestamps / pipeline{sync, fusion, reconstruction, sensor_meta}
+3. 管线不可用或平台不足 → _weighted_synthesis() 兜底：
+     统一时间轴 + 逐时刻加权平均 + smooth_points_3d
+   此时 synthetic 不携带 pipeline 指标（mode='weighted'）
+4. 重建参数（hz / gate_m / smooth_window / max_gap_s）由 API 透传，
+   成功后写回 config.json（update_collab_params）
 ```
+
+> 一致子集选择：融合前先算传感器两两中位距离，超过关联门限的判为不同目标并排除，
+> 只融合互相一致的最大连通子集，避免综合轨迹在多个目标间来回跳。
 
 **插值函数 `lerp_3d(pts, ts, t)`（`core/math_utils.py`）：**
 - 二分查找时间戳区间
@@ -366,33 +375,39 @@ AI_API_KEY, AI_URL, AI_MODEL  # 从 config.json ai 字段读取
 
 ## 9. 预测引擎
 
-### 9.1 核心算法：`core/prediction/prediction.py`
+### 9.1 入口：`core/prediction/prediction.py`
 
-```python
-def generate_prediction(points, timestamps, num_points=5, time_step=0.5):
-    last, prev = points[-1], points[-2]
-    dt = timestamps[-1] - timestamps[-2]
-    v = (last - prev) / dt          # 速度向量
-    pred[0] = last                   # 首点 = 历史末点（保证连接）
-    for i in 1..num_points:
-        pred[i] = last + v * i * time_step
-    return pred_points, pred_times  # 共 num_points + 1 个点
+| 函数 | 说明 |
+|------|------|
+| `load_kinflow_model(device)` | 读取检查点 → 用 `model_info` 的架构参数重建模型（**必须包含 ctx_len/sample_dt/k_max**） |
+| `generate_kinflow_prediction(points, ts, n, dt)` | 调 `KinFlow.predict`，失败/无权重回退线性外推 |
+| `generate_kinflow_prediction_with_confidence(...)` | 同上，额外返回逐点置信度 |
+| `generate_linear_prediction(points, ts, n, dt)` | 末速度线性外推（兜底） |
+
+### 9.2 KinFlow 推理（`core/prediction/kinflow/model.py`）
+
+```text
+历史重采样为 40 点 / 3.9 s（ctx_len × sample_dt）
+  → 编码器 + 走廊先验，在原生栅格 20 × 0.1 s（2 s）上并行生成
+  → 视界 > 2 s 时，末段用"常转率 + 恒定速度"运动模型外推
+     （转率 6 s 指数衰减，置信度 exp(-(t-2)/8) 衰减）
+  → 全段物理投影（速度/垂直速率/高度硬约束）
 ```
 
-**数学本质：** 常数速度线性外推，假设最近的运动趋势不变。
+- 视界 ≤ 2 s：直接在请求时间戳上生成（3~60 点、0.05~5 s 步长）；
+- 视界 > 2 s：前 2 s 模型，其后运动模型外推；返回 `confidence` 供界面提示；
+- 超过 `max_native_steps` 时先均匀取内部栅格再插值回请求时间戳。
 
-### 9.2 编排服务：`services/predict_service.py`
+### 9.3 编排服务：`services/predict_service.py`
 
 | 函数 | 实现 |
 |------|------|
-| `predict_single(mid, n, ts)` | 从 detection_methods 取历史点 → generate_prediction → save_predict_data |
-| `predict_all(n, ts)` | 遍历所有可见平台调用 predict_single → 合成综合预测 → save_predict_data('synthetic') |
-| `clamp_params(n, ts)` | 将 num_points 限制在 [min, max]，time_step 填充默认值 |
+| `predict_single(mid, n, ts)` | 取历史点 → KinFlow（或线性）→ `save_predict_data`（单平台预测也落盘，供分析/捕捉时机使用） |
+| `predict_all(n, ts)` | 各平台预测并按统一时间轴对齐；综合轨迹优先直接预测重建后的 synthetic，失败才回退加权合成 |
+| `clamp_params(n, ts)` | 将 num_points 限制在 [min_points, max_points]，time_step 填充默认值 |
 
-**综合预测合成 `_synthesize_predictions()`：**
-- 与 `synthesize_trajectory()` 算法完全一致
-- 区别：输入为各平台的预测结果（而非历史数据）
-- 包含相同的插值 + 兜底 + 平滑流程
+**综合预测：** 若 synthetic 有点（重建结果），直接对综合轨迹做预测；否则按旧逻辑
+用各平台预测加权合成。
 
 ---
 
@@ -482,16 +497,17 @@ data/backup/20260630_143052_manual/
 | `three-input.js` | `bindWASD`, `bindCoordTooltip`, `bindResize` | 键盘控制 + 鼠标悬停 + 窗口适配 |
 | `toast.js` | `toast.show/error/success/warning` | 轻量通知 |
 | `utils.js` | `lerp` | 线性插值 |
+| `icons.js` | `icon(name)` | 自绘 SVG 图标（无 emoji） |
 
 **页面模块：**
 
-| 文件 | 行数 | 功能 |
-|------|------|------|
-| `dashboard.js` | ~500 | 3D 场景初始化、轨迹渲染、时间轴动画、平台切换、鼠标拾取 |
-| `predict.js` | ~500 | 独立 3D 场景、预测渲染、动画播放 |
-| `ai.js` | ~100 | AI 请求 + sessionStorage 持久化 + 报告保存 |
-| `data.js` | ~200 | 上传/备份列表/恢复/删除/更新 |
-| `analysis.html` (内嵌 JS) | ~150 | ECharts 图表渲染 + 捕捉时机卡片 |
+| 文件 | 功能 |
+|------|------|
+| `dashboard.js` | 3D 场景初始化、综合重建面板、防护区、轨迹渲染、时间轴动画、平台切换 |
+| `predict.js` | 独立 3D 场景、预测渲染（与轨迹同风格）、长视界提示/置信度 |
+| `analysis.js` | ECharts 图表、六因子评估、时间线、捕捉时机卡片 |
+| `ai.js` | AI 请求 + sessionStorage 持久化 + 报告保存 |
+| `data.js` | 上传/备份列表/恢复/删除/更新 |
 
 ---
 
@@ -572,18 +588,22 @@ mousemove → raycaster.setFromCamera
 2. 拼接原始点 + 预测点（跳过重复首点，用时间戳判断）
 3. 调用 `_compute_metrics(points, timestamps)` 统一计算
 
-**_compute_metrics 算法：**
-- **速度：** `sqrt(dx² + dz²) / dt`（仅水平速度）
-- **加速度：** `speed[i] - speed[i-1]`（相邻速度差）
-- **曲率：** 三点法 `|d1 × d2| / |d1|³`
+**_compute_metrics 算法（先平滑再差分）：**
+- **速度：** 5 点滑动平均后的 `sqrt(dx² + dz²) / dt`（仅水平速度）
+- **加速度：** `(speed[i] - speed[i-1]) / dt`（m/s²）
+- **曲率：** 平滑后三点法 `|d1 × d2| / |d1|³`
 - **高度：** 直接提取 `points[i][1]`
+
+> 原始观测含 0.25~0.6 m 噪声，直接差分会把噪声放大 1/Δt 倍，曲线不可读，
+> 因此先做窗口平滑再求导。预测数据会拼接到历史之后一起计算。
 
 ### 14.2 最佳捕捉时机 API：`GET /analysis/capture`
 
 **实现（analysis.py）：**
-1. 仅分析综合轨迹（synthetic），无预测数据时返回空数组
+1. 仅分析综合轨迹（synthetic）；预测结果在 `predict_single` 时已落盘，因此预测后即可用
 2. 读取 `capture_weights` 配置
-3. 对预测部分的每个点计算评分：
+3. 只在预测段**内部**取候选（跳过锚点与末端外推点），缺失指标按中性值处理，
+   避免"锚点速度为 0"被误判为最优；对每个候选计算评分：
 
 ```
 h_norm = 1 - height / max_height     # 越低越好
@@ -595,18 +615,21 @@ score = w_h*h_norm + w_s*s_norm + w_a*a_norm + w_c*c_norm
 
 4. 排序取前三，返回 `[{rank, time, position, score, height, speed}]`
 
-### 14.3 前端图表（analysis.html）
+### 14.3 前端（analysis.html + analysis.js）
+
+页面顺序：风险总分 + 评估参数 → 风险时间线 → 因子拆解 + 处置建议 →
+证据质量 + 未来预测事件 → 最佳捕捉时机（三列卡片）→ 运动学图表。
 
 - ECharts 深色主题，共享时间轴（去重排序）
 - 每平台一条连续曲线（原始+预测拼接）
 - 图例按 `LEGEND_ORDER` 固定排序
-- 捕捉时机卡片：预测后显示前三名（#1/#2/#3，金银铜色）
+- 数据源选择、防护区与预测视界：选择记在 localStorage，数值写回 config.json
 
 ---
 
 ## 15. API 完整参考
 
-18 个端点，统一格式：`{"success": true, ...}` 或 `{"success": false, "error": "..."}`
+统一格式：`{"success": true, ...}` 或 `{"success": false, "error": "..."}`
 
 ### 数据管理（api.py）
 
@@ -616,13 +639,13 @@ score = w_h*h_norm + w_s*s_norm + w_a*a_norm + w_c*c_norm
 | POST | `/api/load_data` | multipart: file + method_id=self | `{success, name, method_id}` |
 | POST | `/api/clear_all_data` | - | `{success, backup_name}` |
 | POST | `/api/toggle_method` | `{method_id}` | `{success, visible}` |
-| POST | `/api/synthesize` | - | `{success, point_count, platforms, weights}` |
+| POST | `/api/synthesize` | `{hz?, gate_m?, smooth_window?, max_gap_s?}` | `{success, mode, point_count, platforms, saved_params}` |
 
 ### 预测 & AI（api_predict.py）
 
 | 方法 | 端点 | 请求体 | 返回 |
 |------|------|--------|------|
-| POST | `/api/predict` | `{method_id, num_points?, time_step?}` | `{success, prediction, pred_times}` |
+| POST | `/api/predict` | `{method_id, num_points?, time_step?}` | `{success, prediction, pred_times, confidence}` |
 | POST | `/api/predict_all` | `{num_points?, time_step?}` | `{success, results: {id: {prediction, pred_times}}}` |
 | POST | `/api/ai_suggestion` | `{methods_data}` | `{success, suggestion}` |
 | POST | `/api/save_report` | `{content, platforms?}` | `{success, filepath}` |
@@ -643,6 +666,14 @@ score = w_h*h_norm + w_s*s_norm + w_a*a_norm + w_c*c_norm
 |------|------|------|
 | GET | `/analysis/data` | `{id: {name, color, speeds, accelerations, curvatures, heights, time_steps}}` |
 | GET | `/analysis/capture` | `[{rank, time, position, score, height, speed}]` 或 `[]` |
+
+### 协同与评估（api_sensor.py）
+
+| 方法 | 端点 | 请求体 | 返回 |
+|------|------|--------|------|
+| GET | `/api/sensors/status` | - | 传感器概览（点数/覆盖率/健康度） |
+| POST | `/api/sensors/reconstruct` | `{scenario?, hz?, gate_m?, smooth_window?, max_gap_s?}` | 同步/融合/重建指标与轨迹 |
+| POST | `/api/sensors/assess` | `{scenario?, zone?, prediction_horizon_s?}` | 风险评分/因子/时间线/建议（并持久化 zone/horizon） |
 
 ### 其他（main.py）
 
@@ -1036,4 +1067,32 @@ node --check trajectory_reconstruction/frontend/static/js/pages/dashboard.js
 - **CSS：** 所有值使用 `var(--xxx)`，支持 `[data-theme="light"]`；不硬编码颜色
 - **分层：** core → services → views 单向依赖
 - **提交：** 中文描述，简洁准确
+
+---
+
+## 20. 参数持久化与状态
+
+| 参数 | 存储 | 写入时机 | 读取方 |
+|------|------|----------|--------|
+| 同步频率 / 关联门限 / 平滑窗口 / 最大补洞 | `config.json`（synchronization / sensor_fusion / reconstruction） | `POST /api/synthesize` 成功后 | 总览面板、启动自动重建 |
+| 防护区中心/半径/高度、评估预测视界 | `config.json → assessment` | `POST /api/sensors/assess` 成功后 | 分析评估表单、3D 防护区 |
+| 预测点数 / 步长 | 浏览器 localStorage（`pred.numPoints` / `pred.timeStep`） | 输入时 | 预测页 |
+| 分析数据源（live/simulated） | 浏览器 localStorage | 切换时 | 分析评估页 |
+| 平台可见性 / 权重 | `config.json → detection_methods` | 切换平台时 | 所有页面 |
+| 预测结果 | `data/predict/predict_*.npz` | 每次预测 | 分析图表、最佳捕捉时机 |
+
+> 启动时 `initialize_data()` 会清空 `data/predict/`，因此重启后需重新预测；
+> 重建/评估参数保存在 config.json，重启后仍生效并用于自动重建。
+
+## 21. 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [README](../README.md) | 项目概览、快速开始、结构 |
+| [manual](manual.md) | 用户操作与常见问题 |
+| [CONFIG](CONFIG.md) | config.json 全部字段 |
+| [kinflow_prediction_model](kinflow_prediction_model.md) | KinFlow 数学原理/训练/评估 |
+| [collaboration](collaboration.md) | 同步/融合/重建/预测/评估链路 |
+| [acceptance](acceptance/README.md) | 验收脚本与指标 |
+| [CHANGELOG](CHANGELOG.md) | 版本与文档变更记录 |
 - **图标：** 全部使用 SVG，禁止 emoji

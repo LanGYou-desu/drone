@@ -65,54 +65,54 @@
         <button class="btn btn-primary btn-sm" onclick="saveCaptureWeights()" style="margin-top:8px;">保存捕捉权重</button>
     </div>
 
-    <!-- 混合预测模型 -->
+    <!-- KinFlow 预测模型 -->
     <div class="card" style="margin-bottom:16px;">
-        <div class="card-header"><h3>{{ icon_brain() }} 混合预测模型</h3></div>
+        <div class="card-header"><h3>{{ icon_brain() }} KinFlow 预测模型</h3></div>
         <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:14px;">
-            Phy-ODE-Diffusion：Transformer + ODE + 扩散生成，物理约束自回归预测。权重文件缺失或禁用时自动回退线性外推。
+            KinFlow：学习式运动学先验 + 并行非自回归细化（连续时间编码器 → 运动学走廊 → 流匹配 → 可微物理投影）。
+            权重缺失、模型禁用或推理异常时自动回退线性外推。
         </p>
-        {% set hc = hybrid_config or {} %}
-        {% set defs = {'v_max':30, 'a_max':30, 'z_min':0, 'guidance_eta':0.1, 'inference_steps':50} %}
+        {% set kf = kinflow_config or {} %}
+        {% set kdef = {'v_h_max':20, 'v_up_max':5, 'v_down_max':3, 'max_tilt':35, 'y_min':1, 'y_max':120} %}
 
         <!-- 基本设置 -->
         <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">基本设置</div>
-        <div class="theme-toggle" style="margin-bottom:10px;" id="hybridEnableRow">
+        <div class="theme-toggle" style="margin-bottom:10px;" id="kinflowEnableRow">
             <div style="display:flex;align-items:center;gap:12px;flex:1;">
                 <div>
-                    <div style="font-weight:600;font-size:0.9rem;">启用混合模型</div>
+                    <div style="font-weight:600;font-size:0.9rem;">启用 KinFlow 模型</div>
                     <div style="font-size:0.75rem;color:var(--text-secondary);">需要训练完成的权重文件</div>
                 </div>
             </div>
-            <div class="toggle-switch" id="hybridEnabledSwitch"></div>
+            <div class="toggle-switch" id="kinflowEnabledSwitch"></div>
         </div>
-        <input type="checkbox" id="hybrid-enabled" style="display:none;" {% if hc.enabled|default(true) %}checked{% endif %}>
+        <input type="checkbox" id="kinflow-enabled" style="display:none;" {% if kf.enabled|default(true) %}checked{% endif %}>
 
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
             <span style="font-size:0.85rem;min-width:70px;">推理设备</span>
-            <select id="hybrid-device" style="flex:1;padding:4px 8px;">
-                <option value="cpu" {% if hc.device|default('cpu')=='cpu' %}selected{% endif %}>CPU</option>
-                <option value="cuda:0" {% if hc.device=='cuda:0' %}selected{% endif %}>CUDA (GPU)</option>
+            <select id="kinflow-device" style="flex:1;padding:4px 8px;">
+                <option value="cpu" {% if kf.device|default('cpu')=='cpu' %}selected{% endif %}>CPU</option>
+                <option value="cuda:0" {% if kf.device=='cuda:0' %}selected{% endif %}>CUDA (GPU)</option>
             </select>
         </div>
 
         <!-- 物理约束 -->
         <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">物理约束</div>
         {% for key, label, minv, maxv, step in [
-            ('v_max','最大水平速度', 5, 40, 1),
-            ('v_v_up','最大上升速度', 1, 10, 0.5),
-            ('v_v_down','最大下降速度', 1, 10, 0.5),
-            ('a_max','最大加速度', 5, 50, 1),
+            ('v_h_max','最大水平速度', 2, 40, 1),
+            ('v_up_max','最大上升速度', 0.5, 10, 0.5),
+            ('v_down_max','最大下降速度', 0.5, 10, 0.5),
             ('max_tilt','最大倾斜角', 10, 60, 5),
-            ('z_min','最低高度', 0, 30, 1),
-            ('z_max','最高高度', 30, 250, 10),
+            ('y_min','最低高度', 0, 30, 1),
+            ('y_max','最高高度', 30, 300, 10),
         ] %}
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
             <span style="min-width:70px;font-size:0.85rem;">{{ label }}</span>
             <input type="range" min="{{ minv }}" max="{{ maxv }}" step="{{ step }}"
-                   value="{{ hc[key]|default({'v_max':30,'v_v_up':5,'v_v_down':3,'a_max':30,'max_tilt':35,'z_min':0,'z_max':120}[key]) }}"
-                   data-key="{{ key }}" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ hc[key]|default({'v_max':30,'v_v_up':5,'v_v_down':3,'a_max':30,'max_tilt':35,'z_min':0,'z_max':120}[key]) }}
+                   value="{{ kf[key]|default(kdef[key]) }}"
+                   data-key="{{ key }}" class="kinflow-slider" style="flex:1;margin:0;">
+            <span class="kinflow-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ kf[key]|default(kdef[key]) }}
             </span>
         </div>
         {% endfor %}
@@ -120,25 +120,25 @@
         <!-- 高级参数 -->
         <div style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin:14px 0 8px;text-transform:uppercase;letter-spacing:0.5px;">高级参数</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-            <span style="min-width:70px;font-size:0.85rem;">引导强度</span>
-            <input type="range" min="1" max="50" step="1"
-                   value="{{ (hc.guidance_eta|default(defs.guidance_eta) * 100)|int }}"
-                   data-key="guidance_eta" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ "%.2f"|format(hc.guidance_eta|default(defs.guidance_eta)) }}
+            <span style="min-width:70px;font-size:0.85rem;">Euler 步数</span>
+            <input type="range" min="1" max="16" step="1"
+                   value="{{ kf.n_euler_steps|default(4) }}"
+                   data-key="n_euler_steps" class="kinflow-slider" style="flex:1;margin:0;">
+            <span class="kinflow-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ kf.n_euler_steps|default(4) }}
             </span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-            <span style="min-width:70px;font-size:0.85rem;">推理步数</span>
-            <input type="range" min="10" max="200" step="10"
-                   value="{{ hc.inference_steps|default(defs.inference_steps) }}"
-                   data-key="inference_steps" class="hybrid-slider" style="flex:1;margin:0;">
-            <span class="hybrid-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
-                {{ hc.inference_steps|default(defs.inference_steps) }}
+            <span style="min-width:70px;font-size:0.85rem;">起点噪声 σ</span>
+            <input type="range" min="0" max="50" step="1"
+                   value="{{ (kf.sigma|default(0) * 100)|round|int }}"
+                   data-key="sigma" class="kinflow-slider" style="flex:1;margin:0;">
+            <span class="kinflow-val" style="min-width:36px;font-size:0.85rem;font-variant-numeric:tabular-nums;">
+                {{ "%.2f"|format(kf.sigma|default(0)) }}
             </span>
         </div>
 
-        <button class="btn btn-primary btn-sm" onclick="saveHybridModel()" style="margin-top:14px;">保存预测模型设置</button>
+        <button class="btn btn-primary btn-sm" onclick="saveKinflowModel()" style="margin-top:14px;">保存预测模型设置</button>
     </div>
 
     <!-- 关于 -->
@@ -205,48 +205,47 @@
         if (r.success) { sessionStorage.clear(); location.reload(); } else alert('保存失败');
     }
 
-    // Hybrid model toggle switch
+    // KinFlow 模型开关
     (function(){
-        var cb = document.getElementById('hybrid-enabled');
-        var sw = document.getElementById('hybridEnabledSwitch');
+        var cb = document.getElementById('kinflow-enabled');
+        var sw = document.getElementById('kinflowEnabledSwitch');
         function updateSwitch(){
             sw.classList.toggle('active', cb.checked);
         }
         updateSwitch();
-        document.getElementById('hybridEnableRow').addEventListener('click', function(){
+        document.getElementById('kinflowEnableRow').addEventListener('click', function(){
             cb.checked = !cb.checked;
             updateSwitch();
         });
     })();
 
-    // Hybrid model slider display
-    document.querySelectorAll('.hybrid-slider').forEach(function(s){
+    // KinFlow 参数滑块显示
+    document.querySelectorAll('.kinflow-slider').forEach(function(s){
         s.addEventListener('input', function(){
-            var val = this.value;
-            this.nextElementSibling.textContent = this.dataset.key === 'guidance_eta'
-                ? (parseInt(val) / 100).toFixed(2) : val;
+            var key = this.dataset.key;
+            this.nextElementSibling.textContent = key === 'sigma'
+                ? (parseInt(this.value) / 100).toFixed(2) : this.value;
         });
     });
 
-    async function saveHybridModel() {
+    async function saveKinflowModel() {
         var data = {};
-        data.enabled = document.getElementById('hybrid-enabled').checked;
-        data.device = document.getElementById('hybrid-device').value;
-        document.querySelectorAll('.hybrid-slider').forEach(function(s){
+        data.enabled = document.getElementById('kinflow-enabled').checked;
+        data.device = document.getElementById('kinflow-device').value;
+        document.querySelectorAll('.kinflow-slider').forEach(function(s){
             var key = s.dataset.key;
-            if (key === 'guidance_eta') {
+            if (key === 'sigma') {
                 data[key] = parseInt(s.value) / 100;
-            } else if (key === 'inference_steps') {
+            } else if (key === 'n_euler_steps') {
                 data[key] = parseInt(s.value);
             } else {
                 data[key] = parseFloat(s.value);
             }
         });
-        var resp = await fetch('/api/hybrid_model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+        var resp = await fetch('/api/kinflow_model', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         var r = await resp.json();
         if (r.success) { alert('预测模型设置已保存'); } else { alert('保存失败'); }
     }
-
     updateThemeUI();
 </script>
 {% endblock %}

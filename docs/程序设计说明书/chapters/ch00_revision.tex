@@ -1,0 +1,69 @@
+% ============================================================
+%  版本说明（第二版）
+% ============================================================
+\section*{版本说明（V2.0）}
+\addcontentsline{toc}{section}{版本说明（V2.0）}
+
+本说明书 V1.0 描述的是以 Phy-ODE-Diffusion 为预测内核的初版系统。2026 年 11 月完成的
+V2.0 重建了预测与协同链路，并对页面结构做了整合。为避免文档与软件不一致，本节集中说明
+修订内容与各章的有效性；正文中与本节点名冲突的部分，以本节与对应专项文档为准。
+
+\subsection*{主要变更}
+
+\begin{enumerate}
+  \item \textbf{预测内核替换为 KinFlow}：连续时间编码器（40 点 / 3.9 s 历史）
+        $\rightarrow$ 运动学走廊先验 $\rightarrow$ 走廊初始化流匹配（2 s 视界，4 步 Euler）
+        $\rightarrow$ 可微物理投影器，参数量约 372K；测试集 ADE 0.495 m / FDE 1.324 m。
+        旧 Phy-ODE-Diffusion 代码、权重与训练产物已归档至 \file{backup/legacy_phy_ode/}。
+  \item \textbf{长视界分段预测}：视界 $\leq 2$ s 由模型直接生成；$>2$ s 的前 2 s 为模型预测，
+        其后由常转率运动模型外推（转率 6 s 指数衰减），逐点置信度随视界衰减并在界面显示。
+        支持 3--60 点、0.05--5 s 步长。
+  \item \textbf{多传感器协同链路}：时间步同步（时钟偏置估计）$\rightarrow$ 一致子集关联
+        $\rightarrow$ 逆方差融合 $\rightarrow$ 三维重建（剔除/补洞/平滑/置信度）$\rightarrow$
+        六因子风险评估。"综合轨迹"即重建结果，在总览页以青色管状体显示。
+  \item \textbf{页面整合}：撤销独立的"重建"与"评估"页面，重建并入总览，分析与评估合并为
+        "分析评估"页；导航为 总览 / 预测 / 分析评估 / AI 策略 / 数据（另有帮助、设置）。
+  \item \textbf{参数持久化}：重建参数与防护区/评估视界写回 \file{config.json}，预测点数/步长
+        与数据源选择记入浏览器 localStorage，刷新与重启后保持。
+  \item \textbf{演示数据}：\file{tools/make_runtime_demo.py} 生成同一目标的三路异构观测
+        （5/4/10 Hz、不同噪声、时钟偏置、遮挡、丢帧），替代原先"三路不同目标"的演示数据。
+\end{enumerate}
+
+\subsection*{章节有效性对照}
+
+\begin{table}[H]
+\centering
+\caption{V2.0 文档修订对照}
+\label{tab:revision}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\heiti\scriptsize}p{2.3cm}>{\scriptsize}p{3.2cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+章节 & 状态 & 说明 \\
+\midrule
+第一章 引言 & 有效 & 参考资料中的预测模型文档改为 \file{docs/kinflow_prediction_model.md} \\
+第二章 总体设计 & 基本有效 & 功能清单以本节点名与 README 为准 \\
+第三章 体系结构 & 基本有效 & 新增 timesync/fusion/reconstruction/risk 模块 \\
+第四章 业务流程 & 基本有效 & 综合轨迹流程改为"同步$\rightarrow$融合$\rightarrow$重建" \\
+第五章 重建模块 & 部分过时 & 页面由 9 个整合为 7 个（撤销重建/评估，新增分析评估），以第 \ref{tab:frontjs} 节与代码为准 \\
+第六章 检测模块 & 有效 & 未改动 \\
+第七章 轨迹预测 & \textbf{已被取代} & 所述 Phy-ODE-Diffusion 方案不再使用，改见 \file{docs/kinflow_prediction_model.md} \\
+第八章 数据设计 & 部分过时 & \code{hybrid_model} 改为 \code{kinflow_model}，新增协同四节配置 \\
+第九章 接口设计 & 部分过时 & 新增 \code{/api/sensors/*}、\code{/api/synthesize} 参数与 \code{confidence} 字段 \\
+第十章 操作说明 & 部分过时 & 预测页步长/点数范围、预测段线型与置信度提示以软件为准 \\
+第十一章 部署 & 部分过时 & 预测权重路径改为 \file{models/kinflow/} \\
+第十二章 测试 & 部分过时 & 预测指标以 README 与 \file{docs/acceptance/} 的最新数据为准 \\
+附录 A 文件清单 & 部分过时 & 预测相关文件替换为 KinFlow 模块 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection*{专项文档}
+
+\begin{itemize}
+  \item \file{docs/kinflow_prediction_model.md}：KinFlow 数学原理、训练、推理与评估；
+  \item \file{docs/collaboration.md}：同步/融合/重建/预测联动/评估链路与接口；
+  \item \file{docs/CONFIG.md}：配置项与持久化行为；
+  \item \file{docs/acceptance/README.md}：验收脚本、指标与截图。
+\end{itemize}
+
+\clearpage

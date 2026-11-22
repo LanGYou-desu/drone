@@ -12,11 +12,13 @@ def register_blueprints(app: Flask):
     from trajectory_reconstruction.views.api_predict import predict_bp
     from trajectory_reconstruction.views.analysis import analysis_bp
     from trajectory_reconstruction.views.api_report import report_bp
+    from trajectory_reconstruction.views.api_sensor import sensor_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(predict_bp)
     app.register_blueprint(report_bp)
+    app.register_blueprint(sensor_bp)
     app.register_blueprint(analysis_bp, url_prefix='/analysis')
 
 

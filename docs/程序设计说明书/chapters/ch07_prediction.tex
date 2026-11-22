@@ -4,6 +4,12 @@
 \section{轨迹预测：现状与后续开发方案}
 \label{sec:prediction_future}
 
+\begin{notebox}[V2.0 修订说明]
+本章描述的是 V1.0 的 Phy-ODE-Diffusion 方案，\textbf{已不再使用}。V2.0 的预测内核为 KinFlow，
+训练/推理/评估详见 \file{docs/kinflow_prediction_model.md} 与版本说明表~\ref{tab:revision}。
+本章保留作为设计过程记录。
+\end{notebox}
+
 本章说明轨迹预测功能的当前状态、失败原因与后续开发方案。需要明确的是：\textbf{本版本（V1.0）的轨迹预测尚未达到可用精度}，界面上的预测点实际由“线性外推”兜底算法产生，基于深度学习的混合模型仅完成了代码框架、训练脚本与权重加载链路，属于后续开发内容。
 
 \subsection{现状说明}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}总览 — 鹰眼长空{% endblock %}
-{% from "icons.html" import icon_play, icon_pause, icon_predict, icon_start, icon_end, icon_pin %}
+{% from "icons.html" import icon_play, icon_pause, icon_predict, icon_start, icon_end, icon_pin, icon_target_track %}
 {% block content %}
 
 <!-- 全屏 3D 视图 -->
@@ -19,6 +19,25 @@
                   id="status-{{ id }}">{% if m.visible %}显示{% else %}隐藏{% endif %}</span>
         </div>
         {% endfor %}
+    </div>
+
+    <div style="height:1px;background:var(--border-muted);margin:10px 0;"></div>
+
+    <h3>{{ icon_target_track() }} 综合重建</h3>
+    <div id="reconSummary" style="font-size:0.74rem;color:var(--text-secondary);line-height:1.75;">
+        尚无重建结果
+    </div>
+
+    <div class="recon-params">
+        <label>同步频率 <input id="reconHz" type="number" value="{{ collab_config.hz }}" min="2" max="30" step="1"></label>
+        <label>关联门限 <input id="reconGate" type="number" value="{{ collab_config.gate_m }}" min="0.2" max="20" step="0.5"></label>
+        <label>平滑窗口 <input id="reconSmooth" type="number" value="{{ collab_config.smooth_window }}" min="1" max="15" step="2"></label>
+        <label>最大补洞 <input id="reconGap" type="number" value="{{ collab_config.max_gap_s }}" min="0" max="5" step="0.2"></label>
+    </div>
+
+    <button class="btn btn-sm" id="rebuildBtn" style="margin-top:8px;width:100%;">重新重建综合轨迹</button>
+    <div style="font-size:0.68rem;color:var(--text-tertiary);margin-top:4px;line-height:1.5;">
+        防护区：中心 ({{ zone.center|join(', ') }})，半径 {{ zone.radius }} m
     </div>
 </div>
 
@@ -85,7 +104,9 @@
     window._PAGE_DATA_ = {
         methodsData: {{ methods_data | tojson }},
         predSettings: {{ pred_settings | tojson }},
-        cameraSpeed: {{ camera_speed }}
+        cameraSpeed: {{ camera_speed }},
+        collab: {{ collab_config | tojson }},
+        zone: {{ zone | tojson }}
     };
 </script>
 <script type="module" src="/static/js/pages/dashboard.js?v={{ app_version }}"></script>

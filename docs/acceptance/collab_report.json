@@ -1,0 +1,98 @@
+{
+  "pages": {
+    "/": 200,
+    "/predict": 200,
+    "/analysis/": 200,
+    "/ai": 200,
+    "/data": 200,
+    "/settings": 200,
+    "/docs": 200
+  },
+  "synthesis": {
+    "mode": "reconstruction",
+    "points": 239,
+    "selected": [
+      "visible",
+      "infrared",
+      "radar"
+    ],
+    "excluded": [],
+    "agreement": 1.0,
+    "mean_sigma": 0.4892,
+    "elapsed_ms": 5
+  },
+  "prediction": {
+    "points": 11,
+    "times": [
+      23.993,
+      25.993
+    ],
+    "bend": 0.0065,
+    "step_min": 0.209,
+    "step_max": 2.62,
+    "first_equals_last_history": true
+  },
+  "assessment": {
+    "score": 93.47,
+    "level": "紧急",
+    "prediction_source": "kinflow",
+    "factors": [
+      [
+        "空间接近",
+        1.0
+      ],
+      [
+        "接近态势",
+        1.0
+      ],
+      [
+        "高度威胁",
+        0.46
+      ],
+      [
+        "机动强度",
+        0.89
+      ],
+      [
+        "预测入侵",
+        1.0
+      ],
+      [
+        "滞留时长",
+        1.0
+      ]
+    ],
+    "recommendations": [
+      "立即启动反制预案",
+      "同步安保与空管告警",
+      "在预计入侵点 [11.26, 15.48, 0.12] 预置拦截",
+      "完整记录取证并持续跟踪",
+      "持续跟踪并滚动更新风险评估"
+    ],
+    "elapsed_ms": 108
+  },
+  "ui": {
+    "dashboard": {
+      "recon": "轨迹帧数239 帧参与传感器3 / 3融合不确定度0.49 m重建置信度0.91补洞 / 剔除0 / 0 帧",
+      "canvas": [
+        1440,
+        900
+      ]
+    },
+    "predict": {
+      "default_platform": "synthetic",
+      "recon_status": "综合轨迹来自 3 路传感器重建 · 239 帧 · 平均不确定度 0.49 m",
+      "horizon_hint": "预测视界 = 10 点 × 0.20 s = 2.0 s",
+      "pred_label": "预测 10 点",
+      "api_status": 200
+    },
+    "analysis": {
+      "risk_level": "紧急",
+      "status": "完成：多传感器协同 · 154 ms",
+      "charts": 4,
+      "gauge": 1,
+      "timeline": 1
+    }
+  },
+  "errors": []
+}

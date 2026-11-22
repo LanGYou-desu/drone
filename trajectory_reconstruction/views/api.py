@@ -120,7 +120,14 @@ def toggle_method():
 
 @api_bp.route('/api/synthesize', methods=['POST'])
 def synthesize():
-    """加权合成综合轨迹"""
-    result = data_service.synthesize_trajectory()
+    """重建综合轨迹（可带同步频率/关联门限/平滑窗口/最大补洞参数）"""
+    payload = request.get_json(silent=True) or {}
+    result = data_service.synthesize_trajectory(payload)
+    if result.get('success'):
+        # 参数持久化：刷新/重启后重建面板保持上次的取值
+        from trajectory_reconstruction.services.sensor_service import update_collab_params
+        update_collab_params(payload)
+        result['saved_params'] = {k: v for k, v in payload.items() if k in
+                                  ('hz', 'gate_m', 'smooth_window', 'max_gap_s')}
     code = 200 if result.get('success') else 400
     return jsonify(result), code
